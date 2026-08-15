@@ -582,13 +582,17 @@ def get_supplier_map(loader):
 
 
 def get_product_info_map(loader):
-    """Load thông tin đơn giá hóa đơn, supplier, ĐVT từ tab SANPHAM."""
+    """Load thông tin chi tiết sản phẩm từ tab SANPHAM (Tên, Giá, Link Web, Màu, Supplier, ĐVT, Đơn giá HĐ)."""
     product_map = {}
     try:
         df_sp, _ = loader.load_sheet('SANPHAM')
         _, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
 
         pcode_col = map_sp.get('product_code', 22)
+        pname_col = map_sp.get('product_name') if map_sp.get('product_name') is not None else map_sp.get('Tên sản phẩm', 23)
+        pprice_col = map_sp.get('product_price') if map_sp.get('product_price') is not None else map_sp.get('Giá bán', 24)
+        pcolor_col = map_sp.get('product_color') if map_sp.get('product_color') is not None else map_sp.get('Màu sắc', 28)
+        web_url_col = map_sp.get('web_url') if map_sp.get('web_url') is not None else map_sp.get('Link sản phẩm', 33)
         inv_col = map_sp.get('invoice_price') if map_sp.get('invoice_price') is not None else map_sp.get('Đơn giá', 31)
         pur_col = map_sp.get('purchase_price', 30)
         sup_col = map_sp.get('supplier', 32)
@@ -598,7 +602,11 @@ def get_product_info_map(loader):
             row = df_sp.iloc[i]
             pcode = str(row[pcode_col]).strip() if (pcode_col is not None and pd.notna(row[pcode_col])) else ""
             if pcode:
-                # CHỈ LẤY ĐƠN GIÁ HÓA ĐƠN NẾU CÓ, TUYỆT ĐỐI KHÔNG FALLBACK SANG CỘT KHÁC
+                pname = str(row[pname_col]).strip() if (pname_col is not None and pd.notna(row[pname_col])) else ""
+                pprice = str(row[pprice_col]).strip() if (pprice_col is not None and pd.notna(row[pprice_col])) else ""
+                pcolor = str(row[pcolor_col]).strip() if (pcolor_col is not None and pd.notna(row[pcolor_col])) else ""
+                web_url = str(row[web_url_col]).strip() if (web_url_col is not None and pd.notna(row[web_url_col])) else ""
+
                 raw_inv = row[inv_col] if (inv_col is not None and pd.notna(row[inv_col])) else ""
                 inv_price = str(raw_inv).strip()
 
@@ -607,6 +615,10 @@ def get_product_info_map(loader):
                 unit = str(row[unit_col]).strip() if (unit_col is not None and pd.notna(row[unit_col])) else ""
 
                 product_map[pcode] = {
+                    'product_name': pname,
+                    'product_price': pprice,
+                    'product_color': pcolor,
+                    'web_url': web_url,
                     'invoice_price': inv_price,
                     'purchase_price': pur_price,
                     'supplier': sup,
@@ -1854,7 +1866,7 @@ def process_export_task(choice, loader):
             pcode = str(rec.get('product_code', '')).strip()
             sz = str(rec.get('item_size', '')).strip()
             if sz.endswith('.0'): sz = sz[:-2]
-            sku = str(rec.get('Mã hàng (*)') or rec.get('Code128') or rec.get('FSKU') or f"{pcode}{sz}").strip()
+            sku = f"{pcode}{sz}" if sz else pcode
 
             sp_info = product_map.get(pcode, {})
             sup_name = sp_info.get('supplier', '')
@@ -2029,18 +2041,36 @@ def process_export_task(choice, loader):
 
     # ==================== TASK 10: IN TEM BARCODE & QR CODE ====================
     elif choice == 10:
+        product_map = get_product_info_map(loader)
         out_rows = []
         for rec in pending_records:
             pcode = str(rec.get('product_code', '')).strip()
             sz = str(rec.get('item_size', '')).strip()
             if sz.endswith('.0'): sz = sz[:-2]
-            pname = rec.get('Tên', '')
-            pcolor = rec.get('Màu', '')
-            scolor = rec.get('Size Color', f"{pcolor} (Size {sz})")
-            f6 = rec.get('F6', 1)
-            code128 = rec.get('Code128', f"{pcode}{sz}")
-            price = rec.get('Giá', '')
-            qr = rec.get('QR code', '')
+
+            sp_info = product_map.get(pcode, {})
+            pname = sp_info.get('product_name') or rec.get('Tên', '')
+            pcolor = str(rec.get('product_color') or sp_info.get('product_color') or rec.get('Màu', '')).strip()
+            scolor = f"{pcolor} (Size {sz})" if sz and pcolor else (pcolor or f"Size {sz}")
+
+            # Số lượng tem in lấy từ cột Số lượng (*) hoặc item_quantity
+            qty_raw = rec.get('item_quantity') or rec.get('Số lượng (*)') or rec.get('F6', 1)
+            try:
+                f6 = int(float(qty_raw))
+            except Exception:
+                f6 = 1
+
+            code128 = f"{pcode}{sz}" if sz else pcode
+
+            # Định dạng giá bán VND hiển thị đẹp (ví dụ: 450.000 đ)
+            raw_price = sp_info.get('product_price') or rec.get('Giá', '')
+            try:
+                num_p = parse_number(raw_price)
+                price_str = f"{int(num_p):,} đ".replace(",", ".") if num_p > 0 else str(raw_price)
+            except Exception:
+                price_str = str(raw_price)
+
+            qr = sp_info.get('web_url') or rec.get('QR code', '')
 
             out_rows.append({
                 'QR code': qr,
@@ -2050,7 +2080,7 @@ def process_export_task(choice, loader):
                 'Size Color': scolor,
                 'F6': f6,
                 'Code128': code128,
-                'Gía': price
+                'Gía': price_str
             })
 
         out_df = pd.DataFrame(out_rows)
