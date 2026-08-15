@@ -1,0 +1,35 @@
+# Python & Virtual Environment
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Credentials & Sensitive Configuration (QUAN TRỌNG: Tuyệt đối không đẩy lên Git)
+credentials.json
+*.pem
+*.key
+.env
+.env.*
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data & Exported files (Nếu có xuất tạm local)
+*.xlsx
+*.csv
+!templates/*.xlsx
+!templates/*.csv
