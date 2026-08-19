@@ -45,5 +45,11 @@
 
 1. **Thảo luận trước khi thực hiện**: Luôn luôn phân tích, đề xuất phương án và nhận xác nhận từ User trước khi sửa code (`.gemini/rules/always_discuss_first.md`).
 2. **Không tự ý thao tác Git**: Tuyệt đối không tự ý chạy lệnh push hoặc yêu cầu User đẩy code lên Git (`.gemini/rules/never_push_git.md`).
-3. **Dò quét Header Động (Dynamic Scanner)**: Dò quét theo tên biến/cột hiển thị ở cả Hàng 1 và Hàng 2, tuyệt đối không cố định chỉ số cột.
-4. **Cơ chế Kiểm soát Chất lượng (Strict QA Gate)**: Khi thiếu các trường bắt buộc, tự động bỏ qua không xuất file và gắn cờ cảnh báo cụ thể lên Sheet.
+3. **Dò quét Header Động (Dynamic Scanner)**: Dò quét an toàn theo tên biến/cột hiển thị ở cả Hàng 1 và Hàng 2 với cơ chế alias tiếng Việt, tuyệt đối không đoán mò số cột.
+4. **Google Sheets Cloud Native**: Dữ liệu đọc/ghi trực tiếp qua Google Sheets API, đảm bảo một nguồn dữ liệu chuẩn xác duy nhất (Single Source of Truth).
+5. **Cơ chế Kiểm soát Chất lượng (Strict QA Gate)**: Khi thiếu các trường bắt buộc, tự động bỏ qua không xuất file và gắn cờ cảnh báo cụ thể lên Sheet.
+
+---
+
+## 💡 4. SỔ TAY Ý TƯỞNG & LỘ TRÌNH TƯƠNG LAI
+- Toàn bộ kế hoạch tái cấu trúc module (Giai đoạn 2) và các ý tưởng mở rộng sàn (Lazada, Zalo, Webhook, AI) được lưu trữ đầy đủ tại: [`IDEAS_AND_ROADMAP.md`](file:///Users/khan/Developer/HNC_Master/IDEAS_AND_ROADMAP.md).

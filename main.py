@@ -42,16 +42,28 @@ except ImportError:
 
 # Paths Configuration
 LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GDRIVE_DIR = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/HNC_Master"
+
+def detect_gdrive_dir():
+    """Tự động nhận diện thư mục Google Drive linh hoạt trên máy macOS"""
+    default_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/HNC_Master"
+    if os.path.exists(default_path):
+        return default_path
+    
+    # Dò tìm thư mục GoogleDrive-* trong CloudStorage của user
+    home_cloud = os.path.expanduser("~/Library/CloudStorage")
+    if os.path.exists(home_cloud):
+        for item in os.listdir(home_cloud):
+            if item.startswith("GoogleDrive-"):
+                cand = os.path.join(home_cloud, item, "My Drive", "HNC_Master")
+                if os.path.exists(cand):
+                    return cand
+    return LOCAL_BASE_DIR
+
+GDRIVE_DIR = detect_gdrive_dir()
 
 CREDENTIALS_PATH = os.path.join(LOCAL_BASE_DIR, "credentials.json")
 if not os.path.exists(CREDENTIALS_PATH) and os.path.exists(os.path.join(GDRIVE_DIR, "credentials.json")):
     CREDENTIALS_PATH = os.path.join(GDRIVE_DIR, "credentials.json")
-
-if os.path.exists(os.path.join(GDRIVE_DIR, "HNC_Control_Center.xlsx")):
-    EXCEL_PATH = os.path.join(GDRIVE_DIR, "HNC_Control_Center.xlsx")
-else:
-    EXCEL_PATH = os.path.join(LOCAL_BASE_DIR, "HNC_Control_Center.xlsx")
 
 if os.path.exists(os.path.join(GDRIVE_DIR, "HNC_Templates")):
     TEMPLATES_DIR = os.path.join(GDRIVE_DIR, "HNC_Templates")
@@ -145,7 +157,7 @@ def fetch_web_images(url, product_code=""):
 
 
 class DynamicHeaderScanner:
-    """Quét Header Động 2 Chiều: Nhận diện chỉ số cột từ tên biến kỹ thuật"""
+    """Quét Header Động 2 Chiều: Nhận diện chỉ số cột an toàn từ tên biến kỹ thuật hoặc alias tiếng Việt"""
 
     @staticmethod
     def scan_data_headers(df):
@@ -168,9 +180,17 @@ class DynamicHeaderScanner:
 
         return var_row_idx, col_map
 
+    @staticmethod
+    def get_col_idx(col_map, *field_names, default=None):
+        """Tra cứu chỉ số cột theo danh sách tên alias kỹ thuật hoặc tiếng Việt an toàn."""
+        for name in field_names:
+            if name in col_map:
+                return col_map[name]
+        return default
+
 
 class EngineDataLoader:
-    """Tải dữ liệu từ Google Sheets (API) hoặc Fallback sang Excel local siêu tốc"""
+    """Tải và cập nhật dữ liệu trực tiếp Google Sheets API (Single Source of Truth)"""
 
     def __init__(self):
         self.gc = None
@@ -179,44 +199,47 @@ class EngineDataLoader:
         self._init_connection()
 
     def _init_connection(self):
-        if HAS_GSPREAD and os.path.exists(CREDENTIALS_PATH):
-            try:
-                scopes = [
-                    "https://www.googleapis.com/auth/spreadsheets",
-                    "https://www.googleapis.com/auth/drive"
-                ]
-                creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scopes)
-                self.gc = gspread.authorize(creds)
-                self.spreadsheet = self.gc.open(SPREADSHEET_NAME)
-                self.is_google_api = True
-            except Exception:
-                self.is_google_api = False
-        else:
+        if not HAS_GSPREAD:
+            print("[!] Thư viện 'gspread' chưa được cài đặt.")
             self.is_google_api = False
+            return
+
+        if not os.path.exists(CREDENTIALS_PATH):
+            print(f"[!] Không tìm thấy file khóa dịch vụ Google tại: {CREDENTIALS_PATH}")
+            self.is_google_api = False
+            return
+
+        try:
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scopes)
+            self.gc = gspread.authorize(creds)
+            self.spreadsheet = self.gc.open(SPREADSHEET_NAME)
+            self.is_google_api = True
+        except Exception as e:
+            self.is_google_api = False
+            print(f"\n❌ [LỖI KẾT NỐI GOOGLE SHEETS]: {e}")
+            print("[!] Vui lòng kiểm tra lại kết nối mạng Internet hoặc quyền chia sẻ của Google Sheet!\n")
 
     def load_sheet(self, sheet_name):
-        """Loads sheet into DataFrame raw."""
+        """Tải toàn bộ dữ liệu của sheet thành DataFrame từ Google Sheets."""
+        if not self.is_google_api:
+            self._init_connection()
+
         if self.is_google_api:
             try:
                 ws = self.spreadsheet.worksheet(sheet_name)
                 data = ws.get_all_values()
                 return pd.DataFrame(data), ws
-            except Exception:
-                pass
-        
-        if os.path.exists(EXCEL_PATH):
-            wb = openpyxl.load_workbook(EXCEL_PATH, data_only=True, read_only=True)
-            if sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                data = list(ws.iter_rows(values_only=True))
-                wb.close()
-                return pd.DataFrame(data), None
-            wb.close()
-        
-        raise FileNotFoundError(f"Không tìm thấy sheet '{sheet_name}' trên Google Sheet hoặc {EXCEL_PATH}")
+            except Exception as e:
+                raise ConnectionError(f"Không thể đọc sheet '{sheet_name}' từ Google Sheets: {e}")
+
+        raise ConnectionError(f"Không có kết nối Google Sheets API để tải sheet '{sheet_name}'!")
 
     def update_status(self, sheet_name, row_indices, col_idx, status_text_or_list):
-        """Cập nhật chữ 'Done - YYYY-MM-DD HH:mm' hoặc danh sách trạng thái riêng từng dòng."""
+        """Cập nhật chữ 'Done - YYYY-MM-DD HH:mm' hoặc danh sách trạng thái riêng từng dòng lên Google Sheet."""
         if not row_indices:
             return True
 
@@ -244,20 +267,7 @@ class EngineDataLoader:
                             time.sleep(0.5)
                 return True
             except Exception as e:
-                print(f"[!] Lỗi khi ghi Google Sheet API: {e}")
-
-        if os.path.exists(EXCEL_PATH):
-            try:
-                wb = openpyxl.load_workbook(EXCEL_PATH)
-                if sheet_name in wb.sheetnames:
-                    ws = wb[sheet_name]
-                    for r_idx, st_text in zip(row_indices, status_list):
-                        ws.cell(row=r_idx + 1, column=col_idx + 1, value=st_text)
-                    wb.save(EXCEL_PATH)
-                    wb.close()
-                    return True
-            except Exception as e:
-                print(f"[!] Lỗi khi ghi Excel Local: {e}")
+                print(f"[!] Lỗi khi ghi Google Sheet API ({sheet_name}): {e}")
         return False
 
     def update_batch_image_results(self, sheet_name, batch_records):
@@ -296,33 +306,10 @@ class EngineDataLoader:
                 return True
             except Exception as e:
                 print(f"[!] Lỗi khi batch update Google Sheet API: {e}")
-
-        if os.path.exists(EXCEL_PATH):
-            try:
-                wb = openpyxl.load_workbook(EXCEL_PATH)
-                if sheet_name in wb.sheetnames:
-                    ws = wb[sheet_name]
-                    for rec in batch_records:
-                        row_idx = rec['row_idx']
-                        status_col_idx = rec['status_col_idx']
-                        img_urls = rec['img_urls']
-                        img_col_indices = rec['img_col_indices']
-                        status_text = rec['status_text']
-
-                        for idx in range(10):
-                            c_idx = img_col_indices[idx]
-                            val = img_urls[idx] if idx < len(img_urls) else ""
-                            ws.cell(row=row_idx + 1, column=c_idx + 1, value=val)
-                        ws.cell(row=row_idx + 1, column=status_col_idx + 1, value=status_text)
-                    wb.save(EXCEL_PATH)
-                    wb.close()
-                    return True
-            except Exception as e:
-                print(f"[!] Lỗi khi ghi Excel Local ảnh: {e}")
         return False
 
     def append_rows_to_sheet(self, sheet_name, new_rows):
-        """Append các dòng mới vào cuối bảng Google Sheet / Excel (với công thức USER_ENTERED)."""
+        """Append các dòng mới vào cuối bảng Google Sheet (với công thức USER_ENTERED)."""
         if not new_rows:
             return True
 
@@ -333,19 +320,6 @@ class EngineDataLoader:
                 return True
             except Exception as e:
                 print(f"[!] Lỗi khi append Google Sheet API ({sheet_name}): {e}")
-
-        if os.path.exists(EXCEL_PATH):
-            try:
-                wb = openpyxl.load_workbook(EXCEL_PATH)
-                if sheet_name in wb.sheetnames:
-                    ws = wb[sheet_name]
-                    for r_data in new_rows:
-                        ws.append(r_data)
-                    wb.save(EXCEL_PATH)
-                    wb.close()
-                    return True
-            except Exception as e:
-                print(f"[!] Lỗi khi append Excel Local ({sheet_name}): {e}")
         return False
 
 
@@ -357,9 +331,9 @@ def get_stock_maps(loader):
 
     df_15e, _ = loader.load_sheet('KHO15E')
     var_idx_15, map_15 = DynamicHeaderScanner.scan_data_headers(df_15e)
-    p_col = map_15.get('product_code', 1)
-    s_col = map_15.get('item_size', 3)
-    q_col = map_15.get('current_quantity', 5)
+    p_col = DynamicHeaderScanner.get_col_idx(map_15, 'product_code', 'Mã sản phẩm', 'Mã SP', default=1)
+    s_col = DynamicHeaderScanner.get_col_idx(map_15, 'item_size', 'Size', 'Kích cỡ', default=3)
+    q_col = DynamicHeaderScanner.get_col_idx(map_15, 'current_quantity', 'Tồn hiện tại', 'Tồn kho', default=5)
 
     start_r = (var_idx_15 + 1) if var_idx_15 is not None else 1
     for i in range(start_r, len(df_15e)):
@@ -378,9 +352,9 @@ def get_stock_maps(loader):
 
     df_y3c, _ = loader.load_sheet('KHOY3C')
     var_idx_y3, map_y3 = DynamicHeaderScanner.scan_data_headers(df_y3c)
-    p_col = map_y3.get('product_code', 1)
-    s_col = map_y3.get('item_size', 3)
-    q_col = map_y3.get('current_quantity', 5)
+    p_col = DynamicHeaderScanner.get_col_idx(map_y3, 'product_code', 'Mã sản phẩm', 'Mã SP', default=1)
+    s_col = DynamicHeaderScanner.get_col_idx(map_y3, 'item_size', 'Size', 'Kích cỡ', default=3)
+    q_col = DynamicHeaderScanner.get_col_idx(map_y3, 'current_quantity', 'Tồn hiện tại', 'Tồn kho', default=5)
 
     start_r = (var_idx_y3 + 1) if var_idx_y3 is not None else 1
     for i in range(start_r, len(df_y3c)):
@@ -560,22 +534,23 @@ def get_supplier_map(loader):
         df_sub, _ = loader.load_sheet('SUB')
         _, map_sub = DynamicHeaderScanner.scan_data_headers(df_sub)
         
-        sup_col = map_sub.get('supplier', 31)
-        ma_col = map_sub.get('Mã đối tượng', 27)
-        ten_col = map_sub.get('Tên đối tượng', 28)
-        ck_col = map_sub.get('% chiết khấu', 32)
-        vat_col = map_sub.get('Thuế suất', 33)
+        sup_col = DynamicHeaderScanner.get_col_idx(map_sub, 'supplier', 'Nhà cung cấp', 'NCC')
+        ma_col = DynamicHeaderScanner.get_col_idx(map_sub, 'Mã đối tượng', 'ma_dt')
+        ten_col = DynamicHeaderScanner.get_col_idx(map_sub, 'Tên đối tượng', 'ten_dt')
+        ck_col = DynamicHeaderScanner.get_col_idx(map_sub, '% chiết khấu', 'ChietKhau')
+        vat_col = DynamicHeaderScanner.get_col_idx(map_sub, 'Thuế suất', 'VAT')
 
-        for i in range(1, len(df_sub)):
-            row = df_sub.iloc[i]
-            sup_name = str(row[sup_col]).strip() if pd.notna(row[sup_col]) else ""
-            if sup_name:
-                supplier_map[sup_name.lower()] = {
-                    'ma_dt': str(row[ma_col]).strip() if (ma_col is not None and pd.notna(row[ma_col])) else "",
-                    'ten_dt': str(row[ten_col]).strip() if (ten_col is not None and pd.notna(row[ten_col])) else "",
-                    'discount_str': str(row[ck_col]).strip() if (ck_col is not None and pd.notna(row[ck_col])) else "0",
-                    'vat_str': str(row[vat_col]).strip() if (vat_col is not None and pd.notna(row[vat_col])) else "0"
-                }
+        if sup_col is not None:
+            for i in range(1, len(df_sub)):
+                row = df_sub.iloc[i]
+                sup_name = str(row[sup_col]).strip() if pd.notna(row[sup_col]) else ""
+                if sup_name:
+                    supplier_map[sup_name.lower()] = {
+                        'ma_dt': str(row[ma_col]).strip() if (ma_col is not None and pd.notna(row[ma_col])) else "",
+                        'ten_dt': str(row[ten_col]).strip() if (ten_col is not None and pd.notna(row[ten_col])) else "",
+                        'discount_str': str(row[ck_col]).strip() if (ck_col is not None and pd.notna(row[ck_col])) else "0",
+                        'vat_str': str(row[vat_col]).strip() if (vat_col is not None and pd.notna(row[vat_col])) else "0"
+                    }
     except Exception as e:
         print(f"[!] Lỗi tải thông tin supplier từ SUB: {e}")
     return supplier_map
@@ -588,42 +563,43 @@ def get_product_info_map(loader):
         df_sp, _ = loader.load_sheet('SANPHAM')
         _, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
 
-        pcode_col = map_sp.get('product_code', 22)
-        pname_col = map_sp.get('product_name') if map_sp.get('product_name') is not None else map_sp.get('Tên sản phẩm', 23)
-        pprice_col = map_sp.get('product_price') if map_sp.get('product_price') is not None else map_sp.get('Giá bán', 24)
-        pcolor_col = map_sp.get('product_color') if map_sp.get('product_color') is not None else map_sp.get('Màu sắc', 28)
-        web_url_col = map_sp.get('web_url') if map_sp.get('web_url') is not None else map_sp.get('Link sản phẩm', 33)
-        inv_col = map_sp.get('invoice_price') if map_sp.get('invoice_price') is not None else map_sp.get('Đơn giá', 31)
-        pur_col = map_sp.get('purchase_price', 30)
-        sup_col = map_sp.get('supplier', 32)
-        unit_col = map_sp.get('product_unit') if map_sp.get('product_unit') is not None else map_sp.get('ĐVT', 25)
+        pcode_col = DynamicHeaderScanner.get_col_idx(map_sp, 'product_code', 'Mã sản phẩm', 'Mã SP')
+        pname_col = DynamicHeaderScanner.get_col_idx(map_sp, 'product_name', 'Tên sản phẩm', 'Tên')
+        pprice_col = DynamicHeaderScanner.get_col_idx(map_sp, 'product_price', 'Giá bán', 'Giá')
+        pcolor_col = DynamicHeaderScanner.get_col_idx(map_sp, 'product_color', 'Màu sắc', 'Màu')
+        web_url_col = DynamicHeaderScanner.get_col_idx(map_sp, 'web_url', 'Link sản phẩm', 'Link web')
+        inv_col = DynamicHeaderScanner.get_col_idx(map_sp, 'invoice_price', 'Đơn giá', 'Giá hóa đơn')
+        pur_col = DynamicHeaderScanner.get_col_idx(map_sp, 'purchase_price', 'Giá mua')
+        sup_col = DynamicHeaderScanner.get_col_idx(map_sp, 'supplier', 'Nhà cung cấp', 'NCC')
+        unit_col = DynamicHeaderScanner.get_col_idx(map_sp, 'product_unit', 'ĐVT', 'Đơn vị tính')
 
-        for i in range(2, len(df_sp)):
-            row = df_sp.iloc[i]
-            pcode = str(row[pcode_col]).strip() if (pcode_col is not None and pd.notna(row[pcode_col])) else ""
-            if pcode:
-                pname = str(row[pname_col]).strip() if (pname_col is not None and pd.notna(row[pname_col])) else ""
-                pprice = str(row[pprice_col]).strip() if (pprice_col is not None and pd.notna(row[pprice_col])) else ""
-                pcolor = str(row[pcolor_col]).strip() if (pcolor_col is not None and pd.notna(row[pcolor_col])) else ""
-                web_url = str(row[web_url_col]).strip() if (web_url_col is not None and pd.notna(row[web_url_col])) else ""
+        if pcode_col is not None:
+            for i in range(2, len(df_sp)):
+                row = df_sp.iloc[i]
+                pcode = str(row[pcode_col]).strip() if pd.notna(row[pcode_col]) else ""
+                if pcode:
+                    pname = str(row[pname_col]).strip() if (pname_col is not None and pd.notna(row[pname_col])) else ""
+                    pprice = str(row[pprice_col]).strip() if (pprice_col is not None and pd.notna(row[pprice_col])) else ""
+                    pcolor = str(row[pcolor_col]).strip() if (pcolor_col is not None and pd.notna(row[pcolor_col])) else ""
+                    web_url = str(row[web_url_col]).strip() if (web_url_col is not None and pd.notna(row[web_url_col])) else ""
 
-                raw_inv = row[inv_col] if (inv_col is not None and pd.notna(row[inv_col])) else ""
-                inv_price = str(raw_inv).strip()
+                    raw_inv = row[inv_col] if (inv_col is not None and pd.notna(row[inv_col])) else ""
+                    inv_price = str(raw_inv).strip()
 
-                pur_price = row[pur_col] if (pur_col is not None and pd.notna(row[pur_col])) else 0
-                sup = str(row[sup_col]).strip() if (sup_col is not None and pd.notna(row[sup_col])) else ""
-                unit = str(row[unit_col]).strip() if (unit_col is not None and pd.notna(row[unit_col])) else ""
+                    pur_price = row[pur_col] if (pur_col is not None and pd.notna(row[pur_col])) else 0
+                    sup = str(row[sup_col]).strip() if (sup_col is not None and pd.notna(row[sup_col])) else ""
+                    unit = str(row[unit_col]).strip() if (unit_col is not None and pd.notna(row[unit_col])) else ""
 
-                product_map[pcode] = {
-                    'product_name': pname,
-                    'product_price': pprice,
-                    'product_color': pcolor,
-                    'web_url': web_url,
-                    'invoice_price': inv_price,
-                    'purchase_price': pur_price,
-                    'supplier': sup,
-                    'unit': unit
-                }
+                    product_map[pcode] = {
+                        'product_name': pname,
+                        'product_price': pprice,
+                        'product_color': pcolor,
+                        'web_url': web_url,
+                        'invoice_price': inv_price,
+                        'purchase_price': pur_price,
+                        'supplier': sup,
+                        'unit': unit
+                    }
     except Exception as e:
         print(f"[!] Lỗi tải thông tin sản phẩm từ SANPHAM: {e}")
     return product_map
@@ -2380,8 +2356,8 @@ def main():
         print_main_menu()
         
         if HAS_RICH:
-            mode_str = "🌐 Google Sheets API Engine" if loader.is_google_api else f"📁 Excel Local Engine ({os.path.basename(EXCEL_PATH)})"
-            console.print(f"[dim]Chế độ hiện tại: {mode_str}[/dim]")
+            mode_str = f"🌐 Google Sheets Connected: [bold green]{SPREADSHEET_NAME}[/bold green]" if loader.is_google_api else "[bold red]❌ Chưa kết nối Google Sheets API[/bold red]"
+            console.print(f"[dim]Trạng thái: {mode_str}[/dim]")
             choice_input = Prompt.ask("[bold cyan]Mời chọn nền tảng [0-4][/bold cyan]", default="0")
         else:
             choice_input = input("Mời chọn nền tảng [0-4]: ").strip()
