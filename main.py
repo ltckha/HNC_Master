@@ -2209,7 +2209,7 @@ def process_export_task(choice, loader):
             sku = f"{pcode}{sz}" if sz else pcode
             kho = str(rec.get('KHO', '')).strip().upper()
 
-            if not pcode or not sz:
+            if not pcode:
                 continue
 
             # Tra cứu vị trí kệ từ tab SUB
