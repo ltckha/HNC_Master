@@ -1268,30 +1268,28 @@ def process_export_task(choice, loader):
     if choice == 1:
         out_rows = []
         for rec in pending_records:
-            sizes = unroll_sizes(rec.get('Size', ''))
             pcode = str(rec.get('product_code', '')).strip()
-            pname = str(rec.get('product_name', '')).strip()
-            pprice = rec.get('product_price', 0)
-            punit = rec.get('product_unit', 'Đôi')
-            porigin = rec.get('product_origin', 'Việt Nam')
-            pcolor = rec.get('product_color', '')
-            pcat = rec.get('product_category_id', '')
-            pdesc = rec.get('product_description', '')
-            pbonus = rec.get('Bonus:', '')
+            pname = str(rec.get('product_name') or rec.get('CON_NAME') or '').strip()
+            raw_price = rec.get('product_price', 0)
+            pprice = int(round(parse_number(raw_price)))
+            punit = str(rec.get('product_unit') or 'Đôi').strip()
+            porigin = str(rec.get('product_origin') or 'Việt Nam').strip()
+            pcolor = str(rec.get('product_color') or '').strip()
+            pcat = str(rec.get('product_category_id') or '').strip()
+            pdesc = str(rec.get('product_description') or rec.get('CON_DES') or '').strip()
+            pbonus = str(rec.get('Bonus:') or rec.get('product_feature') or '').strip()
 
-            for sz in sizes:
-                sku = f"{pcode}{sz}" if sz else pcode
-                out_rows.append({
-                    'product_code': sku,
-                    'product_name': pname,
-                    'product_price': pprice,
-                    'product_unit': punit,
-                    'product_origin': porigin,
-                    'product_color': pcolor,
-                    'product_category_id': pcat,
-                    'product_description': pdesc,
-                    'product_feature': pbonus
-                })
+            out_rows.append({
+                'product_code': pcode,
+                'product_name': pname,
+                'product_price': pprice,
+                'product_unit': punit,
+                'product_origin': porigin,
+                'product_color': pcolor,
+                'product_category_id': pcat,
+                'product_description': pdesc,
+                'product_feature': pbonus
+            })
 
         out_df = pd.DataFrame(out_rows)
         exported_filepath = os.path.join(EXPORT_DIR, f"WEB_PRODUCTS_{timestamp_file}.csv")
@@ -1764,70 +1762,173 @@ def process_export_task(choice, loader):
             else:
                 print(f"\n--- CẢNH BÁO ---\n{warn_msg}\n")
 
-        # GHI DỮ LIỆU 2 TẦNG (HÀNG CHA & HÀNG CON) BẮT ĐẦU TỪ DÒNG 6
-        row_num = 6
-        for vrec in valid_records:
-            # 1. GHI DÒNG HÀNG HÓA CHA
-            safe_write_cell(ws_tpl, row_num, 3, "Hàng hóa cha ")                                        # Cột C (3): Loại hàng hóa
-            safe_write_cell(ws_tpl, row_num, 4, vrec['parent_code'])                                    # Cột D (4): Mã hàng hóa
-            safe_write_cell(ws_tpl, row_num, 7, vrec['pname'])                                          # Cột G (7): Tên hàng hóa
-            safe_write_cell(ws_tpl, row_num, 8, vrec['pprice'])                                         # Cột H (8): Giá bán
-            safe_write_cell(ws_tpl, row_num, 9, vrec['punit'])                                          # Cột I (9): Đơn vị tính
-            safe_write_cell(ws_tpl, row_num, 11, "Không")                                               # Cột K (11): Là dịch vụ
-            safe_write_cell(ws_tpl, row_num, 12, vrec['brand'])                                         # Cột L (12): Thương hiệu
-            safe_write_cell(ws_tpl, row_num, 13, vrec['hnc_cat'])                                       # Cột M (13): Mã nhóm hàng hóa
-            safe_write_cell(ws_tpl, row_num, 14, "")                                                    # Cột N (14): Bỏ qua
-            safe_write_cell(ws_tpl, row_num, 15, vrec['weight'])                                        # Cột O (15): Trọng lượng
-            safe_write_cell(ws_tpl, row_num, 18, "")                                                    # Cột R (18): Bỏ qua link ảnh
-            safe_write_cell(ws_tpl, row_num, 19, 1)                                                     # Cột S (19): % thuế GTGT
-            safe_write_cell(ws_tpl, row_num, 20, 0.5)                                                   # Cột T (20): % thuế TNCN
-            safe_write_cell(ws_tpl, row_num, 22, '101-Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);') # Cột V (22)
-            safe_write_cell(ws_tpl, row_num, 45, vrec['desc'])                                          # Cột AS (45): Mô tả
-            safe_write_cell(ws_tpl, row_num, 47, "")                                                    # Cột AU (47): Bỏ qua
-            row_num += 1
+        # Quét lịch sử SANPHAM để phát hiện các mã cha đã từng được xuất lên MISA trước đó
+        misa_uploaded_parents = set()
+        status_col_name = STATUS_COLUMNS[4][0]
+        status_idx_in_df = col_map.get(status_col_name)
+        parent_idx_in_df = col_map.get('parent_product_code') if col_map.get('parent_product_code') is not None else col_map.get('Mã hàng hóa cha')
+        if status_idx_in_df is not None and parent_idx_in_df is not None:
+            for r in range(var_row_idx + 1, len(df_raw)):
+                p_code_val = str(df_raw.iloc[r, parent_idx_in_df]).strip()
+                st_val = str(df_raw.iloc[r, status_idx_in_df]).strip().lower()
+                if p_code_val and "done" in st_val:
+                    misa_uploaded_parents.add(p_code_val)
 
-            # 2. GHI CÁC DÒNG HÀNG HÓA CON
-            if vrec['all_sizes']:
-                for sz in vrec['all_sizes']:
-                    sku = f"{vrec['pcode']}{sz}"
-                    safe_write_cell(ws_tpl, row_num, 3, "Hàng hóa con theo thuộc tính")                  # Cột C (3)
-                    safe_write_cell(ws_tpl, row_num, 4, sku)                                            # Cột D (4): Mã SKU con
-                    safe_write_cell(ws_tpl, row_num, 5, sku)                                            # Cột E (5): Mã vạch
-                    safe_write_cell(ws_tpl, row_num, 6, vrec['parent_code'])                             # Cột F (6): Mã hàng hóa cha
-                    safe_write_cell(ws_tpl, row_num, 7, vrec['pname'])                                  # Cột G (7): Tên hàng hóa
-                    safe_write_cell(ws_tpl, row_num, 8, vrec['pprice'])                                 # Cột H (8): Giá bán
-                    safe_write_cell(ws_tpl, row_num, 9, vrec['punit'])                                  # Cột I (9): ĐVT
-                    safe_write_cell(ws_tpl, row_num, 32, "Màu sắc")                                     # Cột AF (32): Thuộc tính 1
-                    safe_write_cell(ws_tpl, row_num, 33, vrec['pcolor'])                                 # Cột AG (33): Giá trị màu
-                    safe_write_cell(ws_tpl, row_num, 34, "Size")                                        # Cột AH (34): Thuộc tính 2
-                    safe_write_cell(ws_tpl, row_num, 35, sz)                                            # Cột AI (35): Giá trị size
-                    row_num += 1
+        # Phân loại: Mã mới tinh (NEW) vs Thêm màu mới trên mã cha đã có (UPDATE)
+        new_records = []
+        update_records = []
+        for vrec in valid_records:
+            if vrec['parent_code'] in misa_uploaded_parents:
+                update_records.append(vrec)
             else:
-                # Không có size -> ghi 1 dòng con theo màu sắc
-                sku = vrec['pcode']
-                safe_write_cell(ws_tpl, row_num, 3, "Hàng hóa con theo thuộc tính")
-                safe_write_cell(ws_tpl, row_num, 4, sku)
-                safe_write_cell(ws_tpl, row_num, 5, sku)
-                safe_write_cell(ws_tpl, row_num, 6, vrec['parent_code'])
-                safe_write_cell(ws_tpl, row_num, 7, vrec['pname'])
-                safe_write_cell(ws_tpl, row_num, 8, vrec['pprice'])
-                safe_write_cell(ws_tpl, row_num, 9, vrec['punit'])
-                safe_write_cell(ws_tpl, row_num, 32, "Màu sắc")
-                safe_write_cell(ws_tpl, row_num, 33, vrec['pcolor'])
-                safe_write_cell(ws_tpl, row_num, 34, "")
-                safe_write_cell(ws_tpl, row_num, 35, "")
+                new_records.append(vrec)
+
+        exported_files = []
+
+        # 1. XỬ LÝ XUẤT FILE MISA IMPORT MỚI (tpl_misa_upload.xlsx)
+        if new_records:
+            tpl_file_new = os.path.join(TEMPLATES_DIR, "tpl_misa_upload.xlsx")
+            wb_new = openpyxl.load_workbook(tpl_file_new)
+            ws_new = wb_new['Tep nhap khau']
+            if ws_new.max_row >= 6:
+                ws_new.delete_rows(6, ws_new.max_row - 5)
+
+            row_num = 6
+            for vrec in new_records:
+                # Ghi dòng hàng hóa cha
+                safe_write_cell(ws_new, row_num, 3, "Hàng hóa cha ")
+                safe_write_cell(ws_new, row_num, 4, vrec['parent_code'])
+                safe_write_cell(ws_new, row_num, 7, vrec['pname'])
+                safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
+                safe_write_cell(ws_new, row_num, 9, vrec['punit'])
+                safe_write_cell(ws_new, row_num, 11, "Không")
+                safe_write_cell(ws_new, row_num, 12, vrec['brand'])
+                safe_write_cell(ws_new, row_num, 13, vrec['hnc_cat'])
+                safe_write_cell(ws_new, row_num, 15, vrec['weight'])
+                safe_write_cell(ws_new, row_num, 19, 1)
+                safe_write_cell(ws_new, row_num, 20, 0.5)
+                safe_write_cell(ws_new, row_num, 22, '101-Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
+                safe_write_cell(ws_new, row_num, 45, vrec['desc'])
                 row_num += 1
 
-        exported_filepath = os.path.join(EXPORT_DIR, f"MISA_PRODUCTS_{timestamp_file}.xlsx")
-        wb.save(exported_filepath)
-        wb.close()
+                # Ghi các dòng hàng hóa con
+                valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
+                if valid_sizes:
+                    for sz in valid_sizes:
+                        sku = f"{vrec['pcode']}{sz}"
+                        safe_write_cell(ws_new, row_num, 3, "Hàng hóa con theo thuộc tính")
+                        safe_write_cell(ws_new, row_num, 4, sku)
+                        safe_write_cell(ws_new, row_num, 5, sku)
+                        safe_write_cell(ws_new, row_num, 6, vrec['parent_code'])
+                        safe_write_cell(ws_new, row_num, 7, vrec['pname'])
+                        safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
+                        safe_write_cell(ws_new, row_num, 9, vrec['punit'])
+
+                        if vrec['pcolor']:
+                            safe_write_cell(ws_new, row_num, 32, "Màu sắc")
+                            safe_write_cell(ws_new, row_num, 33, vrec['pcolor'])
+                            safe_write_cell(ws_new, row_num, 34, "Size")
+                            safe_write_cell(ws_new, row_num, 35, sz)
+                        else:
+                            safe_write_cell(ws_new, row_num, 32, "Size")
+                            safe_write_cell(ws_new, row_num, 33, sz)
+                            safe_write_cell(ws_new, row_num, 34, "")
+                            safe_write_cell(ws_new, row_num, 35, "")
+                        row_num += 1
+                else:
+                    sku = vrec['pcode']
+                    safe_write_cell(ws_new, row_num, 3, "Hàng hóa con theo thuộc tính")
+                    safe_write_cell(ws_new, row_num, 4, sku)
+                    safe_write_cell(ws_new, row_num, 5, sku)
+                    safe_write_cell(ws_new, row_num, 6, vrec['parent_code'])
+                    safe_write_cell(ws_new, row_num, 7, vrec['pname'])
+                    safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
+                    safe_write_cell(ws_new, row_num, 9, vrec['punit'])
+
+                    if vrec['pcolor']:
+                        safe_write_cell(ws_new, row_num, 32, "Màu sắc")
+                        safe_write_cell(ws_new, row_num, 33, vrec['pcolor'])
+                        safe_write_cell(ws_new, row_num, 34, "")
+                        safe_write_cell(ws_new, row_num, 35, "")
+                    else:
+                        safe_write_cell(ws_new, row_num, 32, "")
+                        safe_write_cell(ws_new, row_num, 33, "")
+                        safe_write_cell(ws_new, row_num, 34, "")
+                        safe_write_cell(ws_new, row_num, 35, "")
+                    row_num += 1
+
+            new_filename = f"MISA_PRODUCTS_NEW_{timestamp_file}.xlsx" if update_records else f"MISA_PRODUCTS_{timestamp_file}.xlsx"
+            filepath_new = os.path.join(EXPORT_DIR, new_filename)
+            wb_new.save(filepath_new)
+            wb_new.close()
+            exported_files.append(f"📦 [MỚI 100% ({len(new_records)} SP)]: {filepath_new}")
+
+        # 2. XỬ LÝ XUẤT FILE MISA CẬP NHẬT (tpl_misa_update.xlsx - THÊM MÀU MỚI)
+        if update_records:
+            tpl_file_up = os.path.join(TEMPLATES_DIR, "tpl_misa_update.xlsx")
+            wb_up = openpyxl.load_workbook(tpl_file_up)
+            ws_up = wb_up['Nhap_khau_cap_nhat_thong_tin']
+            if ws_up.max_row >= 3:
+                ws_up.delete_rows(3, ws_up.max_row - 2)
+
+            row_up = 3
+            for vrec in update_records:
+                # Ghi dòng cha
+                safe_write_cell(ws_up, row_up, 1, vrec['parent_code'])
+                safe_write_cell(ws_up, row_up, 2, "")
+                safe_write_cell(ws_up, row_up, 3, "")
+                safe_write_cell(ws_up, row_up, 7, vrec['pname'])
+                safe_write_cell(ws_up, row_up, 8, vrec['hnc_cat'])
+                safe_write_cell(ws_up, row_up, 9, vrec['punit'])
+                safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                safe_write_cell(ws_up, row_up, 11, 1)
+                safe_write_cell(ws_up, row_up, 12, vrec['brand'] if vrec['brand'] else 'Hải nancy')
+                safe_write_cell(ws_up, row_up, 13, vrec['weight'])
+                safe_write_cell(ws_up, row_up, 16, 1)
+                safe_write_cell(ws_up, row_up, 17, 0.5)
+                safe_write_cell(ws_up, row_up, 18, '101 - Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
+                row_up += 1
+
+                # Ghi các dòng con thêm màu mới
+                valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
+                if valid_sizes:
+                    for sz in valid_sizes:
+                        sku = f"{vrec['pcode']}{sz}"
+                        child_name = f"{vrec['pname']} ({vrec['pcolor']}/{sz})" if vrec['pcolor'] else f"{vrec['pname']} (Size {sz})"
+                        safe_write_cell(ws_up, row_up, 1, sku)
+                        safe_write_cell(ws_up, row_up, 2, vrec['parent_code'])
+                        safe_write_cell(ws_up, row_up, 3, sku)
+                        safe_write_cell(ws_up, row_up, 7, child_name)
+                        safe_write_cell(ws_up, row_up, 9, vrec['punit'])
+                        safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                        row_up += 1
+                else:
+                    sku = vrec['pcode']
+                    child_name = f"{vrec['pname']} ({vrec['pcolor']})" if vrec['pcolor'] else vrec['pname']
+                    safe_write_cell(ws_up, row_up, 1, sku)
+                    safe_write_cell(ws_up, row_up, 2, vrec['parent_code'])
+                    safe_write_cell(ws_up, row_up, 3, sku)
+                    safe_write_cell(ws_up, row_up, 7, child_name)
+                    safe_write_cell(ws_up, row_up, 9, vrec['punit'])
+                    safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                    row_up += 1
+
+            update_filename = f"MISA_PRODUCTS_UPDATE_{timestamp_file}.xlsx"
+            filepath_up = os.path.join(EXPORT_DIR, update_filename)
+            wb_up.save(filepath_up)
+            wb_up.close()
+            exported_files.append(f"⚡ [THÊM MÀU MỚI ({len(update_records)} SP)]: {filepath_up}")
 
         # Cập nhật trạng thái từng dòng vào cột misa_upload trên tab SANPHAM
         loader.update_status(sheet_name, pending_row_indices, status_col_idx, row_status_list)
 
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ xuất file: {len(valid_records)}, Bị gắn cờ cảnh báo: {len(warning_rows)})\n📁 {exported_filepath}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột 'misa_upload' trên Google Sheet / Excel!\n"
+        files_str = "\n📁 ".join(exported_files)
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ: {len(valid_records)}, Cảnh báo: {len(warning_rows)})\n📁 {files_str}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột 'misa_upload' trên Google Sheet!\n"
         if HAS_RICH:
-            console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT MISA DANH MỤC[/bold green]", border_style="green"))
+            console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT MISA DANH MỤC TỰ ĐỘNG PHÂN LOẠI[/bold green]", border_style="green"))
+        else:
+            print(success_msg)
+        return
     # ==================== TASK 8: MISA NHẬP KHO (TỰ ĐỘNG TÁCH 15E / 3C - KIỂM TRA CHẶT CHẼ) ====================
     elif choice == 8:
         supplier_map = get_supplier_map(loader)
