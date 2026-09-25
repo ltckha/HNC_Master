@@ -13,7 +13,13 @@ import os
 import sys
 import re
 import glob
+import shutil
 import time
+import json
+import base64
+import urllib.request
+import ssl
+import shlex
 from datetime import datetime
 import pandas as pd
 import openpyxl
@@ -40,20 +46,44 @@ try:
 except ImportError:
     HAS_GSPREAD = False
 
+# Dotenv & Gemini Multimodal AI Setup
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except ImportError:
+    pass
+
+try:
+    from google import genai
+    from google.genai import types
+    from PIL import Image
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
 # Paths Configuration
 LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def detect_gdrive_dir():
-    """Tự động nhận diện thư mục Google Drive linh hoạt trên máy macOS"""
+    """Tự động nhận diện thư mục Google Drive linh hoạt trên máy macOS (Ưu tiên Spark/HNC_Master)."""
+    # 1. Ưu tiên thư mục quy hoạch mới: Spark/HNC_Master
+    spark_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/Spark/HNC_Master"
+    if os.path.exists(spark_path):
+        return spark_path
+
+    # 2. Thư mục cũ: HNC_Master
     default_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/HNC_Master"
     if os.path.exists(default_path):
         return default_path
     
-    # Dò tìm thư mục GoogleDrive-* trong CloudStorage của user
+    # 3. Dò tìm tự động trong CloudStorage của user
     home_cloud = os.path.expanduser("~/Library/CloudStorage")
     if os.path.exists(home_cloud):
         for item in os.listdir(home_cloud):
             if item.startswith("GoogleDrive-"):
+                cand_spark = os.path.join(home_cloud, item, "My Drive", "Spark", "HNC_Master")
+                if os.path.exists(cand_spark):
+                    return cand_spark
                 cand = os.path.join(home_cloud, item, "My Drive", "HNC_Master")
                 if os.path.exists(cand):
                     return cand
@@ -77,6 +107,11 @@ else:
 
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
+
+# Media Ingestion & Asset Management Paths
+MEDIA_DEST_DIR = "/Volumes/Media/HNC_Master"
+SOURCE_PHOTOROOM = "/Volumes/home/Photos/MobileBackup/Xiaomi 15T Pro/Photoroom"
+SOURCE_DOWNLOADS = os.path.expanduser("~/Downloads")
 
 # Technical Variable Mappings for Dynamic Header Scanner
 STATUS_COLUMNS = {
@@ -308,6 +343,55 @@ class EngineDataLoader:
                 print(f"[!] Lỗi khi batch update Google Sheet API: {e}")
         return False
 
+    def update_batch_media_results(self, sheet_name, batch_records):
+        """Batch update các cột content_path, content_url, content_files vào Google Sheet siêu tốc."""
+        if not batch_records or not self.is_google_api:
+            return False
+        try:
+            ws = self.spreadsheet.worksheet(sheet_name)
+            p_idx = batch_records[0].get('path_col_idx')
+            u_idx = batch_records[0].get('url_col_idx')
+            f_idx = batch_records[0].get('files_col_idx')
+
+            if p_idx is not None and u_idx is not None and f_idx is not None and (p_idx + 1 == u_idx and u_idx + 1 == f_idx):
+                start_row = batch_records[0]['row_idx'] + 1
+                end_row = batch_records[-1]['row_idx'] + 1
+                matrix = []
+                for rec in batch_records:
+                    matrix.append([rec['path_val'], rec['url_val'], rec['files_val']])
+                start_cell = gspread.utils.rowcol_to_a1(start_row, p_idx + 1)
+                end_cell = gspread.utils.rowcol_to_a1(end_row, f_idx + 1)
+                ws.update(range_name=f"{start_cell}:{end_cell}", values=matrix)
+                return True
+
+            cell_updates = []
+            for rec in batch_records:
+                g_row = rec['row_idx'] + 1
+                if rec.get('path_col_idx') is not None:
+                    cell_updates.append({
+                        'range': gspread.utils.rowcol_to_a1(g_row, rec['path_col_idx'] + 1),
+                        'values': [[rec['path_val']]]
+                    })
+                if rec.get('url_col_idx') is not None:
+                    cell_updates.append({
+                        'range': gspread.utils.rowcol_to_a1(g_row, rec['url_col_idx'] + 1),
+                        'values': [[rec['url_val']]]
+                    })
+                if rec.get('files_col_idx') is not None:
+                    cell_updates.append({
+                        'range': gspread.utils.rowcol_to_a1(g_row, rec['files_col_idx'] + 1),
+                        'values': [[rec['files_val']]]
+                    })
+
+            for i in range(0, len(cell_updates), 300):
+                chunk = cell_updates[i:i+300]
+                ws.batch_update(chunk)
+                time.sleep(0.5)
+            return True
+        except Exception as e:
+            print(f"[!] Lỗi khi batch update media results: {e}")
+            return False
+
     def append_rows_to_sheet(self, sheet_name, new_rows):
         """Append các dòng mới vào cuối bảng Google Sheet (với công thức USER_ENTERED)."""
         if not new_rows:
@@ -321,6 +405,22 @@ class EngineDataLoader:
             except Exception as e:
                 print(f"[!] Lỗi khi append Google Sheet API ({sheet_name}): {e}")
         return False
+
+    def insert_rows_with_exact_range(self, sheet_name, new_rows, start_row):
+        """Ghi các dòng mới vào đúng tọa độ A{start_row}:{last_col}{end_row} (tránh 100% lỗi lệch cột của append_rows)."""
+        if not new_rows or not self.is_google_api:
+            return False
+        try:
+            ws = self.spreadsheet.worksheet(sheet_name)
+            num_cols = max(len(r) for r in new_rows)
+            end_row = start_row + len(new_rows) - 1
+            last_col_letter = gspread.utils.rowcol_to_a1(1, num_cols).rstrip('0123456789')
+            range_name = f"A{start_row}:{last_col_letter}{end_row}"
+            ws.update(range_name=range_name, values=new_rows, value_input_option='USER_ENTERED')
+            return True
+        except Exception as e:
+            print(f"[!] Lỗi khi ghi Google Sheet API ({sheet_name}) tại {start_row}: {e}")
+            return False
 
 
 def get_stock_maps(loader):
@@ -590,7 +690,8 @@ def get_product_info_map(loader):
                     sup = str(row[sup_col]).strip() if (sup_col is not None and pd.notna(row[sup_col])) else ""
                     unit = str(row[unit_col]).strip() if (unit_col is not None and pd.notna(row[unit_col])) else ""
 
-                    product_map[pcode] = {
+                    pcode_upper = pcode.upper()
+                    product_map[pcode_upper] = {
                         'product_name': pname,
                         'product_price': pprice,
                         'product_color': pcolor,
@@ -650,15 +751,41 @@ def process_export_task(choice, loader):
             status_val = str(row[status_col_idx]).strip() if pd.notna(row[status_col_idx]) else ""
             pcode_val = str(row[pcode_col_idx]).strip() if (pcode_col_idx is not None and pd.notna(row[pcode_col_idx])) else ""
 
-            if link_val and str(link_val).startswith("http") and "done" not in status_val.lower() and "no image" not in status_val.lower():
-                if HAS_RICH:
-                    console.print(f"🔎 Đang cào ảnh chuẩn cho dòng {rel_idx + 1} (Mã: {pcode_val}): {link_val}...")
-                else:
-                    print(f"🔎 Đang cào ảnh chuẩn cho dòng {rel_idx + 1} (Mã: {pcode_val}): {link_val}...")
+            if not status_val and pcode_val:
+                imgs = []
+                status_text = ""
 
-                imgs = fetch_web_images(link_val, pcode_val)
+                # 1. Thử cào ảnh từ Link web nếu có
+                if link_val and str(link_val).startswith("http"):
+                    if HAS_RICH:
+                        console.print(f"🔎 Đang cào ảnh chuẩn cho dòng {rel_idx + 1} (Mã: {pcode_val}): {link_val}...")
+                    else:
+                        print(f"🔎 Đang cào ảnh chuẩn cho dòng {rel_idx + 1} (Mã: {pcode_val}): {link_val}...")
+                    imgs = fetch_web_images(link_val, pcode_val)
+                    if imgs:
+                        status_text = f"Done - {now_str}"
+
+                # 2. Nếu không có link web hoặc web chưa có ảnh -> Đối chiếu thư mục Media NAS (chỉ lấy đường dẫn thư mục)
+                if not imgs:
+                    local_folder = os.path.join(MEDIA_DEST_DIR, pcode_val)
+                    if os.path.exists(local_folder):
+                        try:
+                            f_list = [
+                                f for f in os.listdir(local_folder)
+                                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.heic')) and not f.startswith('.')
+                            ]
+                            if f_list:
+                                status_text = local_folder
+                                if HAS_RICH:
+                                    console.print(f"  📁 [bold green]Tìm thấy {len(f_list)} ảnh trong Media NAS:[/bold green] [cyan]{local_folder}[/cyan]")
+                                else:
+                                    print(f"  📁 Tìm thấy {len(f_list)} ảnh trong Media NAS: {local_folder}")
+                        except Exception:
+                            pass
+
+                # 3. Ghi nhận kết quả cập nhật
                 if imgs:
-                    status_text = f"Done - {now_str}"
+                    # Đã có ảnh từ web: Ghi link ảnh web vào image_01-10 và đánh dấu Done
                     batch_records.append({
                         'row_idx': rel_idx,
                         'img_col_indices': img_col_indices,
@@ -666,8 +793,8 @@ def process_export_task(choice, loader):
                         'status_col_idx': status_col_idx,
                         'status_text': status_text
                     })
-                else:
-                    status_text = f"No Image - {now_str}"
+                elif status_text:
+                    # Có ảnh trong Media NAS nhưng chưa up web: Chỉ cập nhật đường dẫn thư mục vào get_images, KHÔNG điền vào image_01-10
                     batch_records.append({
                         'row_idx': rel_idx,
                         'img_col_indices': img_col_indices,
@@ -675,6 +802,16 @@ def process_export_task(choice, loader):
                         'status_col_idx': status_col_idx,
                         'status_text': status_text
                     })
+                else:
+                    if link_val and str(link_val).startswith("http"):
+                        status_text = f"No Image - {now_str}"
+                        batch_records.append({
+                            'row_idx': rel_idx,
+                            'img_col_indices': img_col_indices,
+                            'img_urls': [],
+                            'status_col_idx': status_col_idx,
+                            'status_text': status_text
+                        })
 
         if batch_records:
             loader.update_batch_image_results('SANPHAM', batch_records)
@@ -783,14 +920,18 @@ def process_export_task(choice, loader):
         _, col_map_nhap = DynamicHeaderScanner.scan_data_headers(df_nhap)
 
         status_col_idx = col_map_nhap.get('web_stock', None)
+        pcode_col_idx = col_map_nhap.get('product_code', None)
         pending_row_indices = []
         pending_records = []
 
         for r in range(2, len(df_nhap)):
             row_data = df_nhap.iloc[r]
-            st_val = row_data[status_col_idx] if status_col_idx is not None else None
-            is_done = pd.notna(st_val) and str(st_val).strip().lower().startswith("done")
-            if not is_done:
+            pcode_val = str(row_data[pcode_col_idx]).strip() if (pcode_col_idx is not None and pd.notna(row_data[pcode_col_idx])) else ""
+            if not pcode_val:
+                continue
+
+            st_val = str(row_data[status_col_idx]).strip() if (status_col_idx is not None and pd.notna(row_data[status_col_idx])) else ""
+            if not st_val:
                 pending_row_indices.append(r)
                 rec = {}
                 for k, idx in col_map_nhap.items():
@@ -1247,7 +1388,7 @@ def process_export_task(choice, loader):
             continue
 
         status_val = str(row[status_col_idx]).strip() if pd.notna(row[status_col_idx]) else ""
-        if "done" not in status_val.lower():
+        if not status_val:
             pending_row_indices.append(rel_idx)
             rec = {}
             for var_name, c_idx in col_map.items():
@@ -1793,33 +1934,74 @@ def process_export_task(choice, loader):
             if ws_new.max_row >= 6:
                 ws_new.delete_rows(6, ws_new.max_row - 5)
 
-            row_num = 6
+            # Gom nhóm tất cả các biến thể màu theo từng mã cha
+            grouped_new = {}
             for vrec in new_records:
-                # Ghi dòng hàng hóa cha
+                p_code = vrec['parent_code']
+                if p_code not in grouped_new:
+                    grouped_new[p_code] = []
+                grouped_new[p_code].append(vrec)
+
+            row_num = 6
+            seen_child_skus = set()
+
+            for p_code, var_list in grouped_new.items():
+                first_rec = var_list[0]
+                # Ghi đúng 1 DÒNG DUY NHẤT cho Hàng Hóa Cha
                 safe_write_cell(ws_new, row_num, 3, "Hàng hóa cha ")
-                safe_write_cell(ws_new, row_num, 4, vrec['parent_code'])
-                safe_write_cell(ws_new, row_num, 7, vrec['pname'])
-                safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
-                safe_write_cell(ws_new, row_num, 9, vrec['punit'])
+                safe_write_cell(ws_new, row_num, 4, p_code)
+                safe_write_cell(ws_new, row_num, 7, first_rec['pname'])
+                safe_write_cell(ws_new, row_num, 8, first_rec['pprice'])
+                safe_write_cell(ws_new, row_num, 9, first_rec['punit'])
                 safe_write_cell(ws_new, row_num, 11, "Không")
-                safe_write_cell(ws_new, row_num, 12, vrec['brand'])
-                safe_write_cell(ws_new, row_num, 13, vrec['hnc_cat'])
-                safe_write_cell(ws_new, row_num, 15, vrec['weight'])
+                safe_write_cell(ws_new, row_num, 12, first_rec['brand'])
+                safe_write_cell(ws_new, row_num, 13, first_rec['hnc_cat'])
+                safe_write_cell(ws_new, row_num, 15, first_rec['weight'])
                 safe_write_cell(ws_new, row_num, 19, 1)
                 safe_write_cell(ws_new, row_num, 20, 0.5)
                 safe_write_cell(ws_new, row_num, 22, '101-Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
-                safe_write_cell(ws_new, row_num, 45, vrec['desc'])
+                safe_write_cell(ws_new, row_num, 45, first_rec['desc'])
                 row_num += 1
 
-                # Ghi các dòng hàng hóa con
-                valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
-                if valid_sizes:
-                    for sz in valid_sizes:
-                        sku = f"{vrec['pcode']}{sz}"
+                # Ghi các dòng Hàng Hóa Con cho TẤT CẢ các màu của mã cha này
+                for vrec in var_list:
+                    valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
+                    if valid_sizes:
+                        for sz in valid_sizes:
+                            sku = f"{vrec['pcode']}{sz}"
+                            if sku in seen_child_skus:
+                                continue
+                            seen_child_skus.add(sku)
+
+                            safe_write_cell(ws_new, row_num, 3, "Hàng hóa con theo thuộc tính")
+                            safe_write_cell(ws_new, row_num, 4, sku)
+                            safe_write_cell(ws_new, row_num, 5, sku)
+                            safe_write_cell(ws_new, row_num, 6, p_code)
+                            safe_write_cell(ws_new, row_num, 7, vrec['pname'])
+                            safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
+                            safe_write_cell(ws_new, row_num, 9, vrec['punit'])
+
+                            if vrec['pcolor']:
+                                safe_write_cell(ws_new, row_num, 32, "Màu sắc")
+                                safe_write_cell(ws_new, row_num, 33, vrec['pcolor'])
+                                safe_write_cell(ws_new, row_num, 34, "Size")
+                                safe_write_cell(ws_new, row_num, 35, sz)
+                            else:
+                                safe_write_cell(ws_new, row_num, 32, "Size")
+                                safe_write_cell(ws_new, row_num, 33, sz)
+                                safe_write_cell(ws_new, row_num, 34, "")
+                                safe_write_cell(ws_new, row_num, 35, "")
+                            row_num += 1
+                    else:
+                        sku = vrec['pcode']
+                        if sku in seen_child_skus:
+                            continue
+                        seen_child_skus.add(sku)
+
                         safe_write_cell(ws_new, row_num, 3, "Hàng hóa con theo thuộc tính")
                         safe_write_cell(ws_new, row_num, 4, sku)
                         safe_write_cell(ws_new, row_num, 5, sku)
-                        safe_write_cell(ws_new, row_num, 6, vrec['parent_code'])
+                        safe_write_cell(ws_new, row_num, 6, p_code)
                         safe_write_cell(ws_new, row_num, 7, vrec['pname'])
                         safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
                         safe_write_cell(ws_new, row_num, 9, vrec['punit'])
@@ -1827,35 +2009,14 @@ def process_export_task(choice, loader):
                         if vrec['pcolor']:
                             safe_write_cell(ws_new, row_num, 32, "Màu sắc")
                             safe_write_cell(ws_new, row_num, 33, vrec['pcolor'])
-                            safe_write_cell(ws_new, row_num, 34, "Size")
-                            safe_write_cell(ws_new, row_num, 35, sz)
+                            safe_write_cell(ws_new, row_num, 34, "")
+                            safe_write_cell(ws_new, row_num, 35, "")
                         else:
-                            safe_write_cell(ws_new, row_num, 32, "Size")
-                            safe_write_cell(ws_new, row_num, 33, sz)
+                            safe_write_cell(ws_new, row_num, 32, "")
+                            safe_write_cell(ws_new, row_num, 33, "")
                             safe_write_cell(ws_new, row_num, 34, "")
                             safe_write_cell(ws_new, row_num, 35, "")
                         row_num += 1
-                else:
-                    sku = vrec['pcode']
-                    safe_write_cell(ws_new, row_num, 3, "Hàng hóa con theo thuộc tính")
-                    safe_write_cell(ws_new, row_num, 4, sku)
-                    safe_write_cell(ws_new, row_num, 5, sku)
-                    safe_write_cell(ws_new, row_num, 6, vrec['parent_code'])
-                    safe_write_cell(ws_new, row_num, 7, vrec['pname'])
-                    safe_write_cell(ws_new, row_num, 8, vrec['pprice'])
-                    safe_write_cell(ws_new, row_num, 9, vrec['punit'])
-
-                    if vrec['pcolor']:
-                        safe_write_cell(ws_new, row_num, 32, "Màu sắc")
-                        safe_write_cell(ws_new, row_num, 33, vrec['pcolor'])
-                        safe_write_cell(ws_new, row_num, 34, "")
-                        safe_write_cell(ws_new, row_num, 35, "")
-                    else:
-                        safe_write_cell(ws_new, row_num, 32, "")
-                        safe_write_cell(ws_new, row_num, 33, "")
-                        safe_write_cell(ws_new, row_num, 34, "")
-                        safe_write_cell(ws_new, row_num, 35, "")
-                    row_num += 1
 
             new_filename = f"MISA_PRODUCTS_NEW_{timestamp_file}.xlsx" if update_records else f"MISA_PRODUCTS_{timestamp_file}.xlsx"
             filepath_new = os.path.join(EXPORT_DIR, new_filename)
@@ -1871,47 +2032,97 @@ def process_export_task(choice, loader):
             if ws_up.max_row >= 3:
                 ws_up.delete_rows(3, ws_up.max_row - 2)
 
-            row_up = 3
+            # Gom nhóm tất cả các biến thể màu theo từng mã cha
+            grouped_up = {}
             for vrec in update_records:
-                # Ghi dòng cha
-                safe_write_cell(ws_up, row_up, 1, vrec['parent_code'])
+                p_code = vrec['parent_code']
+                if p_code not in grouped_up:
+                    grouped_up[p_code] = []
+                grouped_up[p_code].append(vrec)
+
+            row_up = 3
+            seen_child_skus_up = set()
+
+            for p_code, var_list in grouped_up.items():
+                first_rec = var_list[0]
+                # Ghi đúng 1 DÒNG DUY NHẤT cho Hàng Hóa Cha
+                safe_write_cell(ws_up, row_up, 1, p_code)
                 safe_write_cell(ws_up, row_up, 2, "")
                 safe_write_cell(ws_up, row_up, 3, "")
-                safe_write_cell(ws_up, row_up, 7, vrec['pname'])
-                safe_write_cell(ws_up, row_up, 8, vrec['hnc_cat'])
-                safe_write_cell(ws_up, row_up, 9, vrec['punit'])
-                safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                safe_write_cell(ws_up, row_up, 7, first_rec['pname'])
+                safe_write_cell(ws_up, row_up, 8, first_rec['hnc_cat'])
+                safe_write_cell(ws_up, row_up, 9, first_rec['punit'])
+                safe_write_cell(ws_up, row_up, 10, first_rec['pprice'])
                 safe_write_cell(ws_up, row_up, 11, 1)
-                safe_write_cell(ws_up, row_up, 12, vrec['brand'] if vrec['brand'] else 'Hải nancy')
-                safe_write_cell(ws_up, row_up, 13, vrec['weight'])
+                safe_write_cell(ws_up, row_up, 12, first_rec['brand'] if first_rec['brand'] else 'Hải nancy')
+                safe_write_cell(ws_up, row_up, 13, first_rec['weight'])
                 safe_write_cell(ws_up, row_up, 16, 1)
                 safe_write_cell(ws_up, row_up, 17, 0.5)
                 safe_write_cell(ws_up, row_up, 18, '101 - Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
                 row_up += 1
 
-                # Ghi các dòng con thêm màu mới
-                valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
-                if valid_sizes:
-                    for sz in valid_sizes:
-                        sku = f"{vrec['pcode']}{sz}"
-                        child_name = f"{vrec['pname']} ({vrec['pcolor']}/{sz})" if vrec['pcolor'] else f"{vrec['pname']} (Size {sz})"
+                # Ghi các dòng Hàng Hóa Con thêm màu mới
+                for vrec in var_list:
+                    valid_sizes = [str(s).strip() for s in vrec['all_sizes'] if s and str(s).strip()]
+                    if valid_sizes:
+                        for sz in valid_sizes:
+                            sku = f"{vrec['pcode']}{sz}"
+                            if sku in seen_child_skus_up:
+                                continue
+                            seen_child_skus_up.add(sku)
+
+                            child_name = f"{vrec['pname']} ({vrec['pcolor']}/{sz})" if vrec['pcolor'] else f"{vrec['pname']} (Size {sz})"
+                            safe_write_cell(ws_up, row_up, 1, sku)
+                            safe_write_cell(ws_up, row_up, 2, p_code)
+                            safe_write_cell(ws_up, row_up, 3, sku)
+                            safe_write_cell(ws_up, row_up, 7, child_name)
+                            safe_write_cell(ws_up, row_up, 9, vrec['punit'])
+                            safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                            safe_write_cell(ws_up, row_up, 11, 1)
+                            safe_write_cell(ws_up, row_up, 16, 1)
+                            safe_write_cell(ws_up, row_up, 17, 0.5)
+                            safe_write_cell(ws_up, row_up, 18, '101 - Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
+
+                            if vrec['pcolor']:
+                                safe_write_cell(ws_up, row_up, 24, "Màu sắc")
+                                safe_write_cell(ws_up, row_up, 25, vrec['pcolor'])
+                                safe_write_cell(ws_up, row_up, 26, "Size")
+                                safe_write_cell(ws_up, row_up, 27, sz)
+                            else:
+                                safe_write_cell(ws_up, row_up, 24, "Size")
+                                safe_write_cell(ws_up, row_up, 25, sz)
+                                safe_write_cell(ws_up, row_up, 26, "")
+                                safe_write_cell(ws_up, row_up, 27, "")
+                            row_up += 1
+                    else:
+                        sku = vrec['pcode']
+                        if sku in seen_child_skus_up:
+                            continue
+                        seen_child_skus_up.add(sku)
+
+                        child_name = f"{vrec['pname']} ({vrec['pcolor']})" if vrec['pcolor'] else vrec['pname']
                         safe_write_cell(ws_up, row_up, 1, sku)
-                        safe_write_cell(ws_up, row_up, 2, vrec['parent_code'])
+                        safe_write_cell(ws_up, row_up, 2, p_code)
                         safe_write_cell(ws_up, row_up, 3, sku)
                         safe_write_cell(ws_up, row_up, 7, child_name)
                         safe_write_cell(ws_up, row_up, 9, vrec['punit'])
                         safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
+                        safe_write_cell(ws_up, row_up, 11, 1)
+                        safe_write_cell(ws_up, row_up, 16, 1)
+                        safe_write_cell(ws_up, row_up, 17, 0.5)
+                        safe_write_cell(ws_up, row_up, 18, '101 - Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);')
+
+                        if vrec['pcolor']:
+                            safe_write_cell(ws_up, row_up, 24, "Màu sắc")
+                            safe_write_cell(ws_up, row_up, 25, vrec['pcolor'])
+                            safe_write_cell(ws_up, row_up, 26, "")
+                            safe_write_cell(ws_up, row_up, 27, "")
+                        else:
+                            safe_write_cell(ws_up, row_up, 24, "")
+                            safe_write_cell(ws_up, row_up, 25, "")
+                            safe_write_cell(ws_up, row_up, 26, "")
+                            safe_write_cell(ws_up, row_up, 27, "")
                         row_up += 1
-                else:
-                    sku = vrec['pcode']
-                    child_name = f"{vrec['pname']} ({vrec['pcolor']})" if vrec['pcolor'] else vrec['pname']
-                    safe_write_cell(ws_up, row_up, 1, sku)
-                    safe_write_cell(ws_up, row_up, 2, vrec['parent_code'])
-                    safe_write_cell(ws_up, row_up, 3, sku)
-                    safe_write_cell(ws_up, row_up, 7, child_name)
-                    safe_write_cell(ws_up, row_up, 9, vrec['punit'])
-                    safe_write_cell(ws_up, row_up, 10, vrec['pprice'])
-                    row_up += 1
 
             update_filename = f"MISA_PRODUCTS_UPDATE_{timestamp_file}.xlsx"
             filepath_up = os.path.join(EXPORT_DIR, update_filename)
@@ -2262,8 +2473,1022 @@ def process_export_task(choice, loader):
         print(success_msg)
 
 
+def process_media_management(loader, auto_ingest=True):
+    """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM."""
+    if not os.path.exists(MEDIA_DEST_DIR):
+        msg = f"❌ Không tìm thấy thư mục đích tại: {MEDIA_DEST_DIR}\nVui lòng kiểm tra lại ổ đĩa / kết nối ổ cứng / Volumes!"
+        if HAS_RICH: console.print(Panel(msg, title="[bold red]LỖI THƯ MỤC MEDIA[/bold red]", border_style="red"))
+        else: print(msg)
+        return
+
+    if HAS_RICH:
+        console.print(Panel(f"🔍 Đang tải dữ liệu SANPHAM và quét thư mục Media...", border_style="cyan"))
+    else:
+        print("🔍 Đang tải dữ liệu SANPHAM và quét thư mục Media...")
+
+    df_sp, _ = loader.load_sheet('SANPHAM')
+    var_row_idx, col_map = DynamicHeaderScanner.scan_data_headers(df_sp)
+    p_idx = col_map.get('product_code', 22)
+    path_col_idx = col_map.get('content_path')
+    url_col_idx = col_map.get('content_url')
+    files_col_idx = col_map.get('content_files')
+
+    if path_col_idx is None or url_col_idx is None or files_col_idx is None:
+        msg = "❌ Không tìm thấy đủ 3 cột 'content_path', 'content_url', 'content_files' ở Dòng 2 trên tab SANPHAM!"
+        if HAS_RICH: console.print(Panel(msg, title="[bold red]THIẾU CỘT TRÊN SHEET[/bold red]", border_style="red"))
+        else: print(msg)
+        return
+
+    # Thu thập tất cả mã sản phẩm từ SANPHAM và NHAP
+    all_pcodes = {}
+    data_start_row = (var_row_idx + 1) if var_row_idx is not None else 2
+    for r in range(data_start_row, len(df_sp)):
+        val = str(df_sp.iloc[r, p_idx]).strip() if pd.notna(df_sp.iloc[r, p_idx]) else ''
+        if val:
+            all_pcodes[val.upper()] = val
+
+    try:
+        df_nhap, _ = loader.load_sheet('NHAP')
+        _, map_nhap = DynamicHeaderScanner.scan_data_headers(df_nhap)
+        p_nhap_idx = map_nhap.get('product_code')
+        if p_nhap_idx is not None:
+            for r in range(2, len(df_nhap)):
+                val_n = str(df_nhap.iloc[r, p_nhap_idx]).strip() if pd.notna(df_nhap.iloc[r, p_nhap_idx]) else ''
+                if val_n and val_n.upper() not in all_pcodes:
+                    all_pcodes[val_n.upper()] = val_n
+    except Exception:
+        pass
+
+    sorted_pcodes = sorted(all_pcodes.keys(), key=lambda x: len(x), reverse=True)
+
+    def find_matching_code(filename):
+        base = os.path.splitext(filename)[0]
+        base_clean = re.sub(r'^(Lookbook_|Look_Book_|lookbook_)', '', base, flags=re.IGNORECASE).strip()
+        base_clean_upper = base_clean.upper()
+
+        # 1. Khớp với danh bạ mã có sẵn trên Google Sheet
+        for pcode_up in sorted_pcodes:
+            if base_clean_upper == pcode_up or base_clean_upper.startswith(pcode_up + '_') or base_clean_upper.startswith(pcode_up + '-') or base_clean_upper.startswith(pcode_up + ' '):
+                return all_pcodes[pcode_up]
+            if base_clean_upper.startswith(pcode_up):
+                rem = base_clean_upper[len(pcode_up):]
+                if rem.startswith(('_', '-', ' ', 'G', 'P', 'V')):
+                    return all_pcodes[pcode_up]
+
+        # 2. Bộ lọc Regex thông minh nhận diện mã sản phẩm mới (chưa có trên Sheet)
+        m = re.match(r'^([A-Za-z0-9]{3,12})(?:[_\-\s].*|$)', base_clean)
+        if m:
+            cand = m.group(1).upper()
+            has_digit = any(c.isdigit() for c in cand)
+            has_alpha = any(c.isalpha() for c in cand)
+            if has_digit and has_alpha:
+                excluded_prefixes = ('GEMINI', 'SCREENSHOT', 'IMAGE', 'IMG', 'DSC', 'PHOTO', 'LOOKBOOK', 'FREEBIE', 'DESIGN', 'HONDA', 'SNOWFLAKE', 'BOOTS', 'BEHIND', 'GNOME')
+                if not cand.startswith(excluded_prefixes):
+                    return cand
+
+        return None
+
+    ingested_count = 0
+    if auto_ingest:
+        sources = [
+            ("Photoroom", SOURCE_PHOTOROOM, ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.mp4', '.mov')),
+            ("Downloads", SOURCE_DOWNLOADS, ('.mp4', '.mov', '.jpg', '.jpeg', '.png', '.webp', '.heic'))
+        ]
+        for src_name, src_path, valid_exts in sources:
+            if not os.path.exists(src_path):
+                continue
+            if HAS_RICH:
+                console.print(f"🔎 Đang quét nguồn [{src_name}]: {src_path}...")
+            else:
+                print(f"🔎 Đang quét nguồn [{src_name}]: {src_path}...")
+
+            for root, dirs, files in os.walk(src_path):
+                for f in files:
+                    if f.startswith('.') or not f.lower().endswith(valid_exts):
+                        continue
+                    matched_code = find_matching_code(f)
+                    if matched_code:
+                        dst_folder = os.path.join(MEDIA_DEST_DIR, matched_code)
+                        os.makedirs(dst_folder, exist_ok=True)
+                        src_file_path = os.path.join(root, f)
+                        dst_file_path = os.path.join(dst_folder, f)
+                        if src_file_path != dst_file_path:
+                            try:
+                                shutil.move(src_file_path, dst_file_path)
+                                ingested_count += 1
+                                if HAS_RICH:
+                                    console.print(f"  📦 [bold green]Đã gom:[/bold green] [cyan]{f}[/cyan] ➔ Thư mục [bold yellow]{matched_code}[/bold yellow]")
+                                else:
+                                    print(f"  📦 Đã gom: {f} -> Thư mục {matched_code}")
+                            except Exception as e:
+                                if HAS_RICH:
+                                    console.print(f"  ⚠️ [bold red]Lỗi gom file {f}:[/bold red] {e}")
+                                else:
+                                    print(f"  ⚠️ Lỗi gom file {f}: {e}")
+
+    # Quét toàn bộ thư mục Media và chuẩn bị batch update lên SANPHAM
+    batch_records = []
+    stats = {'video_img': 0, 'video': 0, 'img': 0, 'empty': 0}
+
+    for r in range(data_start_row, len(df_sp)):
+        pcode = str(df_sp.iloc[r, p_idx]).strip() if pd.notna(df_sp.iloc[r, p_idx]) else ''
+        if not pcode:
+            continue
+
+        folder_path = os.path.join(MEDIA_DEST_DIR, pcode)
+        if os.path.exists(folder_path):
+            try:
+                files = os.listdir(folder_path)
+                v = [x for x in files if x.lower().endswith(('.mp4', '.mov', '.m4v', '.avi', '.mkv')) and not x.startswith('.')]
+                i = [x for x in files if x.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.heic')) and not x.startswith('.')]
+
+                if v and i:
+                    tag = "VIDEO, IMG"
+                    stats['video_img'] += 1
+                elif v:
+                    tag = "VIDEO"
+                    stats['video'] += 1
+                elif i:
+                    tag = "IMG"
+                    stats['img'] += 1
+                else:
+                    tag = ""
+                    stats['empty'] += 1
+
+                c_path = folder_path
+                c_url = ""
+            except Exception:
+                tag = ""
+                c_path = folder_path
+                c_url = ""
+                stats['empty'] += 1
+        else:
+            tag = ""
+            c_path = ""
+            c_url = ""
+            stats['empty'] += 1
+
+        batch_records.append({
+            'row_idx': r,
+            'path_col_idx': path_col_idx,
+            'path_val': c_path,
+            'url_col_idx': url_col_idx,
+            'url_val': c_url,
+            'files_col_idx': files_col_idx,
+            'files_val': tag
+        })
+
+    if batch_records:
+        if HAS_RICH:
+            console.print(f"📝 Đang cập nhật trạng thái Media lên Google Sheet tab SANPHAM ({len(batch_records)} dòng)...")
+        else:
+            print(f"📝 Đang cập nhật trạng thái Media lên Google Sheet tab SANPHAM ({len(batch_records)} dòng)...")
+        loader.update_batch_media_results('SANPHAM', batch_records)
+
+    report_text = f"""✅ ĐỒNG BỘ MEDIA HOÀN TẤT!
+➕ File đã tự động gom về thư mục: {ingested_count} file
+📊 Thống kê Media tab SANPHAM:
+   • Có cả Video & Ảnh (VIDEO, IMG): {stats['video_img']} sản phẩm
+   • Chỉ có Video (VIDEO): {stats['video']} sản phẩm
+   • Chỉ có Ảnh (IMG): {stats['img']} sản phẩm
+   • Chưa có file tư liệu (Để trống): {stats['empty']} sản phẩm
+📝 Đã đồng bộ đầy đủ 3 cột: 'content_path', 'content_url', 'content_files' trên Google Sheet!"""
+
+    if HAS_RICH:
+        console.print(Panel(report_text, title="[bold green]KẾT QUẢ QUẢN LÝ MEDIA[/bold green]", border_style="green"))
+    else:
+        print(f"\n{report_text}\n")
+
+
+def load_sub_dictionary(loader):
+    """Trích xuất danh mục chuẩn từ sheet SUB để khóa chặt Schema cho Gemini AI."""
+    df_sub, _ = loader.load_sheet('SUB')
+
+    def get_col_values(df, col_idx):
+        res = []
+        if col_idx < len(df.columns):
+            for r in range(1, len(df)):
+                val = str(df.iloc[r, col_idx]).strip() if pd.notna(df.iloc[r, col_idx]) else ''
+                if val and val != 'nan' and val not in res:
+                    res.append(val)
+        return res
+
+    # Chỉ lấy các ngành hàng có Mã nhóm hàng hóa ở Cột B
+    valid_categories = []
+    category_map = {}
+    for r in range(1, len(df_sub)):
+        cname = str(df_sub.iloc[r, 0]).strip() if pd.notna(df_sub.iloc[r, 0]) else ''
+        cid = str(df_sub.iloc[r, 1]).strip() if pd.notna(df_sub.iloc[r, 1]) else ''
+        if cname and cid and cid != 'nan' and cname not in valid_categories:
+            valid_categories.append(cname)
+            category_map[cname] = cid
+
+    return {
+        'categories': valid_categories,
+        'category_map': category_map,
+        'features': get_col_values(df_sub, 13),        # Col N: Đặc điểm
+        'brands': get_col_values(df_sub, 14),          # Col O: Thương hiệu
+        'materials': get_col_values(df_sub, 15),       # Col P: Chất liệu
+        'highlights': get_col_values(df_sub, 16),      # Col Q: Nhấn mạnh
+        'strap_materials': get_col_values(df_sub, 17), # Col R: Chất liệu quai
+        'sole_materials': get_col_values(df_sub, 18),  # Col S: Chất liệu đế
+        'inner_linings': get_col_values(df_sub, 19),   # Col T: Lót trong
+        'insole_surfaces': get_col_values(df_sub, 20), # Col U: Mặt lót đế
+        'toe_shapes': get_col_values(df_sub, 21),      # Col V: Dáng giày mũi
+        'bottom_parts': get_col_values(df_sub, 22),    # Col W: Phần dưới giày
+        'outfit_matches': get_col_values(df_sub, 23),  # Col X: Kết hợp trang phục
+        'usages': get_col_values(df_sub, 24),          # Col Y: Sử dụng
+        'suppliers': get_col_values(df_sub, 35)        # Col AJ: Nhà cung cấp
+    }
+
+
+def get_image_mime_type(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == ".webp":
+        return "image/webp"
+    elif ext in [".jpg", ".jpeg"]:
+        return "image/jpeg"
+    elif ext == ".png":
+        return "image/png"
+    return "image/jpeg"
+
+
+def parse_image_paths(input_str):
+    """Bóc tách 1 hoặc nhiều đường dẫn file ảnh từ chuỗi kéo thả Terminal."""
+    if not input_str or not input_str.strip():
+        return []
+    raw = input_str.strip()
+    paths = []
+    try:
+        tokens = shlex.split(raw)
+    except Exception:
+        tokens = [p.strip('\'"') for p in raw.split(' ') if p.strip()]
+
+    for tok in tokens:
+        cleaned = tok.strip('\'"').replace('\\ ', ' ')
+        if os.path.exists(cleaned) and not os.path.isdir(cleaned):
+            paths.append(cleaned)
+        elif os.path.exists(tok.strip('\'"')) and not os.path.isdir(tok.strip('\'"')):
+            paths.append(tok.strip('\'"'))
+    return paths
+
+
+def parse_vietnamese_shoe_sizes(size_input, gender='male'):
+    """Giải mã thông minh mọi cú pháp size chat xưởng tiếng Việt (889901123, 55677890, 39/2đ, 38-42, 38,39...)."""
+    if not size_input:
+        return ['38', '39', '40', '41', '42', '43'] if gender == 'male' else ['35', '36', '37', '38', '39']
+
+    # Nếu đã là list
+    if isinstance(size_input, list):
+        expanded = []
+        for item in size_input:
+            expanded.extend(parse_vietnamese_shoe_sizes(str(item), gender))
+        return expanded if expanded else ['38', '39', '40', '41', '42', '43']
+
+    s = str(size_input).strip()
+
+    # 1. Dạng chuỗi số viết tắt xưởng: '889901123' hoặc '55677890'
+    clean_digits = re.sub(r'[^0-9]', '', s)
+    if len(clean_digits) >= 4 and s == clean_digits:
+        is_female = ('5' in clean_digits or '6' in clean_digits or '7' in clean_digits) and ('1' not in clean_digits and '2' not in clean_digits and '3' not in clean_digits) or (gender == 'female')
+        if is_female:
+            digit_map = {'5': '35', '6': '36', '7': '37', '8': '38', '9': '39', '0': '40', '1': '41'}
+        else:
+            digit_map = {'7': '37', '8': '38', '9': '39', '0': '40', '1': '41', '2': '42', '3': '43', '4': '44', '5': '45'}
+        res = [digit_map[d] for d in clean_digits if d in digit_map]
+        if res:
+            return res
+
+    # 2. Dạng phân số / nhân số lượng: '39/2đ 40/2đ', '39:2, 40:2', '39x2 40x2'
+    slash_matches = re.findall(r'(\d{2})\s*[/x:đ\-]\s*(\d+)(?:\s*(?:đ|đôi|c|cái))?', s, re.IGNORECASE)
+    if slash_matches:
+        res = []
+        for sz, qty in slash_matches:
+            try:
+                q = int(qty)
+                res.extend([sz] * q)
+            except ValueError:
+                res.append(sz)
+        if res:
+            return res
+
+    # 3. Dạng dải khoảng: '38-42', 'sz từ 38 đến 42'
+    range_match = re.search(r'(\d{2})\s*(?:-|➔|đến|to)\s*(\d{2})', s, re.IGNORECASE)
+    if range_match:
+        try:
+            start_sz = int(range_match.group(1))
+            end_sz = int(range_match.group(2))
+            if 30 <= start_sz <= 50 and 30 <= end_sz <= 50 and start_sz <= end_sz:
+                return [str(i) for i in range(start_sz, end_sz + 1)]
+        except Exception:
+            pass
+
+    # 4. Dạng phân tách thông thường (dấu phẩy, chấm phẩy, khoảng trắng)
+    tokens = [t.strip() for t in re.split(r'[,;\s]+', s) if t.strip()]
+    res = []
+    for tok in tokens:
+        m = re.match(r'^(\d{2})(?:[x/:](\d+))?$', tok, re.IGNORECASE)
+        if m:
+            sz = m.group(1)
+            q = int(m.group(2)) if m.group(2) else 1
+            res.extend([sz] * q)
+        elif tok.isdigit() and len(tok) == 2:
+            res.append(tok)
+        elif tok.lower() in ['freesize', 'free', 'f']:
+            res.append('FreeSize')
+
+    return res if res else [s]
+
+
+def format_size_display(sizes_list):
+    """Hiển thị dải size có gom nhóm số lượng rõ ràng, ví dụ: 39 (x2), 40 (x2), 41 (x2) ➔ Tổng: 8 đôi."""
+    if not sizes_list:
+        return "Chưa có size"
+    from collections import Counter
+    counts = Counter([str(s).strip() for s in sizes_list if str(s).strip()])
+    def sort_key(k):
+        try: return (0, int(k))
+        except ValueError: return (1, k)
+    sorted_sizes = sorted(counts.keys(), key=sort_key)
+    parts = []
+    total_qty = 0
+    for sz in sorted_sizes:
+        qty = counts[sz]
+        total_qty += qty
+        if qty > 1:
+            parts.append(f"{sz} (x{qty})")
+        else:
+            parts.append(f"{sz}")
+    return f"{', '.join(parts)}  ➔  Tổng: {total_qty} đôi"
+
+
+def analyze_product_with_gemini(image_paths, user_notes, sub_dict):
+    """Gọi Gemini REST API phân tích (ưu tiên đoạn chat/ghi chú làm chủ đạo, ảnh bổ trợ)."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("Không tìm thấy GEMINI_API_KEY trong file .env hoặc biến môi trường!")
+
+    if not image_paths:
+        image_paths = []
+    elif isinstance(image_paths, str):
+        image_paths = [image_paths]
+
+    parts = []
+    valid_count = 0
+    for img_path in image_paths:
+        if os.path.exists(img_path) and not os.path.isdir(img_path):
+            with open(img_path, "rb") as img_file:
+                img_b64 = base64.b64encode(img_file.read()).decode("utf-8")
+            mime_type = get_image_mime_type(img_path)
+            parts.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": img_b64
+                }
+            })
+            valid_count += 1
+
+    if valid_count == 0 and not user_notes:
+        raise ValueError("Bạn cần nhập ít nhất Tin nhắn đặt hàng/Ghi chú HOẶC File ảnh sản phẩm!")
+
+    cat_list = ", ".join([f"'{c}'" for c in sub_dict['categories']])
+    feat_list = ", ".join([f"'{c}'" for c in sub_dict['features']])
+    mat_list = ", ".join([f"'{c}'" for c in sub_dict['materials']])
+    hl_list = ", ".join([f"'{c}'" for c in sub_dict['highlights']])
+    strap_list = ", ".join([f"'{c}'" for c in sub_dict['strap_materials']])
+    sole_list = ", ".join([f"'{c}'" for c in sub_dict['sole_materials']])
+    lining_list = ", ".join([f"'{c}'" for c in sub_dict['inner_linings']])
+    insole_list = ", ".join([f"'{c}'" for c in sub_dict['insole_surfaces']])
+    toe_list = ", ".join([f"'{c}'" for c in sub_dict['toe_shapes']])
+    bottom_list = ", ".join([f"'{c}'" for c in sub_dict['bottom_parts']])
+    outfit_list = ", ".join([f"'{c}'" for c in sub_dict['outfit_matches']])
+    usage_list = ", ".join([f"'{c}'" for c in sub_dict['usages']])
+    sup_list = ", ".join([f"'{c}'" for c in sub_dict['suppliers']])
+
+    prompt = f"""Bạn là chuyên gia phân tích và chuẩn hóa dữ liệu sản phẩm giày da và phụ kiện của Hiệu giày Hải Nancy.
+Hãy quan sát kỹ các hình ảnh sản phẩm được cung cấp (ảnh sản phẩm, tem hộp, nhãn mác, đế...) và kết hợp với ghi chú / đoạn chat của người dùng để trả về JSON chuẩn xác:
+
+QUY TẮC BẮT BUỘC VỀ GHI CHÚ CỦA NGƯỜI DÙNG (ƯU TIÊN SỐ 1 TUYỆT ĐỐI):
+1. Nhận diện Mã sản phẩm gốc / Mã xưởng:
+   - Nếu trong ghi chú có mã (ví dụ: 'JHA165' hoặc '8918'): BẮT BUỘC DÙNG ĐÚNG MÃ ĐÓ LÀM TIỀN TỐ GỐC, TUYỆT ĐỐI KHÔNG TỰ BỊA THÊM SỐ TỪ ẢNH (như 1650460).
+   - Mã biến thể màu: Ghép mã gốc + ký tự màu HNC (Đen -> 'JHA165D', Nâu -> 'JHA165N', Bò -> 'JHA165B', Kem -> 'JHA165K', Trắng -> 'JHA165T', Vàng -> 'JHA165V', Xám -> 'JHA165X').
+
+2. BẮT BUỘC TÁCH ĐỦ TẤT CẢ CÁC MÀU THÀNH TỪNG SẢN PHẨM TRONG JSON ARRAY:
+   - Nếu trong ghi chú có nhắc đến NHIỀU MÀU (ví dụ: 'Đen e còn... Nâu sz từ...'), BẮT BUỘC TẠO ĐỦ CÁC OBJECT SẢN PHẨM TƯƠNG ỨNG CHO TỪNG MÀU trong JSON Array (kể cả trong ảnh chỉ chụp 1 màu đơn).
+   - Ví dụ: Ghi chú có 'Đen' và 'Nâu' -> BẮT BUỘC trả về mảng 2 object: 1 cho Đen (JHA165D) và 1 cho Nâu (JHA165N).
+
+3. Bóc tách dải size và số lượng (unroll size list lặp lại theo số lượng):
+   - Cú pháp nhân số lượng: '39/2đ 40/2đ 41/2đ 42/2đ' -> sizes = ["39", "39", "40", "40", "41", "41", "42", "42"]
+   - Cú pháp viết tắt xưởng nam: '889901123' -> sizes = ["38", "38", "39", "39", "40", "41", "41", "42", "43"]
+   - Cú pháp viết tắt xưởng nữ: '55677890' -> sizes = ["35", "35", "36", "37", "37", "38", "39", "40"]
+   - Cú pháp dải size: 'sz từ 38-42' hoặc '38-42' -> sizes = ["38", "39", "40", "41", "42"]
+   - Nếu không có ghi chú số lượng size cụ thể: nam mặc định ["38", "39", "40", "41", "42", "43"], nữ mặc định ["35", "36", "37", "38", "39"].
+
+DỮ LIỆU BẮT BUỘC KHÓA (CHỈ ĐƯỢC CHỌN TỪ DANH SÁCH DƯỚI ĐÂY):
+- category_name: Chọn 1 trong [{cat_list}]
+- feature: Chọn 1 trong [{feat_list}]
+- brand: Chọn 'Hải Nancy' hoặc 'Yen Leather' (mặc định 'Hải Nancy')
+- material: Chọn 1 trong [{mat_list}] (mặc định 'da bò' nếu là đồ da)
+- highlight: Chọn 1 trong [{hl_list}]
+- strap_material: Chọn 1 trong [{strap_list}]
+- sole_material: Chọn 1 trong [{sole_list}]
+- inner_lining: Chọn 1 trong [{lining_list}]
+- insole_surface: Chọn 1 trong [{insole_list}]
+- toe_shape: Chọn 1 trong [{toe_list}]
+- bottom_part: Chọn 1 trong [{bottom_list}]
+- outfit_match: Chọn 1 trong [{outfit_list}]
+- usage: Chọn 1 trong [{usage_list}]
+- supplier: Khớp với 1 trong [{sup_list}] nếu người dùng có ghi chú, hoặc điền theo ghi chú.
+
+QUY TẮC MÀU SẮC & MÃ SẢN PHẨM:
+- product_color: Tên màu sắc tiếng Việt (ví dụ: 'Đen', 'Nâu', 'Bò', 'Kem', 'Trắng', 'Vàng', 'Xám', 'Xanh', 'Đỏ')
+- color_code: Ký tự màu chuẩn HNC ('D': Đen, 'N': Nâu, 'B': Bò, 'K': Kem, 'T': Trắng, 'V': Vàng, 'X': Xám)
+- product_code: Mã biến thể. Ghép [Mã xưởng/Mã cha] + [color_code].
+- product_name: Tên sản phẩm thương mại chuẩn SEO (Ví dụ: 'Giày Tây Nam Da Bò Hải Nancy JHA165D').
+- purchase_price: Giá mua (số nguyên) lấy từ ghi chú hoặc OCR tem. Mặc định 0 nếu không có.
+- product_price: Giá bán niêm yết (số nguyên). Mặc định nếu mua 300k thì bán ~600k-700k.
+- invoice_price: Giá hóa đơn (số nguyên). Thường bằng hoặc cao hơn giá mua 1 ít.
+- unit: 'Đôi' (cho giày/dép/sandal) hoặc 'Cái' (cho ví/thắt lưng/túi).
+- origin: 'Việt Nam'
+
+GHI CHÚ BỔ SUNG TỪ NGƯỜI DÙNG:
+\"\"\"{user_notes}\"\"\"
+
+Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đầy đủ các trường trên."""
+
+    parts.append({"text": prompt})
+
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "responseMimeType": "application/json"
+        }
+    }
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    preferred_models = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash"
+    ]
+    raw_text = None
+    used_model = None
+
+    for model_name in preferred_models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(req, context=ctx, timeout=45) as resp:
+                    resp_json = json.loads(resp.read().decode("utf-8"))
+                    raw_text = resp_json["candidates"][0]["content"]["parts"][0]["text"]
+                    if raw_text:
+                        used_model = model_name
+                        break
+            except urllib.error.HTTPError as http_err:
+                err_msg = http_err.read().decode("utf-8", errors="ignore")
+                if http_err.code in [503, 429] and attempt == 0:
+                    time.sleep(2)
+                    continue
+                break
+            except Exception:
+                break
+        if raw_text:
+            break
+
+    if not raw_text:
+        raise RuntimeError("Không nhận được phản hồi từ tất cả các mô hình Gemini Multimodal API.")
+
+    if HAS_RICH:
+        console.print(f"[dim green]⚡ Đã phân tích thành công bằng mô hình: [bold cyan]{used_model}[/bold cyan][/dim green]")
+    else:
+        print(f"⚡ Đã phân tích thành công bằng mô hình: {used_model}")
+
+    raw_text = raw_text.strip()
+    if raw_text.startswith("```"):
+        raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
+        raw_text = re.sub(r'\s*```$', '', raw_text)
+
+    parsed = json.loads(raw_text)
+    if isinstance(parsed, dict):
+        raw_products = [parsed]
+    elif isinstance(parsed, list):
+        raw_products = [p for p in parsed if isinstance(p, dict)]
+    else:
+        raw_products = []
+
+    products = []
+    for data in raw_products:
+        data.setdefault('brand', 'Hải Nancy')
+        data.setdefault('unit', 'Đôi')
+        data.setdefault('origin', 'Việt Nam')
+        data.setdefault('purchase_price', 0)
+        data.setdefault('product_price', 0)
+        data.setdefault('invoice_price', 0)
+
+        # Xác định giới tính
+        cat_lower = str(data.get('category_name', '')).lower()
+        if 'nữ' in cat_lower or 'gót' in cat_lower or 'búp bê' in cat_lower or 'xuồng' in cat_lower:
+            data['gender'] = 'female'
+        elif 'ví' in cat_lower or 'thắt lưng' in cat_lower or 'túi' in cat_lower or 'ba lô' in cat_lower:
+            data['gender'] = 'unisex'
+            data['unit'] = 'Cái'
+        else:
+            data['gender'] = 'male'
+
+        # Chuẩn hóa dải size thông qua parser chuyên biệt
+        raw_sz = data.get('sizes')
+        data['sizes'] = parse_vietnamese_shoe_sizes(raw_sz, data['gender'])
+        products.append(data)
+
+    return products
+
+
+def check_and_enrich_product(product, product_info_map):
+    """Kiểm tra mã sản phẩm đã tồn tại trong SANPHAM chưa để tự động kích hoạt chế độ Restock và lấy giá/tên chuẩn."""
+    pcode = str(product.get('product_code', '')).strip().upper()
+    product['product_code'] = pcode
+
+    if pcode in product_info_map:
+        product['is_restock'] = True
+        existing = product_info_map[pcode]
+        product['existing_info'] = existing
+
+        # BẮT BUỘC ĐỒNG BỘ 100% THÔNG TIN GỐC TỪ SHEET SANPHAM KHI LÀ RESTOCK
+        if existing.get('product_name'):
+            product['product_name'] = str(existing['product_name']).strip()
+        if existing.get('product_color'):
+            product['product_color'] = str(existing['product_color']).strip()
+        if existing.get('supplier'):
+            product['supplier'] = str(existing['supplier']).strip()
+
+        # Lấy đúng Giá bán gốc từ SANPHAM
+        if existing.get('product_price') is not None and str(existing.get('product_price')).strip() != '':
+            try:
+                p_val = str(existing['product_price']).replace(',', '').replace('.', '').strip()
+                if p_val.isdigit():
+                    product['product_price'] = int(p_val)
+                else:
+                    product['product_price'] = int(float(existing['product_price']))
+            except Exception:
+                pass
+
+        # Lấy đúng Giá mua gốc từ SANPHAM
+        if existing.get('purchase_price') is not None and str(existing.get('purchase_price')).strip() != '':
+            try:
+                p_val = str(existing['purchase_price']).replace(',', '').replace('.', '').strip()
+                if p_val.isdigit():
+                    product['purchase_price'] = int(p_val)
+                else:
+                    product['purchase_price'] = int(float(existing['purchase_price']))
+            except Exception:
+                pass
+
+        # Lấy đúng Giá hóa đơn gốc từ SANPHAM
+        if existing.get('invoice_price') is not None and str(existing.get('invoice_price')).strip() != '':
+            try:
+                p_val = str(existing['invoice_price']).replace(',', '').replace('.', '').strip()
+                if p_val.isdigit():
+                    product['invoice_price'] = int(p_val)
+                else:
+                    product['invoice_price'] = int(float(existing['invoice_price']))
+            except Exception:
+                pass
+    else:
+        product['is_restock'] = False
+
+    return product
+
+
+def interactive_review_and_edit_batch(products, sub_dict, product_info_map):
+    """Giao diện Terminal hiển thị rõ ràng từng sản phẩm, nổi bật phím bấm [1-9] và hỗ trợ Restock."""
+    total = len(products)
+    confirmed_products = []
+
+    idx = 0
+    while idx < total:
+        data = products[idx]
+        data = check_and_enrich_product(data, product_info_map)
+        is_restock = data.get('is_restock', False)
+
+        while True:
+            os.system('clear' if os.name == 'posix' else 'cls')
+
+            size_display_text = format_size_display(data.get('sizes', []))
+            price_buy = f"{int(data.get('purchase_price', 0)):,}"
+            price_sell = f"{int(data.get('product_price', 0)):,}"
+            price_inv = f"{int(data.get('invoice_price', 0)):,}"
+
+            if is_restock:
+                title_text = f"📦 [SẢN PHẨM {idx+1}/{total}] NHẬP THÊM HÀNG VỀ (MÃ ĐÃ CÓ TRONG SANPHAM)"
+                border_color = "bold cyan"
+            else:
+                title_text = f"🆕 [SẢN PHẨM {idx+1}/{total}] TẠO MỚI SẢN PHẨM & NHẬP KHO (52 CỘT CHUẨN)"
+                border_color = "bold green"
+
+            table = Table(title=title_text, border_style=border_color, show_header=True)
+            table.add_column("PHÍM", style="bold bright_yellow", min_width=6, justify="center")
+            table.add_column("TRƯỜNG DỮ LIỆU", style="bold bright_cyan", min_width=24)
+            table.add_column("GIÁ TRỊ HIỆN TẠI", style="bold white", min_width=45)
+
+            if is_restock:
+                table.add_row("[1]", "Mã sản phẩm (product_code)", f"[bold green]{data.get('product_code', '')}[/bold green]  [italic yellow](Đã có trong SANPHAM)[/italic yellow]")
+                table.add_row("[2]", "Tên sản phẩm (product_name)", data.get('product_name', ''))
+                table.add_row("[3]", "Màu sắc", data.get('product_color', ''))
+                table.add_row("[4]", "Giá mua / Giá bán", f"Mua: {price_buy}đ  ➔  Bán: {price_sell}đ (HĐ: {price_inv}đ)")
+                table.add_row("[5]", "Dải Size nhập đợt này", size_display_text)
+            else:
+                attrs_preview = f"{data.get('material', '')}, {data.get('sole_material', '')}, Mũi {data.get('toe_shape', '')}, {data.get('bottom_part', '')}, Lót {data.get('inner_lining', '')}"
+                table.add_row("[1]", "Mã sản phẩm (product_code)", f"[bold green]{data.get('product_code', '')}[/bold green]")
+                table.add_row("[2]", "Tên sản phẩm (product_name)", data.get('product_name', ''))
+                table.add_row("[3]", "Tên ngành hàng", f"[bold yellow]{data.get('category_name', '')}[/bold yellow]")
+                table.add_row("[4]", "Màu sắc & Mã màu", f"{data.get('product_color', '')} (Mã màu: {data.get('color_code', '')})")
+                table.add_row("[5]", "Nhà cung cấp (NCC)", data.get('supplier', ''))
+                table.add_row("[6]", "Giá mua / Giá bán", f"Mua: {price_buy}đ  ➔  Bán: {price_sell}đ (HĐ: {price_inv}đ)")
+                table.add_row("[7]", "Dải Size nhập đợt này", size_display_text)
+                table.add_row("[8]", "Đặc điểm / Kiểu buộc", data.get('feature', ''))
+                table.add_row("[9]", "Thuộc tính cấu tạo", attrs_preview)
+
+            if HAS_RICH:
+                console.print(table)
+                if is_restock:
+                    console.print("[dim italic yellow]📌 Chế độ Restock: Chỉ tạo các dòng trong tab NHAP (KHO trống, SL 1). Không tạo thêm dòng SANPHAM.[/dim italic yellow]\n")
+                else:
+                    console.print("[dim italic green]📌 Chế độ Mới: Tạo 1 dòng 52 cột ở tab SANPHAM + Tạo các dòng size ở tab NHAP.[/dim italic green]\n")
+
+                console.print("[bold green]👉 Nhấn [ENTER] [/bold green]: Xác nhận sản phẩm này & Tiếp tục")
+                if is_restock:
+                    console.print("[bold yellow]👉 Gõ [1 - 5] [/bold yellow]: Chỉnh sửa trường tương ứng")
+                else:
+                    console.print("[bold yellow]👉 Gõ [1 - 9] [/bold yellow]: Chỉnh sửa trường tương ứng")
+                console.print("[bold cyan]👉 Gõ [S]     [/bold cyan]: Bỏ qua sản phẩm này (Skip)")
+                console.print("[bold red]👉 Gõ [C]     [/bold red]: Hủy bỏ toàn bộ tiến trình")
+                choice = Prompt.ask("\n[bold bright_white]Lựa chọn của bạn[/bold bright_white]", default="")
+            else:
+                print(f"\n[ENTER] Xác nhận | Gõ số để sửa | [S] Bỏ qua | [C] Hủy")
+                choice = input("Lựa chọn của bạn: ").strip()
+
+            if choice == "":
+                confirmed_products.append(data)
+                break
+            elif choice.upper() == "S":
+                break
+            elif choice.upper() == "C":
+                return None
+            elif choice == "1":
+                val = input(f"✏️ Nhập Mã sản phẩm mới [{data.get('product_code')}]: ").strip()
+                if val:
+                    data['product_code'] = val.upper()
+                    data = check_and_enrich_product(data, product_info_map)
+                    is_restock = data.get('is_restock', False)
+            elif choice == "2":
+                val = input(f"✏️ Nhập Tên sản phẩm mới [{data.get('product_name')}]: ").strip()
+                if val: data['product_name'] = val
+            elif choice == "3" and not is_restock:
+                print("\nDanh sách Ngành Hàng hợp lệ:")
+                for i, cat in enumerate(sub_dict['categories'], 1):
+                    print(f"  [{i:2d}] {cat}")
+                c_idx = input(f"Chọn số thứ tự ngành hàng [1-{len(sub_dict['categories'])}]: ").strip()
+                if c_idx.isdigit() and 1 <= int(c_idx) <= len(sub_dict['categories']):
+                    data['category_name'] = sub_dict['categories'][int(c_idx)-1]
+            elif choice == "3" and is_restock:
+                val = input(f"✏️ Màu sắc [{data.get('product_color')}]: ").strip()
+                if val: data['product_color'] = val
+            elif choice == "4" and not is_restock:
+                c_name = input(f"✏️ Tên màu sắc [{data.get('product_color')}]: ").strip()
+                c_code = input(f"✏️ Ký tự mã màu [{data.get('color_code')}]: ").strip()
+                if c_name: data['product_color'] = c_name
+                if c_code: data['color_code'] = c_code.upper()
+            elif (choice == "4" and is_restock) or (choice == "6" and not is_restock):
+                p_buy = input(f"✏️ Giá mua [{data.get('purchase_price')}]: ").strip().replace(',', '').replace('.', '')
+                p_sell = input(f"✏️ Giá bán [{data.get('product_price')}]: ").strip().replace(',', '').replace('.', '')
+                p_inv = input(f"✏️ Giá hóa đơn [{data.get('invoice_price')}]: ").strip().replace(',', '').replace('.', '')
+                if p_buy.isdigit(): data['purchase_price'] = int(p_buy)
+                if p_sell.isdigit(): data['product_price'] = int(p_sell)
+                if p_inv.isdigit(): data['invoice_price'] = int(p_inv)
+            elif (choice == "5" and is_restock) or (choice == "7" and not is_restock):
+                val = input(f"✏️ Nhập dải size (VD: 889901123, 39/2đ 40/2đ, 38-42, 38,39...): ").strip()
+                if val: data['sizes'] = parse_vietnamese_shoe_sizes(val, data.get('gender', 'male'))
+            elif choice == "5" and not is_restock:
+                val = input(f"✏️ Nhà cung cấp [{data.get('supplier')}]: ").strip()
+                if val: data['supplier'] = val
+            elif choice == "8" and not is_restock:
+                val = input(f"✏️ Đặc điểm / Kiểu buộc [{data.get('feature')}]: ").strip()
+                if val: data['feature'] = val
+            elif choice == "9" and not is_restock:
+                mat = input(f"✏️ Chất liệu [{data.get('material')}]: ").strip()
+                sole = input(f"✏️ Chất liệu đế [{data.get('sole_material')}]: ").strip()
+                toe = input(f"✏️ Dáng mũi [{data.get('toe_shape')}]: ").strip()
+                if mat: data['material'] = mat
+                if sole: data['sole_material'] = sole
+                if toe: data['toe_shape'] = toe
+
+        idx += 1
+
+    return confirmed_products
+
+
+def col_to_letter(col_idx):
+    """Chuyển đổi 0-indexed column sang chữ cái Excel/Google Sheets (0->A, 22->W, 51->AZ, etc.)."""
+    return gspread.utils.rowcol_to_a1(1, col_idx + 1).rstrip('0123456789')
+
+
+def batch_commit_ingestion(loader, confirmed_products):
+    """Ghi hàng loạt sản phẩm mới vào SANPHAM và toàn bộ dòng nhập kho vào NHAP (Quét Header Động)."""
+    if not confirmed_products:
+        return {'sp_added': 0, 'restock_count': 0, 'nhap_rows': 0}
+
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    doc_no = f"PN_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+    # 1. Chuẩn bị dòng cho SANPHAM (chỉ cho các sản phẩm mới)
+    df_sp, _ = loader.load_sheet('SANPHAM')
+    start_sp_row = len(df_sp) + 1
+    var_idx_sp, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
+    num_sp_cols = len(df_sp.columns)
+
+    # Dynamic Column Indices
+    idx_parent = DynamicHeaderScanner.get_col_idx(map_sp, 'parent_product_code', 'Mã hàng hóa cha', default=0)
+    idx_cat = DynamicHeaderScanner.get_col_idx(map_sp, 'Tên Ngành Hàng', 'Tên nhóm hàng hóa', 'category_name', default=1)
+    idx_feat = DynamicHeaderScanner.get_col_idx(map_sp, 'Đặc điểm', 'feature', default=2)
+    idx_brand = DynamicHeaderScanner.get_col_idx(map_sp, 'Thương hiệu', 'brand', default=3)
+    idx_gender = DynamicHeaderScanner.get_col_idx(map_sp, 'Giới tính', 'gender', default=4)
+    idx_sizeplus = DynamicHeaderScanner.get_col_idx(map_sp, 'Size Plus', 'size_plus', default=5)
+    idx_size = DynamicHeaderScanner.get_col_idx(map_sp, 'Size', 'Kích thước', default=6)
+    idx_mat = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu', 'material', default=7)
+    idx_hl = DynamicHeaderScanner.get_col_idx(map_sp, 'Nhấn mạnh', 'highlight', default=8)
+    idx_strap = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu quai: ', 'Chất liệu quai:', 'Chất liệu quai', default=9)
+    idx_sole = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu đế: ', 'Chất liệu đế:', 'Chất liệu đế', default=10)
+    idx_lining = DynamicHeaderScanner.get_col_idx(map_sp, 'Lót trong: ', 'Lót trong:', 'Lót trong', default=11)
+    idx_insole = DynamicHeaderScanner.get_col_idx(map_sp, 'Mặt lót đế: ', 'Mặt lót đế:', 'Mặt lót đế', default=12)
+    idx_toe = DynamicHeaderScanner.get_col_idx(map_sp, 'Dáng giày mũi: ', 'Dáng giày mũi:', 'Dáng giày mũi', default=13)
+    idx_bottom = DynamicHeaderScanner.get_col_idx(map_sp, 'Phần dưới giày: ', 'Phần dưới giày:', 'Phần dưới giày', default=14)
+    idx_outfit = DynamicHeaderScanner.get_col_idx(map_sp, 'Kết hợp trang phục: ', 'Kết hợp trang phục:', 'Kết hợp trang phục', default=15)
+    idx_usage = DynamicHeaderScanner.get_col_idx(map_sp, 'Sử dụng: ', 'Sử dụng:', 'Sử dụng', default=16)
+    idx_bonus = DynamicHeaderScanner.get_col_idx(map_sp, 'Bonus:', 'Bonus', default=17)
+    idx_countif = 18 # Col S (countif)
+    idx_con_name = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_NAME', default=19)
+    idx_con_des = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_DES', default=20)
+    idx_code = DynamicHeaderScanner.get_col_idx(map_sp, 'product_code', 'Mã sản phẩm', default=22)
+    idx_name = DynamicHeaderScanner.get_col_idx(map_sp, 'product_name', 'Tên sản phẩm', default=23)
+    idx_price = DynamicHeaderScanner.get_col_idx(map_sp, 'product_price', 'Giá bán', default=24)
+    idx_unit = DynamicHeaderScanner.get_col_idx(map_sp, 'product_unit', 'ĐVT', default=25)
+    idx_origin = DynamicHeaderScanner.get_col_idx(map_sp, 'product_origin', 'Xuất xứ', default=26)
+    idx_color = DynamicHeaderScanner.get_col_idx(map_sp, 'product_color', 'Màu sắc', default=27)
+    idx_cat_id = DynamicHeaderScanner.get_col_idx(map_sp, 'product_category_id', 'Mã danh mục', default=28)
+    idx_desc = DynamicHeaderScanner.get_col_idx(map_sp, 'product_description', 'Mô tả sản phẩm', default=29)
+    idx_purch = DynamicHeaderScanner.get_col_idx(map_sp, 'purchase_price', 'Giá mua', default=30)
+    idx_inv = DynamicHeaderScanner.get_col_idx(map_sp, 'invoice_price', 'Đơn giá', default=31)
+    idx_sup = DynamicHeaderScanner.get_col_idx(map_sp, 'supplier', 'Nhà cung cấp', default=32)
+
+    # Dynamic Column Letters
+    c_cat = col_to_letter(idx_cat) if idx_cat is not None else 'B'
+    c_feat = col_to_letter(idx_feat) if idx_feat is not None else 'C'
+    c_brand = col_to_letter(idx_brand) if idx_brand is not None else 'D'
+    c_gender = col_to_letter(idx_gender) if idx_gender is not None else 'E'
+    c_sizeplus = col_to_letter(idx_sizeplus) if idx_sizeplus is not None else 'F'
+    c_size = col_to_letter(idx_size) if idx_size is not None else 'G'
+    c_mat = col_to_letter(idx_mat) if idx_mat is not None else 'H'
+    c_hl = col_to_letter(idx_hl) if idx_hl is not None else 'I'
+    c_strap = col_to_letter(idx_strap) if idx_strap is not None else 'J'
+    c_sole = col_to_letter(idx_sole) if idx_sole is not None else 'K'
+    c_lining = col_to_letter(idx_lining) if idx_lining is not None else 'L'
+    c_insole = col_to_letter(idx_insole) if idx_insole is not None else 'M'
+    c_toe = col_to_letter(idx_toe) if idx_toe is not None else 'N'
+    c_bottom = col_to_letter(idx_bottom) if idx_bottom is not None else 'O'
+    c_outfit = col_to_letter(idx_outfit) if idx_outfit is not None else 'P'
+    c_usage = col_to_letter(idx_usage) if idx_usage is not None else 'Q'
+    c_bonus = col_to_letter(idx_bonus) if idx_bonus is not None else 'R'
+    c_con_name = col_to_letter(idx_con_name) if idx_con_name is not None else 'T'
+    c_con_des = col_to_letter(idx_con_des) if idx_con_des is not None else 'U'
+    c_code = col_to_letter(idx_code) if idx_code is not None else 'W'
+    c_unit = col_to_letter(idx_unit) if idx_unit is not None else 'Z'
+
+    sp_new_rows = []
+    sp_added_count = 0
+    for data in confirmed_products:
+        if not data.get('is_restock', False):
+            cur_sp_row = start_sp_row + sp_added_count
+            row_values = [""] * num_sp_cols
+
+            if idx_parent is not None: row_values[idx_parent] = f'=LEFT({c_code}{cur_sp_row}; LEN({c_code}{cur_sp_row})-1)'
+            if idx_cat is not None: row_values[idx_cat] = data.get('category_name', '')
+            if idx_feat is not None: row_values[idx_feat] = data.get('feature', '')
+            if idx_brand is not None: row_values[idx_brand] = data.get('brand', 'Hải Nancy')
+            if idx_gender is not None: row_values[idx_gender] = f'=IF(REGEXMATCH({c_cat}{cur_sp_row}; "nam"); "male"; "female")'
+            if idx_sizeplus is not None: row_values[idx_sizeplus] = ""
+            if idx_size is not None: row_values[idx_size] = f'=IF({c_unit}{cur_sp_row}="Đôi"; CONCATENATE(if({c_gender}{cur_sp_row}="male";"38,39,40,41,42,43";if({c_gender}{cur_sp_row}="female";"35,36,37,38,39,40";""));if({c_sizeplus}{cur_sp_row}="";"";",");{c_sizeplus}{cur_sp_row});"")'
+            if idx_mat is not None: row_values[idx_mat] = data.get('material', 'da bò')
+            if idx_hl is not None: row_values[idx_hl] = data.get('highlight', 'cao cấp')
+            if idx_strap is not None: row_values[idx_strap] = data.get('strap_material', 'da bò cao cấp')
+            if idx_sole is not None: row_values[idx_sole] = data.get('sole_material', 'cao su')
+            if idx_lining is not None: row_values[idx_lining] = data.get('inner_lining', 'da heo')
+            if idx_insole is not None: row_values[idx_insole] = data.get('insole_surface', 'mềm êm, có độ đàn hồi')
+            if idx_toe is not None: row_values[idx_toe] = data.get('toe_shape', 'tròn')
+            if idx_bottom is not None: row_values[idx_bottom] = data.get('bottom_part', 'gót 3cm')
+            if idx_outfit is not None: row_values[idx_outfit] = data.get('outfit_match', 'tây, jean, khaki...')
+            if idx_usage is not None: row_values[idx_usage] = data.get('usage', 'hằng ngày, dự tiệc...')
+            if idx_bonus is not None: row_values[idx_bonus] = ""
+            if idx_countif is not None and idx_countif < num_sp_cols: row_values[idx_countif] = f'=countif(${c_code}:${c_code};{c_code}{cur_sp_row})'
+            if idx_con_name is not None: row_values[idx_con_name] = f'=CONCATENATE({c_cat}{cur_sp_row};" ";{c_feat}{cur_sp_row};" ";{c_brand}{cur_sp_row};" ";{c_mat}{cur_sp_row};" ";{c_hl}{cur_sp_row};" ";{c_code}{cur_sp_row})'
+            if idx_con_des is not None: row_values[idx_con_des] = f'=CONCATENATE({c_con_name}{cur_sp_row};". ";${c_strap}$2;{c_strap}{cur_sp_row};". ";${c_sole}$2;{c_sole}{cur_sp_row};". ";${c_lining}$2;{c_lining}{cur_sp_row};". ";${c_insole}$2;{c_insole}{cur_sp_row};". ";${c_toe}$2;{c_toe}{cur_sp_row};". ";${c_bottom}$2;{c_bottom}{cur_sp_row};". ";${c_outfit}$2;{c_outfit}{cur_sp_row};". ";${c_usage}$2;{c_usage}{cur_sp_row};". ";{c_bonus}{cur_sp_row})'
+            if idx_code is not None: row_values[idx_code] = data.get('product_code', '')
+            if idx_name is not None: row_values[idx_name] = f'={c_con_name}{cur_sp_row}'
+            if idx_price is not None: row_values[idx_price] = data.get('product_price', 0)
+            if idx_unit is not None: row_values[idx_unit] = data.get('unit', 'Đôi')
+            if idx_origin is not None: row_values[idx_origin] = data.get('origin', 'Việt Nam')
+            if idx_color is not None: row_values[idx_color] = data.get('product_color', '')
+            if idx_cat_id is not None: row_values[idx_cat_id] = f'=index(SUB!$B$2:$B$126;match({c_cat}{cur_sp_row};SUB!$A$2:$A$126;0);1)'
+            if idx_desc is not None: row_values[idx_desc] = f'={c_con_des}{cur_sp_row}'
+            if idx_purch is not None: row_values[idx_purch] = data.get('purchase_price', 0)
+            if idx_inv is not None: row_values[idx_inv] = data.get('invoice_price', 0)
+            if idx_sup is not None: row_values[idx_sup] = data.get('supplier', '')
+
+            sp_new_rows.append(row_values)
+            sp_added_count += 1
+
+    if sp_new_rows:
+        loader.insert_rows_with_exact_range('SANPHAM', sp_new_rows, start_sp_row)
+
+    # 2. Chuẩn bị dòng cho NHAP (cho TẤT CẢ các sản phẩm)
+    df_nhap, _ = loader.load_sheet('NHAP')
+    start_nhap_row = len(df_nhap) + 1
+    var_idx_nhap, map_nhap = DynamicHeaderScanner.scan_data_headers(df_nhap)
+    num_nhap_cols = len(df_nhap.columns)
+
+    idx_n_date = DynamicHeaderScanner.get_col_idx(map_nhap, 'Ngày chứng từ (*)', default=0)
+    idx_n_doc = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số chứng từ (*)', default=1)
+    idx_n_code = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_code', default=2)
+    idx_n_color = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_color', default=3)
+    idx_n_kho = DynamicHeaderScanner.get_col_idx(map_nhap, 'KHO', default=4)
+    idx_n_size = DynamicHeaderScanner.get_col_idx(map_nhap, 'item_size', default=5)
+    idx_n_qty = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số lượng (*)', default=6)
+    idx_n_fsku = DynamicHeaderScanner.get_col_idx(map_nhap, 'FSKU', default=7)
+
+    c_n_kho = col_to_letter(idx_n_kho) if idx_n_kho is not None else 'E'
+    c_n_code = col_to_letter(idx_n_code) if idx_n_code is not None else 'C'
+    c_n_size = col_to_letter(idx_n_size) if idx_n_size is not None else 'F'
+
+    nhap_new_rows = []
+    nhap_count = 0
+    for data in confirmed_products:
+        pcode = data.get('product_code', '')
+        pcolor = data.get('product_color', '')
+        sizes = data.get('sizes', [''])
+        for sz in sizes:
+            cur_nhap_row = start_nhap_row + nhap_count
+            row = [""] * num_nhap_cols
+            if idx_n_date is not None: row[idx_n_date] = today_str
+            if idx_n_doc is not None: row[idx_n_doc] = doc_no
+            if idx_n_code is not None: row[idx_n_code] = pcode
+            if idx_n_color is not None: row[idx_n_color] = pcolor
+            if idx_n_kho is not None: row[idx_n_kho] = ""
+            if idx_n_size is not None: row[idx_n_size] = sz
+            if idx_n_qty is not None: row[idx_n_qty] = 1
+            if idx_n_fsku is not None: row[idx_n_fsku] = f'=CONCATENATE({c_n_kho}{cur_nhap_row}; {c_n_code}{cur_nhap_row}; {c_n_size}{cur_nhap_row})'
+            nhap_new_rows.append(row)
+            nhap_count += 1
+
+    if nhap_new_rows:
+        loader.insert_rows_with_exact_range('NHAP', nhap_new_rows, start_nhap_row)
+
+    restock_count = len(confirmed_products) - sp_added_count
+    return {
+        'sp_added': sp_added_count,
+        'restock_count': restock_count,
+        'nhap_rows': len(nhap_new_rows)
+    }
+
+
+def read_multiline_input(prompt_text, hint_text=""):
+    """Hứng trọn vẹn nhiều dòng văn bản khi dán từ Zalo/Xưởng vào Terminal."""
+    if HAS_RICH:
+        console.print(f"\n[bold yellow]{prompt_text}[/bold yellow]")
+        if hint_text:
+            console.print(f"[dim]{hint_text}[/dim]")
+    else:
+        print(f"\n{prompt_text}")
+        if hint_text:
+            print(hint_text)
+
+    lines = []
+    while True:
+        try:
+            line = input()
+            stripped = line.strip()
+            # Nếu người dùng bấm Enter ngay từ đầu khi chưa nhập gì -> Bỏ qua
+            if not stripped and not lines:
+                break
+            # Nếu gõ lệnh kết thúc
+            if stripped.lower() in ('xong', 'end', 'done', 'q'):
+                break
+            # Nếu bấm Enter trên dòng trống sau khi đã có nội dung dán -> Kết thúc nhập
+            if not stripped and lines:
+                break
+            lines.append(line)
+        except (EOFError, KeyboardInterrupt):
+            break
+    return "\n".join(lines).strip()
+
+
+def process_ai_product_ingestion(loader):
+    """Quy trình toàn diện AI Tự Động Nhập Hàng Từ Hình Ảnh (Hỗ trợ Đa Sản Phẩm & Restock)."""
+    if HAS_RICH:
+        console.print(Panel("""📸 [bold white]AI TỰ ĐỘNG NHẬP SẢN PHẨM MỚI TỪ HÌNH ẢNH (GEMINI MULTIMODAL ENGINE)[/bold white]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Hỗ trợ dán tin nhắn Zalo / Ghi chú xưởng (Mã gốc, dải size, màu sắc, giá...).
+👉 Hỗ trợ kéo thả 1 hoặc NHIỀU ảnh sản phẩm / tem mác / mẫu khác nhau.
+👉 Tự động nhận diện Sản Phẩm MỚI (52 cột) hoặc ĐÃ CÓ (Chỉ nhập thêm kho)!""", border_style="bold green"))
+    else:
+        print("\n=== AI TỰ ĐỘNG NHẬP SẢN PHẨM MỚI TỪ HÌNH ẢNH ===")
+
+    # 1. Nhập thông tin / Tin nhắn đặt hàng / Ghi chú (Hỗ trợ dán nhiều dòng)
+    user_notes = read_multiline_input(
+        "✍️ Dán tin nhắn đặt hàng / Ghi chú (Mã, màu, size, giá, NCC...):",
+        "(Dán xong bấm Enter thêm 1 lần hoặc gõ 'xong' để tiếp tục | Bấm Enter ngay nếu không có ghi chú)"
+    )
+
+    # 2. Nhập đường dẫn ảnh (Bổ trợ kiểu dáng / chất liệu)
+    if HAS_RICH:
+        img_input = Prompt.ask("\n[bold cyan]📸 Kéo thả 1 hoặc nhiều File Ảnh (hoặc Enter nếu không có ảnh)[/bold cyan]", default="").strip()
+    else:
+        img_input = input("\n📸 Kéo thả 1 hoặc nhiều File Ảnh (hoặc Enter nếu không có ảnh): ").strip()
+
+    img_paths = parse_image_paths(img_input) if img_input else []
+    if not user_notes and not img_paths:
+        msg = "❌ Bạn cần nhập ít nhất Tin nhắn đặt hàng/Ghi chú HOẶC File ảnh sản phẩm để AI phân tích!"
+        if HAS_RICH: console.print(f"[bold red]{msg}[/bold red]")
+        else: print(msg)
+        return
+
+    if img_paths:
+        if HAS_RICH:
+            console.print(f"[dim]📸 Đã nhận diện [bold cyan]{len(img_paths)} ảnh bổ trợ[/bold cyan]: {', '.join([os.path.basename(p) for p in img_paths])}[/dim]")
+
+    # 3. Tải từ điển SUB, thông tin SANPHAM và phân tích AI
+    if HAS_RICH:
+        console.print("\n[bold green]🔍 Đang tải dữ liệu chuẩn từ Google Sheet & Gọi Gemini AI phân tích...[/bold green]")
+    else:
+        print("\n🔍 Đang tải dữ liệu chuẩn từ Google Sheet & Gọi Gemini AI phân tích...")
+
+    try:
+        sub_dict = load_sub_dictionary(loader)
+        product_info_map = get_product_info_map(loader)
+        analyzed_products = analyze_product_with_gemini(img_paths, user_notes, sub_dict)
+    except Exception as e:
+        msg = f"❌ Lỗi khi phân tích AI: {e}"
+        if HAS_RICH: console.print(Panel(msg, title="[bold red]LỖI AI VISION[/bold red]", border_style="red"))
+        else: print(msg)
+        return
+
+    if not analyzed_products:
+        msg = "⚠️ Gemini AI không tìm thấy dữ liệu sản phẩm nào từ hình ảnh!"
+        if HAS_RICH: console.print(f"[yellow]{msg}[/yellow]")
+        else: print(msg)
+        return
+
+    # 4. Review và Chỉnh sửa tương tác theo lô
+    confirmed_products = interactive_review_and_edit_batch(analyzed_products, sub_dict, product_info_map)
+    if not confirmed_products:
+        if HAS_RICH: console.print("[yellow]⚠️ Đã hủy bỏ thao tác nhập sản phẩm.[/yellow]")
+        else: print("⚠️ Đã hủy bỏ thao tác nhập sản phẩm.")
+        return
+
+    # 5. Ghi vào SANPHAM & NHAP
+    if HAS_RICH:
+        console.print("\n[bold green]📝 Đang ghi dữ liệu vào tab SANPHAM và tab NHAP trên Google Sheet...[/bold green]")
+    else:
+        print("\n📝 Đang ghi dữ liệu vào tab SANPHAM và tab NHAP trên Google Sheet...")
+
+    try:
+        stats = batch_commit_ingestion(loader, confirmed_products)
+        success_msg = f"""🎉 TẠO SẢN PHẨM & NHẬP KHO THÀNH CÔNG!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Tab SANPHAM: Đã thêm mới [bold green]{stats['sp_added']} sản phẩm[/bold green] (52 cột công thức đầy đủ).
+✅ Nhập thêm  : [bold cyan]{stats['restock_count']} sản phẩm đã có sẵn[/bold cyan] (Bỏ qua SANPHAM để tránh trùng).
+✅ Tab NHAP   : Đã tự động tạo [bold yellow]{stats['nhap_rows']} dòng nhập kho[/bold yellow] theo từng size (KHO để trống, SL = 1)."""
+        if HAS_RICH:
+            console.print(Panel(success_msg, title="[bold green]HOÀN TẤT 100%[/bold green]", border_style="green"))
+        else:
+            print(f"\n{success_msg}\n")
+    except Exception as e:
+        msg = f"❌ Lỗi khi ghi Google Sheet: {e}"
+        if HAS_RICH: console.print(Panel(msg, title="[bold red]LỖI GHI SHEET[/bold red]", border_style="red"))
+        else: print(msg)
+
+
 def print_main_menu():
-    """Hiển thị Giao diện Menu Chính theo 4 Nền Tảng với Màu Sáng Cao Cấp"""
+    """Hiển thị Giao diện Menu Chính theo 6 Nền Tảng với Màu Sáng Cao Cấp"""
     menu_text = """===================================================================
              🚀 [bold white]HNC CONTROL CENTER - MAC MINI M4 ENGINE[/bold white]
 ===================================================================
@@ -2271,6 +3496,8 @@ def print_main_menu():
   [2] [bold #FF6E40]🛍️  SHOPEE[/bold #FF6E40]
   [3] [bold #00E5FF]🎵 TIKTOK[/bold #00E5FF] [bold #FF1744]SHOP[/bold #FF1744]
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
+  [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
+  [6] [bold #69F0AE]📸 AI TỰ ĐỘNG NHẬP SẢN PHẨM MỚI TỪ ẢNH[/bold #69F0AE]
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -2343,6 +3570,22 @@ def print_submenu_misa():
 -------------------------------------------------------------------"""
     if HAS_RICH:
         console.print(Panel(menu_text, border_style="#29B6F6"))
+    else:
+        print(menu_text)
+
+
+def print_submenu_media():
+    """Hiển thị Sub-Menu 5: Quản Lý Media & Tư Liệu Sản Phẩm"""
+    menu_text = """-------------------------------------------------------------------
+             [bold #A7FFEB]📁 SUB-MENU: QUẢN LÝ MEDIA & TƯ LIỆU[/bold #A7FFEB]
+-------------------------------------------------------------------
+  [1] 🔄 Gom File Tự Động (Từ Photoroom & Downloads) + Đồng Bộ Sheet
+  [2] 📊 Chỉ Quét & Đồng Bộ Trạng Thái Media Lên Sheet (Không di chuyển file)
+  -----------------------------------------------------------------
+  [0] ⬅️  Quay lại Menu chính
+-------------------------------------------------------------------"""
+    if HAS_RICH:
+        console.print(Panel(menu_text, border_style="#A7FFEB"))
     else:
         print(menu_text)
 
@@ -2449,6 +3692,30 @@ def handle_submenu_misa(loader):
         else: input("\nNhấn Enter để quay lại Sub-Menu...")
 
 
+def handle_submenu_media(loader):
+    """Xử lý điều hướng trong Sub-menu Quản Lý Media"""
+    while True:
+        os.system('clear' if os.name == 'posix' else 'cls')
+        print_submenu_media()
+        
+        if HAS_RICH:
+            sub_choice = Prompt.ask("[bold #A7FFEB]Mời chọn tác vụ Media [0-2][/bold #A7FFEB]", default="0")
+        else:
+            sub_choice = input("Mời chọn tác vụ Media [0-2]: ").strip()
+
+        if sub_choice == "0":
+            break
+        elif sub_choice == "1":
+            process_media_management(loader, auto_ingest=True)
+        elif sub_choice == "2":
+            process_media_management(loader, auto_ingest=False)
+        else:
+            if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
+
+        if HAS_RICH: Prompt.ask("\n[dim]Nhấn Enter để quay lại Sub-Menu...[/dim]")
+        else: input("\nNhấn Enter để quay lại Sub-Menu...")
+
+
 def main():
     loader = EngineDataLoader()
 
@@ -2459,9 +3726,9 @@ def main():
         if HAS_RICH:
             mode_str = f"🌐 Google Sheets Connected: [bold green]{SPREADSHEET_NAME}[/bold green]" if loader.is_google_api else "[bold red]❌ Chưa kết nối Google Sheets API[/bold red]"
             console.print(f"[dim]Trạng thái: {mode_str}[/dim]")
-            choice_input = Prompt.ask("[bold cyan]Mời chọn nền tảng [0-4][/bold cyan]", default="0")
+            choice_input = Prompt.ask("[bold cyan]Mời chọn tác vụ [0-6][/bold cyan]", default="0")
         else:
-            choice_input = input("Mời chọn nền tảng [0-4]: ").strip()
+            choice_input = input("Mời chọn tác vụ [0-6]: ").strip()
 
         if choice_input == "0":
             if HAS_RICH:
@@ -2477,9 +3744,15 @@ def main():
             handle_submenu_tiktok(loader)
         elif choice_input == "4":
             handle_submenu_misa(loader)
+        elif choice_input == "5":
+            handle_submenu_media(loader)
+        elif choice_input == "6":
+            process_ai_product_ingestion(loader)
+            if HAS_RICH: Prompt.ask("\n[dim]Nhấn Enter để quay lại Menu chính...[/dim]")
+            else: input("\nNhấn Enter để quay lại Menu chính...")
         else:
             if HAS_RICH:
-                console.print("[bold red]❌ Lựa chọn không hợp lệ! Vui lòng nhập số từ 0 đến 4.[/bold red]")
+                console.print("[bold red]❌ Lựa chọn không hợp lệ! Vui lòng nhập số từ 0 đến 6.[/bold red]")
                 Prompt.ask("[dim]Nhấn Enter để tiếp tục...[/dim]")
             else:
                 input("❌ Lựa chọn không hợp lệ! Nhấn Enter để tiếp tục...")

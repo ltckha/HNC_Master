@@ -59,9 +59,29 @@ Chuyển đổi từ cấu trúc đơn file (`main.py`) sang cấu trúc đa mod
 - [ ] **Cảnh báo Hàng Chậm Luân Chuyển (Slow-moving / Deadstock Alert)**:
   - Nhận diện các mã hàng tồn lâu (> 60-90 ngày không bán được) để gợi ý chiến dịch giảm giá, Flash Sale xả tồn.
 
-### ⚙️ E. Tập trung hóa Business Rules (Master Configuration):
+### 📁 F. Quản lý Thư Mục Content Sản Phẩm & Tích Hợp Hệ Sinh Thái Video (Product Digital Asset Management - DAM):
+- [ ] **Lưu trữ Đường Dẫn / Link Thư Mục Content trên Google Sheet (`SANPHAM`)**:
+  - Bổ sung cột lưu đường dẫn cục bộ (`local_content_path`) hoặc link Google Drive (`gdrive_folder_url`) trỏ trực tiếp đến thư mục chứa tư liệu hình ảnh/video của từng mã sản phẩm.
+  - **Tương tác 1-Click**: Người dùng bấm trực tiếp vào link trên Sheet để mở ngay thư mục tư liệu sản phẩm trên máy tính hoặc Drive.
+- [ ] **Tự Động Khởi Tạo Cấu Trúc Thư Mục Tư Liệu (Auto-Folder Provisioning)**:
+  - Khi có mã sản phẩm mới được tạo trên `SANPHAM`, hệ thống tự động sinh cây thư mục chuẩn:
+    ```text
+    HNC_Content/
+    └── {product_code}/
+        ├── 01_Raw_Images/      (Ảnh chụp gốc, ảnh cào web)
+        ├── 02_Raw_Videos/      (Video quay mẫu, clip review sản phẩm)
+        ├── 03_Rendered_Videos/ (Video thành phẩm xuất từ Auto-Video-Factory)
+        └── 04_Marketing_Banners/ (Banner, thiết kế phục vụ quảng cáo)
+    ```
+  - Tự động cập nhật đường dẫn vừa tạo ngược lại vào cột tương ứng trên Google Sheet.
+- [ ] **Cầu Nối Đồng Bộ Sang Hệ Sinh Thái 3 Project Video (Omni-Video, Auto-Video-Factory, Video-Post)**:
+  - `Omni-Video` & `Auto-Video-Factory`: Đọc Google Sheet lấy đúng đường dẫn `01_Raw_Images` & `02_Raw_Videos` để tự động render video marketing hàng loạt.
+  - `Video-Post`: Quét thư mục `03_Rendered_Videos` để tự động lên lịch đăng bài lên TikTok, Facebook Reels, YouTube Shorts kèm đúng caption và mã sản phẩm.
+
+### ⚙️ G. Tập trung hóa Business Rules (Master Configuration):
 - [ ] Chuyển các thông tin doanh nghiệp (Tên brand TikTok, địa chỉ tổ chức, mã nhà cung cấp, thông tin 2 MST của 2 kho) ra file cấu hình độc lập `config.json` hoặc đọc 100% từ tab `SUB`.
 
 ---
 
 > 📌 **Ghi chú**: Mọi nâng cấp trong danh mục này đều phải tuân thủ nguyên tắc **"Thảo luận trước khi làm"** và **"Kiểm thử song song an toàn"**.
+

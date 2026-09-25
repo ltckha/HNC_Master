@@ -21,6 +21,8 @@
 | **9** | 🎵 **TikTok** | ⚡ **TikTok Cập Nhật** | `TIKTOK_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | 3 chế độ: `[1] Chỉ Tồn Kho`, `[2] Chỉ Giá 140%`, `[3] Cập Nhật TẤT CẢ Dữ Liệu`. |
 | **10** | 📊 **MISA** | 📊 **MISA Danh Mục Hàng Hóa** | `MISA_PRODUCTS_NEW_*.xlsx`<br>`MISA_PRODUCTS_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | Tự động phân loại: Mã cha mới xuất `MISA_NEW`, mã cha đã tồn tại (thêm màu mới) tự động xuất `MISA_UPDATE`. |
 | **11** | 📊 **MISA** | 📥 **MISA Nhập Kho** | `MISA_STOCK_15E_*.xlsx`<br>`MISA_STOCK_3C_*.xlsx` | ✅ **ĐÃ OK** | Tự động 22 cột, tính chiết khấu/thuế từ `SUB`, tự phân kho `15E` / `3C`, Strict QA. |
+| **12** | 📁 **Media** | 🎬 **Quản Lý Media & Tư Liệu SP** | `/Volumes/Media/HNC_Master/` | ✅ **ĐÃ OK** | Quét đệ quy gom file từ Photoroom & Downloads, tự động cập nhật 3 cột `content_path`, `content_url`, `content_files` (Kiểu 3: `VIDEO, IMG` / để trống khi không có file). |
+| **13** | 📸 **AI Vision** | 🤖 **AI Tự Động Nhập SP Từ Ảnh** | Cập nhật trực tiếp `SANPHAM` & `NHAP` | ✅ **ĐÃ OK** | Gemini Multimodal REST API, hỗ trợ Kéo thả nhiều ảnh/nhiều sản phẩm (Batch Ingestion), Smart Restock (mã đã có chỉ nhập thêm NHAP, không tạo trùng SANPHAM), bảng CLI số nổi bật [1-9]. |
 
 ---
 
@@ -45,9 +47,10 @@
 
 1. **Thảo luận trước khi thực hiện**: Luôn luôn phân tích, đề xuất phương án và nhận xác nhận từ User trước khi sửa code (`.agents/rules/always_discuss_first.md`).
 2. **Không tự ý thao tác Git**: Tuyệt đối không tự ý chạy lệnh push hoặc yêu cầu User đẩy code lên Git (`.agents/rules/never_push_git.md`).
-3. **Dò quét Header Động (Dynamic Scanner)**: Dò quét an toàn theo tên biến/cột hiển thị ở cả Hàng 1 và Hàng 2 với cơ chế alias tiếng Việt, tuyệt đối không đoán mò số cột.
-4. **Google Sheets Cloud Native**: Dữ liệu đọc/ghi trực tiếp qua Google Sheets API, đảm bảo một nguồn dữ liệu chuẩn xác duy nhất (Single Source of Truth).
-5. **Cơ chế Kiểm soát Chất lượng (Strict QA Gate)**: Khi thiếu các trường bắt buộc, tự động bỏ qua không xuất file và gắn cờ cảnh báo cụ thể lên Sheet.
+3. **Giao tiếp 2 chiều với Spark 100% qua Google Drive API v3**: Toàn bộ dữ liệu, blueprint và nhật ký trao đổi giữa Antigravity và Gemini Spark đều thông qua Google Drive API v3, hoàn toàn độc lập và không phụ thuộc vào đường dẫn đồng bộ cục bộ trên macOS (`.agents/rules/spark_gdrive_api_v3_protocol.md`).
+4. **Dò quét Header Động (Dynamic Scanner)**: Dò quét an toàn theo tên biến/cột hiển thị ở cả Hàng 1 và Hàng 2 với cơ chế alias tiếng Việt, tuyệt đối không đoán mò số cột (`.agents/rules/always_map_columns_by_header.md`).
+5. **Google Sheets Cloud Native**: Dữ liệu đọc/ghi trực tiếp qua Google Sheets API, đảm bảo một nguồn dữ liệu chuẩn xác duy nhất (Single Source of Truth).
+6. **Cơ chế Kiểm soát Chất lượng (Strict QA Gate)**: Khi thiếu các trường bắt buộc, tự động bỏ qua không xuất file và gắn cờ cảnh báo cụ thể lên Sheet.
 
 ---
 
