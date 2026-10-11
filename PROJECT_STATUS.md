@@ -1,6 +1,6 @@
 # 🚀 HNC MASTER ENGINE - BẢNG THEO DÕI TIẾN ĐỘ & TRẠNG THÁI TÁC VỤ (PROJECT STATUS)
 
-> **Cập nhật lần cuối:** 15/08/2026  
+> **Cập nhật lần cuối:** 09/10/2026  
 > **Nền tảng:** Mac mini M4 - Python 3 Engine (Google Sheets API & Excel Offline)  
 > **Trạng thái tổng thể:** ✅ **HOÀN TẤT & ĐÃ KIỂM THỬ 100% HOẠT ĐỘNG ỔN ĐỊNH**
 
@@ -19,7 +19,7 @@
 | **7** | 🛍️ **Shopee** | ⚡ **Shopee Cập Nhật Giá/Tồn** | `SHOPEE_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | 3 chế độ: `[1] Chỉ Tồn Kho`, `[2] Chỉ Giá 140%`, `[3] Cả Hai`. |
 | **8** | 🎵 **TikTok** | 🎵 **TikTok Upload Mới** | `TIKTOK_UPLOAD_*.xlsx` | ✅ **ĐÃ OK** | 38 cột chuẩn, điền 10 thuộc tính chi tiết, xuất xứ Việt Nam, tổ chức chịu trách nhiệm. |
 | **9** | 🎵 **TikTok** | ⚡ **TikTok Cập Nhật** | `TIKTOK_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | 3 chế độ: `[1] Chỉ Tồn Kho`, `[2] Chỉ Giá 140%`, `[3] Cập Nhật TẤT CẢ Dữ Liệu`. |
-| **10** | 📊 **MISA** | 📊 **MISA Danh Mục Hàng Hóa** | `MISA_PRODUCTS_NEW_*.xlsx`<br>`MISA_PRODUCTS_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | Tự động phân loại: Mã cha mới xuất `MISA_NEW`, mã cha đã tồn tại (thêm màu mới) tự động xuất `MISA_UPDATE`. |
+| **10** | 📊 **MISA** | 📊 **MISA Danh Mục Hàng Hóa** | `MISA_PRODUCTS_NEW_*.xlsx`<br>`MISA_PRODUCTS_UPDATE_*.xlsx` | ✅ **ĐÃ OK** | Tự động phân loại: Mã cha mới xuất `MISA_PRODUCTS_NEW`, mã cha đã tồn tại (thêm màu mới) tự động xuất `MISA_PRODUCTS_UPDATE`. |
 | **11** | 📊 **MISA** | 📥 **MISA Nhập Kho** | `MISA_STOCK_15E_*.xlsx`<br>`MISA_STOCK_3C_*.xlsx` | ✅ **ĐÃ OK** | Tự động 22 cột, tính chiết khấu/thuế từ `SUB`, tự phân kho `15E` / `3C`, Strict QA. |
 | **12** | 📁 **Media** | 🎬 **Quản Lý Media & Tư Liệu SP** | `/Volumes/Media/HNC_Master/` | ✅ **ĐÃ OK** | Quét đệ quy gom file từ Photoroom & Downloads, tự động cập nhật 3 cột `content_path`, `content_url`, `content_files` (Kiểu 3: `VIDEO, IMG` / để trống khi không có file). |
 | **13** | 📸 **AI Vision** | 🤖 **AI Tự Động Nhập SP Từ Ảnh** | Cập nhật trực tiếp `SANPHAM` & `NHAP` | ✅ **ĐÃ OK** | Gemini Multimodal REST API, hỗ trợ Kéo thả nhiều ảnh/nhiều sản phẩm (Batch Ingestion), Smart Restock (mã đã có chỉ nhập thêm NHAP, không tạo trùng SANPHAM), bảng CLI số nổi bật [1-9]. |
@@ -28,16 +28,17 @@
 
 ## 🛡️ 2. QUY CHUẨN ĐẶT TÊN FILE & ĐƯỜNG DẪN XUẤT
 
-- **Thư mục xuất chính**: `My Drive/HNC_Master/HNC_Exported_Files/` (và thư mục local dự phòng).
+- **Thư mục xuất chính**: `My Drive/Spark/HNC_Master/HNC_Exported_Files/` (ưu tiên; fallback `My Drive/HNC_Master/HNC_Exported_Files/`, cuối cùng là `./HNC_Exported_Files` local).
 - **Quy chuẩn tên file ngắn gọn kèm timestamp**:
   - `WEB_PRODUCTS_YYYYMMDD_HHMMSS.csv`
   - `WEB_STOCK_15E_YYYYMMDD_HHMMSS.csv` & `WEB_STOCK_Y3C_YYYYMMDD_HHMMSS.csv`
   - `WEB_STOCK_15E_FULL_YYYYMMDD_HHMMSS.csv` & `WEB_STOCK_Y3C_FULL_YYYYMMDD_HHMMSS.csv`
   - `SHOPEE_UPLOAD_YYYYMMDD_HHMMSS.xlsx`
-  - `SHOPEE_UPDATE_YYYYMMDD_HHMMSS.xlsx`
+  - `SHOPEE_UPDATE_{STOCK_ONLY|PRICE_ONLY|FULL}_YYYYMMDD_HHMMSS.xlsx`
   - `TIKTOK_UPLOAD_YYYYMMDD_HHMMSS.xlsx`
-  - `TIKTOK_UPDATE_YYYYMMDD_HHMMSS.xlsx`
-  - `MISA_PRODUCTS_YYYYMMDD_HHMMSS.xlsx`
+  - `TIKTOK_UPDATE_{STOCK_ONLY|PRICE_ONLY|FULL_ALL_INFO}_YYYYMMDD_HHMMSS.xlsx`
+  - `MISA_PRODUCTS_YYYYMMDD_HHMMSS.xlsx` *(khi chỉ có mã cha mới)*
+  - `MISA_PRODUCTS_NEW_YYYYMMDD_HHMMSS.xlsx` & `MISA_PRODUCTS_UPDATE_YYYYMMDD_HHMMSS.xlsx` *(khi có cả mã mới và mã cập nhật)*
   - `MISA_STOCK_15E_YYYYMMDD_HHMMSS.xlsx` & `MISA_STOCK_3C_YYYYMMDD_HHMMSS.xlsx`
   - `WEB_LABEL_YYYYMMDD_HHMMSS.csv` *(và file ghi đè cố định `/IN Mini Code/IN.csv`)*
 
