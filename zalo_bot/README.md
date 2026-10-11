@@ -40,7 +40,7 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 | `BOT_TOKEN` | Mã bot Zalo (lấy từ node "Edit Fields" trong flow n8n cũ) |
 | `WEBHOOK_KEY` | Một chuỗi bí mật tự đặt, chỉ chữ và số, ví dụ 24 ký tự ngẫu nhiên |
 | `DRY_RUN` | `true` (chạy thử, chưa ghi Sheet) |
-| `ALLOWED_CHAT_IDS` | Để trống lúc đầu |
+| `ALLOWED_CHAT_IDS` | `0` lúc đầu (ô này không nhận giá trị trống; `0` = chưa cho ai dùng) |
 
 ### Bước 3 — Chạy thử không ghi Sheet
 1. Chọn hàm **`testMessages`** → **Chạy**. Lần đầu Google sẽ hỏi cấp quyền → Cho phép.
@@ -59,7 +59,7 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 
 ### Bước 6 — Cấp quyền nhân viên
 1. Mỗi nhân viên nhắn bot 1 tin bất kỳ → bot trả lời "chưa được cấp quyền, chat_id của bạn: …".
-2. Điền các chat_id vào `ALLOWED_CHAT_IDS`, cách nhau bằng dấu phẩy.
+2. Thay `0` trong `ALLOWED_CHAT_IDS` bằng các chat_id, cách nhau bằng dấu phẩy.
 
 ### Bước 7 — Chạy thật
 1. Nhắn thử vài tin khi `DRY_RUN` = `true`: bot trả lời "🧪 CHẠY THỬ" kèm nội dung sẽ ghi.
