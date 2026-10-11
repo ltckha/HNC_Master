@@ -107,6 +107,7 @@ else:
 
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
+GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
 
 # Media Ingestion & Asset Management Paths
 MEDIA_DEST_DIR = "/Volumes/Media/HNC_Master"
@@ -414,6 +415,9 @@ class EngineDataLoader:
             ws = self.spreadsheet.worksheet(sheet_name)
             num_cols = max(len(r) for r in new_rows)
             end_row = start_row + len(new_rows) - 1
+            # Tự mở rộng lưới khi vượt số dòng hiện có (thêm dư GRID_EXTRA_ROWS dòng)
+            if end_row > ws.row_count:
+                ws.add_rows(end_row - ws.row_count + GRID_EXTRA_ROWS)
             last_col_letter = gspread.utils.rowcol_to_a1(1, num_cols).rstrip('0123456789')
             range_name = f"A{start_row}:{last_col_letter}{end_row}"
             ws.update(range_name=range_name, values=new_rows, value_input_option='USER_ENTERED')
@@ -3318,7 +3322,8 @@ def batch_commit_ingestion(loader, confirmed_products):
             sp_added_count += 1
 
     if sp_new_rows:
-        loader.insert_rows_with_exact_range('SANPHAM', sp_new_rows, start_sp_row)
+        if not loader.insert_rows_with_exact_range('SANPHAM', sp_new_rows, start_sp_row):
+            raise RuntimeError("Ghi tab SANPHAM thất bại — đã DỪNG, chưa ghi tab NHAP.")
 
     # 2. Chuẩn bị dòng cho NHAP (cho TẤT CẢ các sản phẩm)
     df_nhap, _ = loader.load_sheet('NHAP')
@@ -3360,7 +3365,8 @@ def batch_commit_ingestion(loader, confirmed_products):
             nhap_count += 1
 
     if nhap_new_rows:
-        loader.insert_rows_with_exact_range('NHAP', nhap_new_rows, start_nhap_row)
+        if not loader.insert_rows_with_exact_range('NHAP', nhap_new_rows, start_nhap_row):
+            raise RuntimeError(f"Ghi tab NHAP thất bại — tab SANPHAM ĐÃ ghi {sp_added_count} sản phẩm mới, cần kiểm tra và bổ sung {len(nhap_new_rows)} dòng NHAP.")
 
     restock_count = len(confirmed_products) - sp_added_count
     return {
