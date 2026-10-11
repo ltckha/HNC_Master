@@ -11,14 +11,24 @@
    - Trước khi sửa code, xuất dữ liệu lớn, hay chạy lệnh, **bắt buộc phải trình bày giải pháp kỹ thuật chi tiết và được anh Kha đồng ý trước**.
    - Không tự ý suy đoán cấu trúc cột tính toán tài chính, giá và tồn kho.
 
-2. **TUYỆT ĐỐI KHÔNG TỰ Ý CHẠY `git push`:**
-   - Nghiêm cấm chạy `git push` dưới mọi hình thức khi chưa có lệnh trực tiếp từ anh Kha.
-   - Chỉ được tạo commit cục bộ (`git commit`) trên máy để lưu tiến độ an toàn.
+2. **GIT: CHỈ PUSH NHÁNH RIÊNG + PULL REQUEST (luật chung 4 repo, chốt 11/10/2026):**
+   - Chỉ push lên **nhánh riêng** (vd `claude/<chủ-đề>`) rồi mở Pull Request. **Cấm push thẳng `main`.**
+   - `main` chỉ thay đổi khi anh Kha bấm **Merge** trên GitHub (thao tác này được coi là lệnh push của anh Kha).
+   - Trước khi push: rà diff, đảm bảo không lọt `.env`, `credentials.json`, token, cookie.
+   - Cấm `git commit -am`, `git add -A`, `git add .`. Luôn `git add` từng file.
 
 3. **MÔ HÌNH PHỐI HỢP CẶP BÀI TRÙNG (DUAL-CLAUDE ARCHITECTURE):**
    - **Claude Cowork (Cloud):** Đảm nhận tư duy vĩ mô: Rà soát công thức tính giá, đối chiếu logic nghiệp vụ 4 sàn, quy hoạch tính năng.
    - **Claude Code (Local Mac M4):** Kỹ sư trưởng thực thi hiện trường: Chạy lệnh terminal, kích hoạt môi trường ảo Python `venv`, xuất file dữ liệu, đồng bộ Google Sheets.
    - **Antigravity (IDE Pair-Programmer):** Đồng hành cùng anh Kha tại IDE.
+
+4. **MỖI REPO MỘT PHIÊN THỰC THI:**
+   - Chỉ phiên **"Thực thi – HNC_Master"** được sửa code và commit trong repo này.
+   - Việc cần đụng repo khác (Auto-Video-Factory, Video-Post, Omni-Video) → nhắn phiên "Thực thi – <repo>" của repo đó, không tự sửa chéo.
+
+5. **TRI THỨC BRAND — NGUỒN DUY NHẤT LÀ AUTO-VIDEO-FACTORY:**
+   - Tên chuẩn, mã brand, bí danh lấy từ `Auto-Video-Factory/knowledge/brands/`. Tab Sheet `Brands_Registry` (đang xây) sẽ được sinh ra từ đó.
+   - Không viết cứng danh sách brand trong repo này. Cần thêm/sửa brand → nhắn phiên "Thực thi – Auto-Video-Factory".
 
 ---
 
