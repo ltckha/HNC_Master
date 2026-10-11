@@ -1,6 +1,6 @@
 # 🚀 HNC MASTER ENGINE - BẢNG THEO DÕI TIẾN ĐỘ & TRẠNG THÁI TÁC VỤ (PROJECT STATUS)
 
-> **Cập nhật lần cuối:** 09/10/2026  
+> **Cập nhật lần cuối:** 11/10/2026  
 > **Nền tảng:** Mac mini M4 - Python 3 Engine (Google Sheets API & Excel Offline)  
 > **Trạng thái tổng thể:** ✅ **HOÀN TẤT & ĐÃ KIỂM THỬ 100% HOẠT ĐỘNG ỔN ĐỊNH**
 
@@ -23,6 +23,7 @@
 | **11** | 📊 **MISA** | 📥 **MISA Nhập Kho** | `MISA_STOCK_15E_*.xlsx`<br>`MISA_STOCK_3C_*.xlsx` | ✅ **ĐÃ OK** | Tự động 22 cột, tính chiết khấu/thuế từ `SUB`, tự phân kho `15E` / `3C`, Strict QA. |
 | **12** | 📁 **Media** | 🎬 **Quản Lý Media & Tư Liệu SP** | `/Volumes/Media/HNC_Master/` | ✅ **ĐÃ OK** | Quét đệ quy gom file từ Photoroom & Downloads, tự động cập nhật 3 cột `content_path`, `content_url`, `content_files` (Kiểu 3: `VIDEO, IMG` / để trống khi không có file). |
 | **13** | 📸 **AI Vision** | 🤖 **AI Tự Động Nhập SP Từ Ảnh** | Cập nhật trực tiếp `SANPHAM` & `NHAP` | ✅ **ĐÃ OK** | Gemini Multimodal REST API, hỗ trợ Kéo thả nhiều ảnh/nhiều sản phẩm (Batch Ingestion), Smart Restock (mã đã có chỉ nhập thêm NHAP, không tạo trùng SANPHAM), bảng CLI số nổi bật [1-9]. |
+| **14** | 💬 **Zalo** | 🤖 **Bot Zalo Quản Lý Bán Hàng & Kho** | Ghi trực tiếp `BAN`, `NHAP`, `XUAT`, `product_location` (KHO15E/KHOY3C) | ✅ **ĐÃ OK** | Google Apps Script gắn vào HNC_Control_Center (`zalo_bot/`), thay flow n8n cũ (11/10/2026). Kiểm hàng, Bán/Nhập/Xuất, Chuyển kho, Chuyển vị trí; YEN→Y3C, TBH→15E; chặn theo `ALLOWED_CHAT_IDS`, chống ghi trùng, dòng NHAP đánh dấu `Zalo_Update`. |
 
 ---
 
