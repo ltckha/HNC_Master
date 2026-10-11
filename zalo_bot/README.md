@@ -38,7 +38,7 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 | Thuộc tính | Giá trị |
 |---|---|
 | `BOT_TOKEN` | Mã bot Zalo (lấy từ node "Edit Fields" trong flow n8n cũ) |
-| `WEBHOOK_KEY` | Một chuỗi bí mật tự đặt, chỉ chữ và số, ví dụ 24 ký tự ngẫu nhiên |
+| `WEBHOOK_KEY` | Chuỗi bí mật tự đặt, 8-256 ký tự, chỉ chữ không dấu, số, `_` và `-` (ví dụ ~20 ký tự ngẫu nhiên) |
 | `DRY_RUN` | `true` (chạy thử, chưa ghi Sheet) |
 | `ALLOWED_CHAT_IDS` | `0` lúc đầu (ô này không nhận giá trị trống; `0` = chưa cho ai dùng) |
 

@@ -443,6 +443,9 @@ function setupWebhook() {
   const url = props.getProperty('WEBAPP_URL');
   const key = props.getProperty('WEBHOOK_KEY');
   if (!token || !url || !key) throw new Error('Cần đủ BOT_TOKEN, WEBAPP_URL, WEBHOOK_KEY trong Script Properties');
+  if (!/^[A-Za-z0-9_-]{8,256}$/.test(key)) {
+    throw new Error('WEBHOOK_KEY phải dài 8-256 ký tự, chỉ gồm chữ không dấu, số, _ và -');
+  }
   const res = UrlFetchApp.fetch(ZALO_API + token + '/setWebhook', {
     method: 'post',
     contentType: 'application/json',
