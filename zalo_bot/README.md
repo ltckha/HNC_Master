@@ -10,17 +10,25 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 
 | Nhắn | Bot làm |
 |---|---|
-| `AP0408D 40` hoặc `AP0408D` | Kiểm hàng ở KHOY3C + KHO15E (tồn, vị trí) |
-| `bán AP0408D 40 YEN 450k` | Thêm dòng vào tab `BAN` |
-| `nhập AP0408D 38/2 39 TBH` | Thêm dòng vào tab `NHAP` (38 × 2 đôi, 39 × 1 đôi) |
-| `xuất AP0408D 41 15E` | Thêm dòng vào tab `XUAT` |
-| `chuyển kho AP0408D 40 từ kho YEN đến kho TBH` | `XUAT` ở Y3C + `NHAP` ở 15E |
-| `chuyển vị trí AP0408D YEN đến K12` | Sửa `product_location` trong tab KHO (không ghi size = đổi mọi size) |
+| `TH2040D 40` hoặc `TH2040D` | Kiểm hàng ở KHOY3C + KHO15E: giá bán (từ SANPHAM), tồn từng size (xếp tăng dần), vị trí |
+| `TH2040` (mã không màu) | Kiểm hàng tất cả các màu TH2040D, TH2040N… |
+| `ban TH2040D 40 YEN 800k` | Thêm dòng vào tab `BAN` |
+| `nhap TH2040D 38/2 39 TBH` | Thêm dòng vào tab `NHAP` |
+| `xuat TH2040D 41 15E` | Thêm dòng vào tab `XUAT` |
+| `chuyen kho TH2040D 40 tu YEN den TBH` | `XUAT` ở Y3C + `NHAP` ở 15E |
+| `chuyen vi tri TH2040D YEN den K12` | Sửa `product_location` trong tab KHO (không ghi size = đổi mọi size) |
+| `huy` | Huỷ thao tác ghi gần nhất của chính người nhắn, trong 10 phút |
+| `bc` / `bc hom qua` / `bc 10/10` | Báo cáo bán trong ngày: số đôi + doanh thu theo kho (tab `BAN`, Giá × số lượng) |
+| `hd` / `?` / `huong dan` | Bảng hướng dẫn. Tin không hiểu cũng được trả lời bằng bảng này |
 
 - **Kho:** `YEN` / `3C` / `Y3C` → **Y3C**; `TBH` / `15E` → **15E**.
-- **Size:** `40` = 1 đôi; `40/2` = 2 đôi.
-- **Giá:** `450k`, `450000`, `450.000đ`.
+- **Size / số lượng:** `40` (1 đôi), `40/2`, `40.2`, `40x2`, `40*2`, `40:2`, `40-2`, `40 x2`, `40 2 đôi`, `40 sl 2`, `2 đôi 40`, `38,39,40`, dải `38-43` (mỗi size 1 đôi). Size trùng thì cộng dồn.
+- **Giá:** `800k`, `800000`, `800.000đ`, `800,000`, `1tr2`, `1.5tr`. Không ghi giá thì cột Giá để trống (giá bán có thể khác giá niêm yết).
+- **Mã:** bot so với danh sách mã thật trong tab KHO trước (nhận được mã không có số như `CXED`, mã ngắn như `T1D`, mã giống giá như `119K`). Mã mới chưa có trong KHO thì đoán theo mẫu chữ + số + chữ màu.
+- **Gõ không dấu** vẫn hiểu (`ban`, `nhap`, `xuat`, `chuyen kho`, `huy`, `bao cao`). "bạn" không bị nhầm là "bán".
 - **Màu:** không cần ghi, bot tự lấy từ tab KHO. Có thể ghi `màu Đen`.
+- **Cảnh báo:** bán / xuất quá tồn → vẫn ghi nhưng báo "⚠️ tồn sẽ âm". SKU chưa có trong KHO → báo tồn không trừ. Thiếu size khi mã có size → bot hỏi lại kèm danh sách size.
+- **Huỷ:** bot kiểm tra lại từng dòng trước khi huỷ; dòng đã bị sửa hoặc dòng NHAP đã đồng bộ kho (`kho_sync`) thì từ chối. Huỷ chỉ xoá các ô bot đã ghi, không xoá dòng.
 - Dòng NHAP ghi từ Zalo được điền `Zalo_Update` vào `web_stock`, `web_label`, `misa_stock` (HNC bỏ qua khi xuất web / tem / MISA). Cột `kho_sync` để trống, để tác vụ đồng bộ kho tự thêm SKU mới.
 - FSKU: tab `BAN` và `XUAT` tự tính bằng ARRAYFORMULA có sẵn; tab `NHAP` thì bot ghi công thức từng dòng.
 
