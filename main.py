@@ -244,6 +244,25 @@ class EngineDataLoader:
         if sheet_name in SYNC_WATCH_TABS:
             self._sync_tabs.add(sheet_name)
 
+    def mark_platform_update(self, channel):
+        """Ghi mốc "lần cập nhật tồn/giá gần nhất" của sàn vào SUB, cột <channel>_last_update, hàng 2
+        (chỗ chung với web và bot Zalo). Chưa có cột thì chỉ in nhắc, không tự tạo cột."""
+        if not self.is_google_api:
+            return
+        col_name = f"{channel}_last_update"
+        try:
+            ws = self.spreadsheet.worksheet('SUB')
+            header = [str(h).strip() for h in ws.row_values(1)]
+            if col_name not in header:
+                print(f"[!] Tab SUB chưa có cột '{col_name}' — chưa ghi mốc cập nhật {channel}.")
+                return
+            stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            ws.update(range_name=gspread.utils.rowcol_to_a1(2, header.index(col_name) + 1), values=[[stamp]])
+            self._mark_sync('SUB')
+            print(f"🕒 Đã ghi mốc cập nhật {channel}: {stamp} (SUB!{gspread.utils.rowcol_to_a1(2, header.index(col_name) + 1)})")
+        except Exception as e:
+            print(f"[!] Không ghi được mốc cập nhật {channel}: {e}")
+
     def flush_sync_hint(self):
         """Báo web giayhainancy.vn chép lại các tab vừa ghi (Sheets API không chạy trigger Apps Script).
         POST SYNC_HINT_URL?key=SYNC_HINT_KEY, body {"tabs":[...]}. Thiếu cấu hình hoặc lỗi → chỉ in cảnh báo."""
@@ -1262,6 +1281,7 @@ def process_export_task(choice, loader):
             print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file Shopee vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"SHOPEE_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
+        loader.mark_platform_update('shopee')
         wb.close()
 
         mode_desc = {
@@ -1513,6 +1533,7 @@ def process_export_task(choice, loader):
             print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file TikTok vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"TIKTOK_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
+        loader.mark_platform_update('tiktok')
         wb.close()
 
         mode_desc = {

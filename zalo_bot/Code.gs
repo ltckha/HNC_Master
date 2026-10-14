@@ -83,6 +83,7 @@ function doGet() {
 function doPost(e) {
   if (e && e.parameter && e.parameter.sale_key !== undefined) return handleSaleRequest_(e);
   if (e && e.parameter && e.parameter.notify_key !== undefined) return handleNotifyRequest_(e);
+  if (e && e.parameter && e.parameter.export_key !== undefined) return handleExportRequest_(e);
   try {
     const props = PropertiesService.getScriptProperties();
     const key = props.getProperty('WEBHOOK_KEY');
@@ -971,6 +972,108 @@ function testSyncHint() {
 }
 
 // =====================================================================
+// CỬA "ĐÁNH DẤU ĐÃ XUẤT FILE SÀN" (web xuất file Shopee / TikTok song song menu HNC)
+// POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
+// Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", dry_run? }
+//  - upload: SANPHAM cột shopee_upload / tiktok_upload = "Done - yyyy-MM-dd HH:mm" cho mã có trong codes (giống main.py).
+//  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào SUB, cột shopee_last_update / tiktok_last_update, hàng 2.
+// =====================================================================
+
+const EXPORT_CHANNELS = ['shopee', 'tiktok'];
+const EXPORT_MAX_CODES = 3000;
+
+function handleExportRequest_(e) {
+  let out;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = props.getProperty('EXPORT_KEY') || '';
+    const others = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'SYNC_HINT_KEY'].map(n => props.getProperty(n)).filter(Boolean);
+    if (key.length < 16 || others.indexOf(key) !== -1) {
+      out = { ok: false, error: 'chưa cấu hình EXPORT_KEY (≥16 ký tự, khác các khoá khác) trong Script Properties' };
+    } else if (e.parameter.export_key !== key) {
+      out = { ok: false, error: 'unauthorized' };
+    } else {
+      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
+      out = handleExport_(body, dryRun);
+      if (!dryRun && out.ok && !out.duplicate && out.written) {
+        try { queueSyncHint_([out.kind === 'update' ? 'SUB' : 'SANPHAM']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+      }
+    }
+  } catch (err) {
+    console.error(err && err.stack ? err.stack : err);
+    out = { ok: false, error: 'bad_request: ' + (err && err.message ? err.message : err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleExport_(body, dryRun) {
+  MEMO = {};
+  const channel = String(body.channel || '').trim().toLowerCase();
+  const kind = String(body.kind || '').trim().toLowerCase();
+  if (body.action !== 'mark_exported') return { ok: false, error: 'action phải là "mark_exported"' };
+  if (EXPORT_CHANNELS.indexOf(channel) === -1) return { ok: false, error: 'channel phải là shopee hoặc tiktok' };
+  if (kind !== 'upload' && kind !== 'update') return { ok: false, error: 'kind phải là upload hoặc update' };
+  const codes = Array.isArray(body.codes) ? uniq_(body.codes.map(c => String(c || '').trim().toUpperCase()).filter(Boolean)) : [];
+  if (kind === 'upload' && (!codes.length || codes.length > EXPORT_MAX_CODES)) return { ok: false, error: 'codes phải có 1-' + EXPORT_MAX_CODES + ' mã' };
+  let at = body.at ? new Date(body.at) : new Date();
+  if (isNaN(at)) at = new Date();
+  const stamp = Utilities.formatDate(at, TZ, 'yyyy-MM-dd HH:mm');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const digestKey = 'export_' + digestHex_([channel, kind, stamp].concat(codes.slice().sort()).join('|'));
+    if (props.getProperty(digestKey)) return { ok: true, duplicate: true, kind, written: 0, not_found: [] };
+
+    let result;
+    if (kind === 'upload') {
+      const data = sheetValues_('SANPHAM');
+      let headerRow = -1;
+      for (let r = 0; r < Math.min(2, data.length); r++) {
+        if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { headerRow = r; break; }
+      }
+      if (headerRow === -1) throw new Error('Tab SANPHAM thiếu cột product_code');
+      const col = headerMap_(data[headerRow]);
+      const statusName = channel + '_upload';
+      requireColumns_('SANPHAM', col, ['product_code', statusName]);
+      const want = {};
+      codes.forEach(c => { want[c] = true; });
+      const found = {};
+      const cells = [];
+      for (let r = headerRow + 1; r < data.length; r++) {
+        const c = String(data[r][col.product_code]).trim().toUpperCase();
+        if (want[c]) { found[c] = true; cells.push(columnLetter_(col[statusName] + 1) + (r + 1)); }
+      }
+      if (!dryRun && cells.length) getSheet_('SANPHAM').getRangeList(cells).setValue('Done - ' + stamp);
+      result = { ok: true, kind, column: statusName, value: 'Done - ' + stamp, written: cells.length, not_found: codes.filter(c => !found[c]) };
+    } else {
+      const sub = getSheet_('SUB');
+      const header = sub.getRange(1, 1, 1, sub.getLastColumn()).getValues()[0];
+      const col = headerMap_(header);
+      const name = channel + '_last_update';
+      if (col[name] === undefined) return { ok: false, error: 'Tab SUB chưa có cột ' + name + ' (cần anh Kha cho tạo cột)' };
+      if (!dryRun) sub.getRange(2, col[name] + 1).setValue(stamp);
+      result = { ok: true, kind, cell: 'SUB!' + columnLetter_(col[name] + 1) + '2', value: stamp, written: 1, not_found: [] };
+    }
+    if (!dryRun) {
+      props.setProperty(digestKey, JSON.stringify({ t: Date.now() }));
+      pruneTickets_(props, 'export_');
+    }
+    result.dry_run = dryRun;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function digestHex_(text) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8)
+    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+// =====================================================================
 // GHI SHEET
 // =====================================================================
 
@@ -1264,14 +1367,17 @@ function testSale() {
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
-    'SYNC_HINT_URL', 'SYNC_HINT_KEY'];
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
   });
-  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY'].map(n => props.getProperty(n) || '');
-  console.log('3 khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
-  console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌'));
+  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY'].map(n => props.getProperty(n) || '');
+  console.log('Các khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
+  console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌') +
+    ' | EXPORT_KEY ≥16: ' + (keys[3].length >= 16 ? '✅' : '❌'));
+  const subHeader = getSheet_('SUB').getRange(1, 1, 1, getSheet_('SUB').getLastColumn()).getValues()[0].map(h => String(h).trim());
+  ['shopee_last_update', 'tiktok_last_update'].forEach(n => console.log('SUB cột ' + n + ': ' + (subHeader.indexOf(n) !== -1 ? '✅' : '❌ chưa có')));
   const owner = props.getProperty('OWNER_CHAT_ID') || '';
   const allowed = (props.getProperty('ALLOWED_CHAT_IDS') || '').split(',').map(s => s.trim());
   console.log('OWNER_CHAT_ID nằm trong ALLOWED_CHAT_IDS: ' + (owner && allowed.indexOf(owner) !== -1 ? '✅' : '⚠️ không'));

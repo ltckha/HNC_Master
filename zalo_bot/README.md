@@ -91,6 +91,23 @@ Content-Type: application/json
 - Trả về: `{"ok":true,"order_id":…}`. Lỗi: `unauthorized`, `chưa cấu hình …`, `Zalo không nhận tin` (khi Zalo từ chối, lần sau gửi lại được).
 - Gợi ý: để sẵn các dòng `ban …` trong `text`. Anh xác nhận với khách xong thì **chuyển tiếp nguyên tin** cho bot, bot ghi BAN từng dòng.
 
+## Cửa "đánh dấu đã xuất file sàn" (API, web gọi)
+
+Web cũng xuất file Shopee / TikTok, chạy song song với menu HNC. Web xuất xong thì gọi cửa này để cờ trên Sheet khớp với menu HNC.
+
+**Cấu hình:** Script Properties `EXPORT_KEY`: ≥ 16 ký tự, khác `WEBHOOK_KEY` / `SALE_KEY` / `WEB_NOTIFY_KEY` / `SYNC_HINT_KEY`. Đặt cùng giá trị vào secret của web.
+
+**Gọi:**
+```
+POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
+{ "action": "mark_exported", "channel": "shopee" | "tiktok", "kind": "upload" | "update",
+  "codes": ["TH2040D", ...], "at": "2026-10-15T03:05:00Z", "dry_run": true }
+```
+- **`kind: "upload"`:** ghi tab SANPHAM, cột `shopee_upload` / `tiktok_upload` = `Done - yyyy-MM-dd HH:mm` (giờ VN, cùng định dạng main.py) cho các mã trong `codes`. Mã không có trong SANPHAM → trả trong `not_found`. Tối đa 3.000 mã / lần.
+- **`kind: "update"`:** ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab **SUB, cột `shopee_last_update` / `tiktok_last_update`, hàng 2** (dạng `yyyy-MM-dd HH:mm`). Menu HNC cũng ghi vào đúng ô này mỗi lần xuất `SHOPEE_UPDATE` / `TIKTOK_UPDATE`. Thiếu cột thì bot báo lỗi, không tự tạo.
+- `at` bỏ trống = giờ hiện tại.
+- **Trả về:** `{"ok":true,"kind":…,"written":N,"not_found":[…],"dry_run":…}`. Gửi lại đúng nội dung cũ thì trả `duplicate:true` và không ghi lần nữa (nhớ 30 ngày). Ghi xong, bot báo web chép lại SANPHAM (hoặc SUB).
+
 ## Báo web chép lại Sheet khi Sheet đổi
 
 Khi tab `SANPHAM`, `KHO15E`, `KHOY3C`, `BAN`, `NHAP`, `XUAT` hoặc `SUB` thay đổi, bot báo web giayhainancy.vn chép lại Sheet, không phải chờ vòng chép mỗi giờ.

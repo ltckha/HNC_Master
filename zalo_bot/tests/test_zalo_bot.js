@@ -12,11 +12,32 @@ const DATA = {
     ['CXED', 'Đen', 40, 1, 1, ''], ['T1D', 'Đen', 39, 1, 1, ''], ['AROMAX60T', 'Trắng', '', 5, 5, '']]),
 };
 const PROPS = {};
+const WRITES = [];
+DATA.SANPHAM = [['Mã hàng hóa cha', '', '', ''], ['parent_product_code', 'product_code', 'shopee_upload', 'tiktok_upload'],
+  ['TH2040', 'TH2040D', '', ''], ['TH2040', 'TH2040N', 'Done', ''], ['CXE', 'CXED', '', 'Thiếu ảnh']];
+DATA.SUB = [['Tên Ngành Hàng', 'Shopee', 'shopee_last_update', 'tiktok_last_update'], ['Giày tây nam', '100', '', '']];
+function mockSheet(n) {
+  const d = DATA[n];
+  return {
+    getDataRange: () => ({ getValues: () => d }),
+    getLastColumn: () => Math.max.apply(null, d.map(r => r.length)),
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => d.slice(r - 1, r - 1 + (nr || 1)).map(row => row.slice(c - 1, c - 1 + (nc || 1))),
+      setValue: v => WRITES.push({ sheet: n, cell: [r, c], v }),
+    }),
+    getRangeList: list => ({ setValue: v => WRITES.push({ sheet: n, cells: list, v }) }),
+  };
+}
 const CACHE = {};
 const ctx = {
   console,
-  Utilities: { formatDate: (d, tz, f) => { const p = n => ('0' + n).slice(-2); return f.replace('yyyy', d.getFullYear()).replace('yy', String(d.getFullYear()).slice(-2)).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())); } },
-  SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? { getDataRange: () => ({ getValues: () => DATA[n] }) } : null }) },
+  Utilities: { DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' }, computeDigest: (a, t) => Array.from(require('crypto').createHash('md5').update(t).digest()).map(b => (b > 127 ? b - 256 : b)), formatDate: (d, tz, f) => {
+    const parts = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(d).forEach(x => { parts[x.type] = x.value; });
+    return f.replace('yyyy', parts.year).replace('yy', parts.year.slice(-2)).replace('MM', parts.month).replace('dd', parts.day).replace('HH', parts.hour).replace('mm', parts.minute);
+  } },
+  SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? mockSheet(n) : null }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => PROPS[k] || null, setProperty: (k, v) => { PROPS[k] = v; }, getProperties: () => PROPS, deleteProperty: k => { delete PROPS[k]; } }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }), getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
   CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
@@ -29,7 +50,7 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -135,6 +156,23 @@ eq('dòng NHAP trả hàng', [captured.sheet, /^TRA-\d{6}$/.test(captured.values
 ctx.appendNhap_('TH2040D', 'Đen', '40', 1, '15E', false);
 eq('dòng NHAP thường', [captured.values['Số chứng từ (*)'], captured.values.misa_stock], [undefined, 'Zalo_Update']);
 ctx.appendByHeader_ = realAppend;
+
+// ---- Cửa đánh dấu đã xuất file sàn ----
+const ex = (b, dry) => ctx.handleExport_(Object.assign({ action: 'mark_exported' }, b), !!dry);
+let r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['th2040d', 'CXED', 'KHONGCO'], at: '2026-10-15T03:05:00Z' }, true);
+eq('upload dry-run', [r2.ok, r2.written, r2.not_found, r2.value, WRITES.length], [true, 2, ['KHONGCO'], 'Done - 2026-10-15 10:05', 0]);
+r2 = ex({ channel: 'tiktok', kind: 'upload', codes: ['TH2040N'], at: '2026-10-15T03:05:00Z' });
+eq('upload ghi đúng ô tiktok_upload', [r2.written, WRITES[0] && WRITES[0].cells, WRITES[0] && WRITES[0].v], [1, ['D4'], 'Done - 2026-10-15 10:05']);
+r2 = ex({ channel: 'tiktok', kind: 'upload', codes: ['TH2040N'], at: '2026-10-15T03:05:00Z' });
+eq('upload chống trùng', [r2.duplicate, WRITES.length], [true, 1]);
+r2 = ex({ channel: 'shopee', kind: 'update', at: '2026-10-15T04:00:00Z' });
+eq('update ghi mốc SUB hàng 2', [r2.ok, r2.cell, WRITES[1] && WRITES[1].cell, WRITES[1] && WRITES[1].v], [true, 'SUB!C2', [2, 3], '2026-10-15 11:00']);
+eq('channel sai', ex({ channel: 'lazada', kind: 'upload', codes: ['TH2040D'] }).ok, false);
+eq('kind sai', ex({ channel: 'shopee', kind: 'x', codes: ['TH2040D'] }).ok, false);
+eq('upload thiếu codes', ex({ channel: 'shopee', kind: 'upload', codes: [] }).ok, false);
+eq('action sai', ctx.handleExport_({ action: 'x', channel: 'shopee', kind: 'update' }, true).ok, false);
+DATA.SUB[0] = ['Tên Ngành Hàng', 'Shopee'];
+eq('SUB chưa có cột → báo lỗi, không ghi', [/chưa có cột tiktok_last_update/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, 2]);
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);
