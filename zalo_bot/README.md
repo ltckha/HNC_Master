@@ -32,6 +32,42 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 - Dòng NHAP ghi từ Zalo được điền `Zalo_Update` vào `web_stock`, `web_label`, `misa_stock` (HNC bỏ qua khi xuất web / tem / MISA). Cột `kho_sync` để trống, để tác vụ đồng bộ kho tự thêm SKU mới.
 - FSKU: tab `BAN` và `XUAT` tự tính bằng ARRAYFORMULA có sẵn; tab `NHAP` thì bot ghi công thức từng dòng.
 
+## Cửa "ghi bán" cho app bán hàng (API)
+
+App bán hàng (và sau này web) ghi đơn vào tab `BAN` qua cửa riêng. Cửa này **không** dùng chung khoá với webhook Zalo.
+
+**Cấu hình:** thêm thuộc tính `SALE_KEY` vào Script Properties: chuỗi ngẫu nhiên ≥ 16 ký tự, **khác** `WEBHOOK_KEY`. Không gửi khoá qua chat; anh tự đặt khoá ở phía app/Worker (vd `wrangler secret put SALE_KEY`). Lộ khoá → đổi `SALE_KEY` ngay (đổi xong không cần triển khai lại).
+
+**Gọi:**
+```
+POST {WEBAPP_URL}?sale_key=<SALE_KEY>
+Content-Type: application/json   (hoặc text/plain)
+
+{
+  "ticket_id": "APP-20261014-0001",      // mã phiếu duy nhất: 1-64 ký tự chữ/số/_ . : -
+  "channel": "cua_hang",                  // cua_hang | web | shopee | tiktok
+  "seller": "Tên người bán",              // ≤ 50 ký tự
+  "lines": [                              // 1-50 dòng
+    { "code": "TH2040D", "size": 40, "qty": 1, "warehouse": "15E", "price": 800000 }
+  ],
+  "dry_run": true                         // tuỳ chọn: chỉ kiểm tra, không ghi
+}
+```
+- `warehouse`: `15E` / `Y3C` (nhận cả `TBH`, `YEN`, `3C`). `size` bỏ trống với hàng không size. `qty` 1-99, mặc định 1. `price` tuỳ chọn.
+- Apps Script trả lời qua 1 lần chuyển hướng (302). Bên gọi phải **đi theo chuyển hướng** (`fetch` mặc định đã theo; `curl` cần `-L`).
+
+**Trả về (JSON):**
+- `{"ok":true,"ticket_id":...,"dry_run":false,"rows":N,"results":[{"line":1,"code":...,"size":...,"qty":...,"warehouse":...,"stock_before":...,"row":...,"warning"?:...}]}`
+- Có dòng lỗi → `{"ok":false,"error":"Có dòng lỗi, chưa ghi dòng nào","results":[...{"ok":false,"error":"..."}]}`. **Không ghi dòng nào.**
+- Gửi lại cùng `ticket_id` → `{"ok":true,"duplicate":true,...}`, không ghi thêm. Mã phiếu được nhớ 30 ngày.
+- Ghi dở do lỗi giữa chừng → `{"ok":false,"partial":true,"rows":<đã ghi>}`. **Không gửi lại**, kiểm tra tab `BAN`.
+- Sai khoá → `{"ok":false,"error":"unauthorized"}`.
+- Cảnh báo (vẫn ghi): bán quá tồn (`tồn X < bán Y → tồn âm`), SKU chưa có trong tab KHO.
+
+**Ghi vào BAN:** mỗi dòng phiếu = 1 dòng BAN (Ngày, product_code, product_color tự lấy, Giá, item_size, item_quantity, KHO, `channel`, `seller`). Lệnh `ban` gõ qua Zalo ghi `channel` = `cua_hang`, `seller` = tên Zalo người nhắn. Nếu tab BAN chưa có cột `channel` / `seller` thì bot bỏ qua 2 cột đó, phần còn lại ghi bình thường.
+
+**Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
+
 ## Cài đặt (làm 1 lần)
 
 ### Bước 1 — Dán code

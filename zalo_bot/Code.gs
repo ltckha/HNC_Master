@@ -56,6 +56,13 @@ const HELP_TEXT = [
 
 // Bộ nhớ đệm đọc Sheet trong 1 lần xử lý tin nhắn
 let MEMO = {};
+// Ngữ cảnh tin nhắn đang xử lý (tên người nhắn → cột seller của BAN)
+let CTX = {};
+
+// Cửa "ghi bán" cho app bán hàng
+const SALE_CHANNELS = ['cua_hang', 'web', 'shopee', 'tiktok'];
+const SALE_MAX_LINES = 50;
+const SALE_TICKET_DAYS = 30; // giữ mã phiếu đã ghi 30 ngày để chống ghi trùng
 
 // =====================================================================
 // WEBHOOK
@@ -66,6 +73,7 @@ function doGet() {
 }
 
 function doPost(e) {
+  if (e && e.parameter && e.parameter.sale_key !== undefined) return handleSaleRequest_(e);
   try {
     const props = PropertiesService.getScriptProperties();
     const key = props.getProperty('WEBHOOK_KEY');
@@ -91,7 +99,8 @@ function doPost(e) {
     }
 
     const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true';
-    sendMessage_(chatId, handleText_(msg.text, dryRun, chatId));
+    const sellerName = msg.from && msg.from.display_name ? String(msg.from.display_name).slice(0, 50) : '';
+    sendMessage_(chatId, handleText_(msg.text, dryRun, chatId, sellerName));
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
   }
@@ -103,8 +112,9 @@ function ok_() {
 }
 
 /** Xử lý 1 tin nhắn, trả về câu trả lời. Dùng chung cho webhook và hàm chạy thử. */
-function handleText_(text, dryRun, chatId) {
+function handleText_(text, dryRun, chatId, sellerName) {
   MEMO = {};
+  CTX = { seller: sellerName || '' };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -437,7 +447,7 @@ function doMovement_(p, action, kho, dryRun) {
       }
     }
     if (!dryRun) {
-      if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho));
+      if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho, 'cua_hang', CTX.seller));
       else if (action === ACTIONS.OUT) ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
       else ops.push(appendNhap_(p.code, color, s.size, s.qty, kho));
     }
@@ -589,15 +599,140 @@ function doReport_(p) {
 }
 
 // =====================================================================
+// CỬA "GHI BÁN" CHO APP BÁN HÀNG
+// POST {WEBAPP_URL}?sale_key=<SALE_KEY>
+// Body JSON: { ticket_id, seller, channel, lines: [{ code, size, qty, warehouse, price }], dry_run? }
+// =====================================================================
+
+function handleSaleRequest_(e) {
+  let out;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const saleKey = props.getProperty('SALE_KEY') || '';
+    if (saleKey.length < 16 || saleKey === props.getProperty('WEBHOOK_KEY') || e.parameter.sale_key !== saleKey) {
+      out = { ok: false, error: 'unauthorized' };
+    } else {
+      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
+      out = handleSale_(body, dryRun);
+    }
+  } catch (err) {
+    console.error(err && err.stack ? err.stack : err);
+    out = { ok: false, error: 'bad_request: ' + (err && err.message ? err.message : err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Ghi 1 phiếu bán vào BAN. Kiểm tra hết các dòng trước: có dòng lỗi thì không ghi dòng nào.
+ * Chống trùng theo ticket_id (lưu Script Properties 30 ngày). Trả kết quả từng dòng.
+ */
+function handleSale_(body, dryRun) {
+  MEMO = {};
+  const ticket = String(body.ticket_id || '').trim();
+  const channel = String(body.channel || '').trim().toLowerCase();
+  const seller = String(body.seller || '').trim().slice(0, 50);
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
+  if (SALE_CHANNELS.indexOf(channel) === -1) return { ok: false, ticket_id: ticket, error: 'channel phải là: ' + SALE_CHANNELS.join(', ') };
+  if (!lines.length || lines.length > SALE_MAX_LINES) return { ok: false, ticket_id: ticket, error: 'lines phải có 1-' + SALE_MAX_LINES + ' dòng' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ticketKey = 'sale_' + ticket;
+    const prev = props.getProperty(ticketKey);
+    if (prev) {
+      const p = JSON.parse(prev);
+      return { ok: !p.partial, duplicate: true, partial: !!p.partial, ticket_id: ticket, rows: p.rows,
+        error: p.partial ? 'Phiếu này lần trước chỉ ghi được ' + p.rows + ' dòng — kiểm tra tab BAN, KHÔNG gửi lại' : undefined };
+    }
+
+    const results = [];
+    const plan = [];
+    lines.forEach((ln, i) => {
+      ln = ln || {};
+      const code = String(ln.code || '').trim().toUpperCase();
+      const size = normSize_(ln.size === undefined || ln.size === null ? '' : ln.size);
+      const qty = ln.qty === undefined || ln.qty === null || ln.qty === '' ? 1 : Number(ln.qty);
+      const kho = KHO_ALIASES[String(ln.warehouse || '').trim().toUpperCase()];
+      const price = ln.price === undefined || ln.price === null || ln.price === '' ? '' : Number(ln.price);
+      const r = { line: i + 1, code, size, qty, warehouse: kho || String(ln.warehouse || '') };
+      const errs = [];
+      if (!/^[A-Z0-9]{2,20}$/.test(code)) errs.push('mã không hợp lệ');
+      else if (!codeExists_(code)) errs.push('mã không có trong KHOY3C/KHO15E');
+      if (size && !/^\d{2}$/.test(size)) errs.push('size không hợp lệ');
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99) errs.push('qty phải là số nguyên 1-99');
+      if (!kho) errs.push('warehouse phải là 15E hoặc Y3C');
+      if (price !== '' && (!isFinite(price) || price < 0)) errs.push('price không hợp lệ');
+      if (!errs.length) {
+        const here = findKhoRows_(kho, code, null);
+        const known = here.length ? here : findKhoRows_(kho === 'Y3C' ? '15E' : 'Y3C', code, null);
+        if (!size && known.some(x => x.item_size)) errs.push('thiếu size');
+        const rows = errs.length ? null : findKhoRows_(kho, code, [size]);
+        if (!rows) {
+          // đã có lỗi → không cần cảnh báo tồn
+        } else if (!rows.length) {
+          r.warning = 'SKU chưa có trong ' + KHO_SHEETS[kho] + ', tồn không trừ';
+        } else {
+          r.stock_before = Number(rows[0].current_quantity) || 0;
+          if (r.stock_before < qty) r.warning = 'tồn ' + r.stock_before + ' < bán ' + qty + ' → tồn âm';
+        }
+      }
+      if (errs.length) { r.ok = false; r.error = errs.join('; '); }
+      else { r.ok = true; plan.push({ r, code, size, qty, kho, price }); }
+      results.push(r);
+    });
+    if (results.some(r => !r.ok)) {
+      return { ok: false, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', results };
+    }
+
+    if (!dryRun) {
+      let written = 0;
+      try {
+        plan.forEach(x => {
+          const op = appendBan_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel, seller);
+          x.r.row = op.row;
+          written++;
+        });
+      } catch (err) {
+        props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: written, partial: true }));
+        return { ok: false, partial: true, ticket_id: ticket, rows: written,
+          error: 'Ghi dở: đã ghi ' + written + '/' + plan.length + ' dòng (' + (err && err.message ? err.message : err) + ') — KHÔNG gửi lại, kiểm tra tab BAN',
+          results };
+      }
+      props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: written }));
+      pruneSaleTickets_(props);
+    }
+    return { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Xoá mã phiếu cũ hơn SALE_TICKET_DAYS ngày khỏi Script Properties. */
+function pruneSaleTickets_(props) {
+  const cutoff = Date.now() - SALE_TICKET_DAYS * 86400000;
+  const all = props.getProperties();
+  Object.keys(all).forEach(k => {
+    if (k.indexOf('sale_') !== 0) return;
+    try { if (JSON.parse(all[k]).t < cutoff) props.deleteProperty(k); } catch (e) { /* bỏ qua */ }
+  });
+}
+
+// =====================================================================
 // GHI SHEET
 // =====================================================================
 
-function appendBan_(code, color, price, size, qty, kho) {
-  // FSKU của BAN tự tính bằng ARRAYFORMULA → không ghi cột FSKU
+function appendBan_(code, color, price, size, qty, kho, channel, seller) {
+  // FSKU của BAN tự tính bằng ARRAYFORMULA → không ghi cột FSKU.
+  // channel / seller chỉ ghi khi tab BAN đã có 2 cột đó (cột thêm cuối hàng tiêu đề).
   return appendByHeader_('BAN', {
     'Ngày': today_(), 'product_code': code, 'product_color': color,
     'Giá': price ? Number(price) : '', 'item_size': sizeValue_(size), 'item_quantity': qty, 'KHO': kho,
-  }, null, { product_code: code, item_size: size, item_quantity: qty, KHO: kho });
+  }, null, { product_code: code, item_size: size, item_quantity: qty, KHO: kho },
+  { 'channel': channel || '', 'seller': seller || '' });
 }
 
 function appendXuat_(code, color, size, qty, kho) {
@@ -624,9 +759,10 @@ function appendNhap_(code, color, size, qty, kho) {
 /**
  * Ghi 1 dòng mới ngay sau dòng cuối có product_code, theo tên cột hàng 1.
  * Chỉ ghi vào các cột được truyền vào (không đè cột công thức khác). Tự thêm dòng nếu hết lưới.
+ * optional: các cột chỉ ghi nếu tab có cột đó (không báo lỗi khi thiếu).
  * Trả về thông tin để có thể huỷ: { type, sheet, row, written, check }.
  */
-function appendByHeader_(sheetName, values, formulaBuilder, check) {
+function appendByHeader_(sheetName, values, formulaBuilder, check, optional) {
   const sheet = getSheet_(sheetName);
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const col = headerMap_(header);
@@ -640,6 +776,9 @@ function appendByHeader_(sheetName, values, formulaBuilder, check) {
 
   const all = Object.assign({}, values, formulaBuilder ? formulaBuilder(row, col) : {});
   if (formulaBuilder) requireColumns_(sheetName, col, Object.keys(all));
+  Object.keys(optional || {}).forEach(name => {
+    if (col[name] !== undefined && optional[name] !== '') all[name] = optional[name];
+  });
   Object.keys(all).forEach(name => {
     const cell = sheet.getRange(row, col[name] + 1);
     const v = all[name];
@@ -848,6 +987,21 @@ function testMessages() {
   ].forEach(t => {
     console.log('▶ ' + t + '\n' + handleText_(t, true, ''));
   });
+}
+
+/** Chạy thử cửa "ghi bán" (luôn dry-run, KHÔNG ghi Sheet). Xem kết quả ở Nhật ký thực thi. */
+function testSale() {
+  [
+    { ticket_id: 'TEST-001', seller: 'Kha', channel: 'cua_hang',
+      lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 },
+              { code: 'TH2040D', size: '41', qty: 2, warehouse: 'YEN', price: 800000 }] },
+    { ticket_id: 'TEST-002', seller: 'Kha', channel: 'web',
+      lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E', price: 800000 }] },
+    { ticket_id: 'TEST-003', seller: 'Kha', channel: 'shopee',
+      lines: [{ code: 'KHONGCO1X', size: 40, qty: 1, warehouse: '15E' },
+              { code: 'TH2040D', qty: 1, warehouse: 'Y3C' }] },
+    { ticket_id: 'TEST-004', seller: 'Kha', channel: 'facebook', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] },
+  ].forEach(t => console.log('▶ ' + t.ticket_id + '\n' + JSON.stringify(handleSale_(t, true), null, 1)));
 }
 
 /** Trỏ bot Zalo về Web App này (chạy 1 lần sau khi Triển khai). */
