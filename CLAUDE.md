@@ -34,7 +34,7 @@
 
 ## 👠 2. TỔNG QUAN KIẾN TRÚC HNC CONTROL CENTER
 
-Hệ thống điều phối dữ liệu sản phẩm, quản lý tồn kho đa nền tảng và xuất file nghiệp vụ cho thương hiệu **Hiệu Giày Hải Nancy**:
+Hệ thống điều phối dữ liệu sản phẩm, quản lý tồn kho đa nền tảng và xuất file nghiệp vụ cho thương hiệu **Hiệu giày Hải Nancy**:
 
 1. **Website Hải Nancy:**
    - Xuất file đăng sản phẩm mới (`WEB_PRODUCTS_*.csv`, tab-delimited UTF-8-SIG).
