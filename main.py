@@ -1295,7 +1295,10 @@ def process_export_task(choice, loader):
             print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file Shopee vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"SHOPEE_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
-        loader.mark_platform_update('shopee')
+        if updated_stock_count > 0:
+            loader.mark_platform_update('shopee')
+        else:
+            print("ℹ️ Không ghi mốc shopee_last_update: file này không cập nhật tồn kho (chế độ chỉ giá).")
         wb.close()
 
         mode_desc = {
@@ -1425,6 +1428,10 @@ def process_export_task(choice, loader):
         brand_col = key_col_map.get('brand')
         price_col = key_col_map.get('price')
         qty_col = key_col_map.get('quantity') or key_col_map.get('stock')
+        if not qty_col:
+            # Mẫu Kho hàng (Inventory) của TikTok có thể đặt tên cột tồn khác (vd quantity/<kho>, warehouse_quantity…)
+            qty_col = next((c for k, c in key_col_map.items()
+                            if k.lower().startswith(('quantity', 'stock', 'warehouse_quantity'))), None)
         sku_col = key_col_map.get('seller_sku', 10 if ws_tpl.max_column >= 10 else 7)
         var_col = key_col_map.get('variation_value', 6 if ws_tpl.max_column >= 9 else 5)
         weight_col = key_col_map.get('parcel_weight')
@@ -1456,7 +1463,7 @@ def process_export_task(choice, loader):
 
         # Cảnh báo thông minh nếu chọn chế độ nhưng template thiếu cột tương ứng
         if update_mode == "1" and not qty_col:
-            warn_t = "⚠️ Template hiện tại không có cột số lượng tồn kho ('quantity'). Vui lòng dùng mẫu Kho hàng (Inventory) nếu muốn cập nhật tồn kho!"
+            warn_t = "⚠️ Mẫu TikTok hiện tại KHÔNG có cột tồn kho ('quantity') → file này KHÔNG cập nhật tồn, và KHÔNG ghi mốc tiktok_last_update. Hãy thay HNC_Templates/tpl_tiktok_update.xlsx bằng mẫu có cột Tồn kho."
             if HAS_RICH: console.print(f"[bold yellow]{warn_t}[/bold yellow]")
             else: print(warn_t)
 
@@ -1547,7 +1554,10 @@ def process_export_task(choice, loader):
             print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file TikTok vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"TIKTOK_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
-        loader.mark_platform_update('tiktok')
+        if updated_stock_count > 0:
+            loader.mark_platform_update('tiktok')
+        else:
+            print("ℹ️ Không ghi mốc tiktok_last_update: file này không cập nhật tồn kho (mẫu không có cột tồn hoặc chế độ chỉ giá).")
         wb.close()
 
         mode_desc = {

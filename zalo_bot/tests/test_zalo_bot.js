@@ -170,6 +170,9 @@ eq('update ghi META theo key', [r2.ok, r2.cell, WRITES[1] && WRITES[1].cell, WRI
 DATA.META = [['key', 'value', 'updated_at'], ['tiktok_last_update', 'x', 'y']];
 r2 = ex({ channel: 'shopee', kind: 'update', at: '2026-10-15T05:00:00Z' });
 eq('META chưa có dòng key → thêm dòng cuối', [r2.ok, r2.cell, WRITES[3] && WRITES[3].cell, WRITES[3] && WRITES[3].v], [true, 'META!B3', [3, 1], 'shopee_last_update']);
+const nW0 = WRITES.length;
+r2 = ex({ channel: 'tiktok', kind: 'update', stock_included: false });
+eq('update không có cột tồn → không ghi mốc', [r2.ok, /không có cột tồn/.test(r2.error), WRITES.length], [false, true, nW0]);
 eq('channel sai', ex({ channel: 'lazada', kind: 'upload', codes: ['TH2040D'] }).ok, false);
 eq('kind sai', ex({ channel: 'shopee', kind: 'x', codes: ['TH2040D'] }).ok, false);
 eq('upload thiếu codes', ex({ channel: 'shopee', kind: 'upload', codes: [] }).ok, false);

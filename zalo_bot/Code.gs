@@ -974,7 +974,7 @@ function testSyncHint() {
 // =====================================================================
 // CỬA "ĐÁNH DẤU ĐÃ XUẤT FILE SÀN" (web xuất file Shopee / TikTok song song menu HNC)
 // POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
-// Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", dry_run? }
+// Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", stock_included?, dry_run? }
 //  - upload: SANPHAM cột shopee_upload / tiktok_upload = "Done - yyyy-MM-dd HH:mm" cho mã có trong codes (giống main.py).
 //  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab META (key | value | updated_at), dòng key = shopee_last_update / tiktok_last_update.
 // =====================================================================
@@ -1016,6 +1016,10 @@ function handleExport_(body, dryRun) {
   if (kind !== 'upload' && kind !== 'update') return { ok: false, error: 'kind phải là upload hoặc update' };
   const codes = Array.isArray(body.codes) ? uniq_(body.codes.map(c => String(c || '').trim().toUpperCase()).filter(Boolean)) : [];
   if (kind === 'upload' && (!codes.length || codes.length > EXPORT_MAX_CODES)) return { ok: false, error: 'codes phải có 1-' + EXPORT_MAX_CODES + ' mã' };
+  // Mốc *_last_update là "lần cập nhật TỒN gần nhất": file không có cột tồn (vd mẫu TikTok All_Information) thì không ghi
+  if (kind === 'update' && body.stock_included === false) {
+    return { ok: false, kind, written: 0, error: 'mẫu không có cột tồn — không ghi mốc ' + channel + '_last_update' };
+  }
   let at = body.at ? new Date(body.at) : new Date();
   if (isNaN(at)) at = new Date();
   const stamp = Utilities.formatDate(at, TZ, 'yyyy-MM-dd HH:mm');
