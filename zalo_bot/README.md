@@ -90,6 +90,25 @@ Content-Type: application/json
 - Trả về: `{"ok":true,"order_id":…}`. Lỗi: `unauthorized`, `chưa cấu hình …`, `Zalo không nhận tin` (khi Zalo từ chối, lần sau gửi lại được).
 - Gợi ý: để sẵn các dòng `ban …` trong `text`. Anh xác nhận với khách xong thì **chuyển tiếp nguyên tin** cho bot, bot ghi BAN từng dòng.
 
+## Báo web chép lại Sheet khi Sheet đổi
+
+Khi tab `SANPHAM`, `KHO15E`, `KHOY3C`, `BAN`, `NHAP`, `XUAT` hoặc `SUB` thay đổi, bot báo web giayhainancy.vn chép lại Sheet, không phải chờ vòng chép mỗi giờ.
+
+- **Nguồn báo:**
+  - Trigger cài đặt `onEdit` + `onChange`, bắt khi người sửa trên Sheet.
+  - Bot tự báo sau khi ghi BAN / NHAP / XUAT / vị trí: lệnh Zalo, `huy`, cửa ghi bán.
+- **Gộp:** tên tab vào hàng chờ, mỗi phút gửi **tối đa 1 lần**: `POST SYNC_HINT_URL?key=SYNC_HINT_KEY`, body `{"tabs":[...]}`. Đổi BAN / NHAP / XUAT thì gửi kèm `KHO15E`, `KHOY3C`. Trigger mỗi phút gửi phần còn lại trong hàng chờ.
+- **Web trả:** 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi Nhật ký, không gửi dồn lại.
+- **Không bắt được:** ghi từ Sheets API, ví dụ `main.py` (AI nhập SP, đồng bộ kho, cột trạng thái). Google không chạy trigger cho các lần ghi này, nên web chờ vòng chép mỗi giờ.
+
+**Cài (anh làm 1 lần):**
+1. Script Properties:
+   - `SYNC_HINT_URL` = `https://giayhainancy-web.giayhainancy-web.workers.dev/api/sync-hint`
+   - `SYNC_HINT_KEY` = cùng giá trị với secret bên web.
+2. Chạy hàm `setupChangeTrigger`, cho phép quyền khi Google hỏi. Hàm tạo 3 trigger, chạy lại cũng không tạo trùng.
+3. Chạy `checkConfig`: 2 thuộc tính mới và 3 trigger đều ✅.
+4. Chạy `testSyncHint`: trả `202` là web đã nhận.
+
 ## Cài đặt (làm 1 lần)
 
 ### Bước 1 — Dán code

@@ -119,6 +119,15 @@ function ok_() {
 
 /** Xử lý 1 tin nhắn, trả về câu trả lời. Dùng chung cho webhook và hàm chạy thử. */
 function handleText_(text, dryRun, chatId, sellerName) {
+  const out = handleTextLocked_(text, dryRun, chatId, sellerName);
+  // Báo web chép lại Sheet SAU khi nhả khoá (trigger onEdit không chạy khi script tự ghi)
+  if (!dryRun && out.syncTabs.length) {
+    try { queueSyncHint_(out.syncTabs); } catch (e) { console.error(e && e.stack ? e.stack : e); }
+  }
+  return out.reply;
+}
+
+function handleTextLocked_(text, dryRun, chatId, sellerName) {
   MEMO = {};
   CTX = { seller: sellerName || '', pending: {} };
   const lock = LockService.getScriptLock();
@@ -139,14 +148,17 @@ function handleText_(text, dryRun, chatId, sellerName) {
       }
     } catch (err) {
       console.error(err && err.stack ? err.stack : err);
-      return '⚠️ Lỗi: ' + (err && err.message ? err.message : err) + '\nKiểm tra lại Sheet xem đã ghi chưa. Báo anh Kha nếu lỗi lặp lại.';
+      // Có thể đã ghi dở → báo web chép lại các tab có thể đã đổi
+      return { reply: '⚠️ Lỗi: ' + (err && err.message ? err.message : err) + '\nKiểm tra lại Sheet xem đã ghi chưa. Báo anh Kha nếu lỗi lặp lại.',
+        syncTabs: ['BAN', 'NHAP', 'XUAT'] };
     }
+    const syncTabs = uniq_((res.ops || []).map(o => o.sheet).concat(res.touched || []));
     if (res.ops && res.ops.length && !dryRun && chatId) {
       CacheService.getScriptCache().put('last_' + chatId,
         JSON.stringify({ label: res.label || '', ops: res.ops }), UNDO_SECONDS);
       res.text += '\n↩️ Nhắn "huy" trong 10 phút nếu ghi nhầm' + (res.batch ? ' (huỷ cả lô).' : '.');
     }
-    return (dryRun && isWrite ? '🧪 CHẠY THỬ — chưa ghi Sheet\n' : '') + res.text;
+    return { reply: (dryRun && isWrite ? '🧪 CHẠY THỬ — chưa ghi Sheet\n' : '') + res.text, syncTabs };
   } finally {
     lock.releaseLock();
   }
@@ -629,7 +641,7 @@ function doUndo_(chatId, dryRun) {
     });
     cache.remove('last_' + chatId);
   }
-  return { text: '↩️ Đã huỷ: ' + last.label };
+  return { text: '↩️ Đã huỷ: ' + last.label, touched: dryRun ? [] : uniq_(last.ops.map(o => o.sheet)) };
 }
 
 /** Báo cáo bán trong 1 ngày theo kho, từ tab BAN. Doanh thu = Giá × số lượng. */
@@ -686,6 +698,9 @@ function handleSaleRequest_(e) {
       const body = JSON.parse((e.postData && e.postData.contents) || '{}');
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = handleSale_(body, dryRun);
+      if (!dryRun && (out.rows || out.partial) && !out.duplicate) {
+        try { queueSyncHint_(['BAN']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+      }
     }
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
@@ -840,6 +855,105 @@ function handleNotify_(body, owner, props) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// =====================================================================
+// BÁO WEB CHÉP LẠI SHEET KHI SHEET ĐỔI
+// Trigger cài đặt onEdit + onChange → ghi tên tab vào hàng chờ (CacheService).
+// Mỗi phút gửi tối đa 1 lần: POST SYNC_HINT_URL?key=SYNC_HINT_KEY, body {"tabs":[...]}.
+// Web trả 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi log, không gửi dồn lại.
+// =====================================================================
+
+const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB'];
+const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
+const SYNC_MIN_INTERVAL_MS = 60 * 1000;
+const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints'];
+
+/** Trigger cài đặt onEdit (người sửa ô). */
+function onSheetEditHint(e) {
+  try {
+    const name = e && e.range ? e.range.getSheet().getName() : '';
+    if (name) queueSyncHint_([name]);
+  } catch (err) { console.error(err && err.stack ? err.stack : err); }
+}
+
+/** Trigger cài đặt onChange (thêm/xoá dòng, cột, dán…). Sự kiện không có tên tab → lấy tab đang mở. */
+function onSheetChangeHint(e) {
+  try {
+    const ss = e && e.source ? e.source : SpreadsheetApp.getActiveSpreadsheet();
+    const name = ss.getActiveSheet().getName();
+    if (name) queueSyncHint_([name]);
+  } catch (err) { console.error(err && err.stack ? err.stack : err); }
+}
+
+/** Trigger mỗi phút: gửi phần còn trong hàng chờ. */
+function flushSyncHints() {
+  try { flushSyncHint_(false); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+}
+
+/** Thêm tab vào hàng chờ (chỉ tab đang theo dõi) rồi gửi ngay nếu đã quá 60 giây kể từ lần gửi trước. */
+function queueSyncHint_(tabs) {
+  let add = tabs.filter(t => SYNC_WATCH_TABS.indexOf(t) !== -1);
+  if (!add.length) return;
+  if (add.some(t => SYNC_STOCK_TABS.indexOf(t) !== -1)) add = add.concat(['KHO15E', 'KHOY3C']);
+  const lock = LockService.getDocumentLock() || LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
+  try {
+    const cache = CacheService.getScriptCache();
+    const queued = JSON.parse(cache.get('sync_q') || '[]');
+    cache.put('sync_q', JSON.stringify(uniq_(queued.concat(add))), 21600);
+  } finally {
+    lock.releaseLock();
+  }
+  flushSyncHint_(false);
+}
+
+/** Gửi hàng chờ nếu có và đã đủ 60 giây. Trả về mã HTTP, hoặc null nếu không gửi. */
+function flushSyncHint_(force) {
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty('SYNC_HINT_URL');
+  const key = props.getProperty('SYNC_HINT_KEY');
+  if (!url || !key) return null;
+  const lock = LockService.getDocumentLock() || LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return null;
+  let tabs;
+  try {
+    const cache = CacheService.getScriptCache();
+    tabs = JSON.parse(cache.get('sync_q') || '[]');
+    if (!tabs.length) return null;
+    const last = Number(cache.get('sync_last') || 0);
+    if (!force && Date.now() - last < SYNC_MIN_INTERVAL_MS) return null; // trigger mỗi phút sẽ gửi sau
+    cache.put('sync_last', String(Date.now()), 21600);
+    cache.remove('sync_q');
+  } finally {
+    lock.releaseLock();
+  }
+  const res = UrlFetchApp.fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(key), {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ tabs: SYNC_WATCH_TABS.filter(t => tabs.indexOf(t) !== -1) }),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code !== 202 && code !== 200) console.error('sync-hint lỗi ' + code + ' (tabs ' + tabs.join(',') + '): ' + res.getContentText().slice(0, 200));
+  return code;
+}
+
+/** Cài trigger onEdit + onChange + mỗi phút (chạy 1 lần; không tạo trùng nếu đã có). */
+function setupChangeTrigger() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const have = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  if (have.indexOf('onSheetEditHint') === -1) ScriptApp.newTrigger('onSheetEditHint').forSpreadsheet(ss).onEdit().create();
+  if (have.indexOf('onSheetChangeHint') === -1) ScriptApp.newTrigger('onSheetChangeHint').forSpreadsheet(ss).onChange().create();
+  if (have.indexOf('flushSyncHints') === -1) ScriptApp.newTrigger('flushSyncHints').timeBased().everyMinutes(1).create();
+  console.log('Trigger hiện có: ' + ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()).join(', '));
+}
+
+/** Gửi thử 1 lần báo đồng bộ tab SANPHAM ngay (bỏ qua giới hạn 60 giây) — xem mã trả về ở Nhật ký. */
+function testSyncHint() {
+  const cache = CacheService.getScriptCache();
+  cache.put('sync_q', JSON.stringify(['SANPHAM']), 21600);
+  console.log('sync-hint trả về: ' + flushSyncHint_(true) + ' (202 = web đã nhận)');
 }
 
 // =====================================================================
@@ -1134,7 +1248,8 @@ function testSale() {
 /** Kiểm cấu hình Script Properties: chỉ in tên, độ dài, các khoá có khác nhau không — KHÔNG in giá trị. */
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
-  const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID'];
+  const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
@@ -1145,6 +1260,8 @@ function checkConfig() {
   const owner = props.getProperty('OWNER_CHAT_ID') || '';
   const allowed = (props.getProperty('ALLOWED_CHAT_IDS') || '').split(',').map(s => s.trim());
   console.log('OWNER_CHAT_ID nằm trong ALLOWED_CHAT_IDS: ' + (owner && allowed.indexOf(owner) !== -1 ? '✅' : '⚠️ không'));
+  const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  SYNC_TRIGGER_HANDLERS.forEach(h => console.log('Trigger ' + h + ': ' + (handlers.indexOf(h) !== -1 ? '✅' : '❌ chưa có (chạy setupChangeTrigger)')));
 }
 
 /** Trỏ bot Zalo về Web App này (chạy 1 lần sau khi Triển khai). */

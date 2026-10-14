@@ -12,20 +12,24 @@ const DATA = {
     ['CXED', 'Đen', 40, 1, 1, ''], ['T1D', 'Đen', 39, 1, 1, ''], ['AROMAX60T', 'Trắng', '', 5, 5, '']]),
 };
 const PROPS = {};
+const CACHE = {};
 const ctx = {
   console,
   Utilities: { formatDate: (d, tz, f) => { const p = n => ('0' + n).slice(-2); return f.replace('yyyy', d.getFullYear()).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())); } },
   SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? { getDataRange: () => ({ getValues: () => DATA[n] }) } : null }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => PROPS[k] || null, setProperty: (k, v) => { PROPS[k] = v; }, getProperties: () => PROPS, deleteProperty: k => { delete PROPS[k]; } }) },
-  LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-  CacheService: { getScriptCache: () => ({ get: () => null, put() {}, remove() {} }) },
+  LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }), getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
+  CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
 };
 vm.createContext(ctx);
 const SENT = [];
-ctx.UrlFetchApp = { fetch: (url, opt) => { SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
+const HINTS = [];
+ctx.UrlFetchApp = { fetch: (url, opt) => {
+  if (url.indexOf('sync-hint') !== -1) { HINTS.push({ url, body: JSON.parse(opt.payload) }); return { getResponseCode: () => 202, getContentText: () => '' }; }
+  SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -110,6 +114,26 @@ n = post('notifykey_1234567890', { order_id: 'W2', text: 'a'.repeat(5000) });
 eq('báo đơn cắt bớt', [n.ok, n.truncated, SENT[1].text.length < 2000], [true, true, true]);
 PROPS.WEB_NOTIFY_KEY = PROPS.SALE_KEY;
 eq('khoá báo đơn trùng SALE_KEY → từ chối', /chưa cấu hình WEB_NOTIFY_KEY/.test(post(PROPS.SALE_KEY, { order_id: 'W3', text: 'x' }).error), true);
+
+// ---- Báo web chép Sheet ----
+ctx.queueSyncHint_(['BAN']);
+eq('chưa cấu hình URL → không gửi', HINTS.length, 0);
+delete CACHE.sync_q;
+PROPS.SYNC_HINT_URL = 'https://web.example/api/sync-hint'; PROPS.SYNC_HINT_KEY = 'synckey_1234567890';
+ctx.queueSyncHint_(['BAN']);
+eq('BAN đổi → gửi kèm KHO15E, KHOY3C', [HINTS.length, HINTS[0] && HINTS[0].body.tabs, /key=synckey_1234567890/.test(HINTS[0] && HINTS[0].url)], [1, ['KHO15E', 'KHOY3C', 'BAN'], true]);
+ctx.queueSyncHint_(['SANPHAM']);
+ctx.queueSyncHint_(['SUB']);
+eq('trong 60 giây → gộp, chưa gửi', HINTS.length, 1);
+ctx.queueSyncHint_(['Trang tính 1']);
+eq('tab không theo dõi → bỏ qua', JSON.parse(CACHE.sync_q), ['SANPHAM', 'SUB']);
+ctx.flushSyncHints();
+eq('trigger mỗi phút chưa đủ 60s → chờ', HINTS.length, 1);
+CACHE.sync_last = String(Date.now() - 61000);
+ctx.flushSyncHints();
+eq('đủ 60s → gửi 1 lần gộp', [HINTS.length, HINTS[1] && HINTS[1].body.tabs], [2, ['SANPHAM', 'SUB']]);
+ctx.flushSyncHints();
+eq('hàng chờ trống → không gửi', HINTS.length, 2);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
