@@ -23,6 +23,8 @@ const KHO_SHEETS = { 'Y3C': 'KHOY3C', '15E': 'KHO15E' };
 // để tác vụ đồng bộ kho của HNC tự thêm SKU mới vào KHO15E / KHOY3C.
 const NHAP_ZALO_MARK = 'Zalo_Update';
 const NHAP_MARK_COLUMNS = ['web_stock', 'web_label', 'misa_stock'];
+// Dòng NHAP trả hàng / huỷ đơn đã bán: Số chứng từ = TRA-<ddMMyy>, 3 cột trên = Tra_hang (không xuất phiếu nhập MISA)
+const NHAP_RETURN_MARK = 'Tra_hang';
 
 const UNDO_SECONDS = 600; // Cho huỷ thao tác gần nhất trong 10 phút
 
@@ -43,6 +45,7 @@ const HELP_TEXT = [
   '🔎 Kiểm hàng: TH2040D 40  |  TH2040 (mọi màu)',
   '🛒 Bán: ban TH2040D 40 YEN 800k',
   '📥 Nhập: nhap TH2040D 38/2 39 TBH',
+  '↩️ Khách trả hàng / huỷ đơn: nhap TH2040D 40 15E tra hang',
   '📤 Xuất: xuat TH2040D 41 15E',
   '🔁 Chuyển kho: chuyen kho TH2040D 40 tu YEN den TBH',
   '📍 Chuyển vị trí: chuyen vi tri TH2040D YEN den K12',
@@ -226,7 +229,8 @@ function isSize_(t) {
 
 // Từ thường gặp trong tin nhắn, không bao giờ là mã gốc
 const STOP_WORDS = ['ban', 'nhap', 'xuat', 'chuyen', 'kho', 'tri', 'den', 'toi', 'sang', 'qua',
-  'mau', 'doi', 'cai', 'huy', 'bao', 'cao', 'hom', 'nay', 'con', 'khong', 'size', 'gia', 'oi'];
+  'mau', 'doi', 'cai', 'huy', 'bao', 'cao', 'hom', 'nay', 'con', 'khong', 'size', 'gia', 'oi',
+  'tra', 'hang', 'lai', 'khach'];
 
 /**
  * known = { codes: Set, bases: Set } lấy từ tab KHO (mã thật đang có). Có known thì ưu tiên khớp mã thật
@@ -257,6 +261,8 @@ function parseMessage_(textRaw, known) {
     code: '', baseCode: '', sizes: [], qty: 0, sizeErrors: [], reportDate: null, text,
   };
   if (action === ACTIONS.HELP || action === ACTIONS.UNDO) return p;
+  // Trả hàng / huỷ đơn: "tra hang", "trả hàng", "tra lai", "khach tra", "hang tra" (chỉ có tác dụng với lệnh nhập)
+  p.returnGoods = action === ACTIONS.IN && /(^|\s)(tra\s*hang|tra\s*lai|khach\s*tra|hang\s*tra)(\s|$|[.,!])/.test(n);
   if (action === ACTIONS.REPORT) { p.reportDate = parseReportDate_(n); return p; }
 
   const used = {}; // chỉ số token đã dùng cho kho / vị trí / giá / mã
@@ -526,7 +532,7 @@ function doMovement_(p, action, kho, dryRun) {
     if (!dryRun) {
       if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho, 'cua_hang', CTX.seller));
       else if (action === ACTIONS.OUT) ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
-      else ops.push(appendNhap_(p.code, color, s.size, s.qty, kho));
+      else ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, action === ACTIONS.IN && p.returnGoods));
     }
     // Ghi nhớ số đã bán/xuất/nhập trong cùng lô để cảnh báo tồn của dòng sau tính đúng
     if (!CTX.pending) CTX.pending = {};
@@ -539,9 +545,11 @@ function doMovement_(p, action, kho, dryRun) {
   const label = action + ' ' + p.code + ' (' + written.join(', ') + ') kho ' + kho;
   return {
     ok: true, ops, label,
-    text: '✅ ' + action + ' ' + p.code + (color ? ' màu ' + color : '') + ' kho ' + kho +
+    text: (action === ACTIONS.IN && p.returnGoods ? '↩️ TRẢ HÀNG: nhập lại ' + p.code : '✅ ' + action + ' ' + p.code) +
+      (color ? ' màu ' + color : '') + ' kho ' + kho +
       (action === ACTIONS.SELL && p.price ? ' giá ' + money_(p.price) : '') +
       '\n  ' + written.join('\n  ') + '\n→ tab ' + tab +
+      (action === ACTIONS.IN && p.returnGoods ? '\n(Số chứng từ TRA-…, không xuất phiếu nhập MISA)' : '') +
       (warnings.length ? '\n' + warnings.join('\n') : ''),
   };
 }
@@ -984,12 +992,13 @@ function appendXuat_(code, color, size, qty, kho) {
   }, null, { product_code: code, item_size: size, item_quantity: qty, KHO: kho });
 }
 
-function appendNhap_(code, color, size, qty, kho) {
+function appendNhap_(code, color, size, qty, kho, isReturn) {
   const values = {
     'Ngày chứng từ (*)': today_(), 'product_code': code, 'product_color': color,
     'KHO': kho, 'item_size': sizeValue_(size), 'Số lượng (*)': qty,
   };
-  NHAP_MARK_COLUMNS.forEach(c => { values[c] = NHAP_ZALO_MARK; });
+  if (isReturn) values['Số chứng từ (*)'] = 'TRA-' + Utilities.formatDate(new Date(), TZ, 'ddMMyy');
+  NHAP_MARK_COLUMNS.forEach(c => { values[c] = isReturn ? NHAP_RETURN_MARK : NHAP_ZALO_MARK; });
   // FSKU của NHAP là công thức từng dòng: =CONCATENATE(KHO; product_code; item_size)
   return appendByHeader_('NHAP', values, (row, col) => {
     const a1 = c => columnLetter_(col[c] + 1) + row;

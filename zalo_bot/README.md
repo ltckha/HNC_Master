@@ -17,6 +17,7 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 | `xuat TH2040D 41 15E` | Thêm dòng vào tab `XUAT` |
 | `chuyen kho TH2040D 40 tu YEN den TBH` | `XUAT` ở Y3C + `NHAP` ở 15E |
 | `chuyen vi tri TH2040D YEN den K12` | Sửa `product_location` trong tab KHO (không ghi size = đổi mọi size) |
+| `nhap TH2040D 40 15E tra hang` | **Khách trả hàng / huỷ đơn đã bán**: ghi 1 dòng NHAP với Số chứng từ `TRA-<ddMMyy>`, cột `web_stock` / `web_label` / `misa_stock` = `Tra_hang`, nên không xuất phiếu nhập MISA và web không tính là hàng mới về. Nhận cả `trả hàng`, `tra lai`, `khach tra`; dùng được trong tin nhiều dòng |
 | `huy` | Huỷ thao tác ghi gần nhất của chính người nhắn, trong 10 phút |
 | `bc` / `bc hom qua` / `bc 10/10` | Báo cáo bán trong ngày: số đôi + doanh thu theo kho (tab `BAN`, Giá × số lượng) |
 | `hd` / `?` / `huong dan` | Bảng hướng dẫn. Tin không hiểu cũng được trả lời bằng bảng này |

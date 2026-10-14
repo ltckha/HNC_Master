@@ -15,7 +15,7 @@ const PROPS = {};
 const CACHE = {};
 const ctx = {
   console,
-  Utilities: { formatDate: (d, tz, f) => { const p = n => ('0' + n).slice(-2); return f.replace('yyyy', d.getFullYear()).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())); } },
+  Utilities: { formatDate: (d, tz, f) => { const p = n => ('0' + n).slice(-2); return f.replace('yyyy', d.getFullYear()).replace('yy', String(d.getFullYear()).slice(-2)).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())); } },
   SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? { getDataRange: () => ({ getValues: () => DATA[n] }) } : null }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => PROPS[k] || null, setProperty: (k, v) => { PROPS[k] = v; }, getProperties: () => PROPS, deleteProperty: k => { delete PROPS[k]; } }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }), getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
@@ -29,7 +29,7 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -114,6 +114,27 @@ n = post('notifykey_1234567890', { order_id: 'W2', text: 'a'.repeat(5000) });
 eq('báo đơn cắt bớt', [n.ok, n.truncated, SENT[1].text.length < 2000], [true, true, true]);
 PROPS.WEB_NOTIFY_KEY = PROPS.SALE_KEY;
 eq('khoá báo đơn trùng SALE_KEY → từ chối', /chưa cấu hình WEB_NOTIFY_KEY/.test(post(PROPS.SALE_KEY, { order_id: 'W3', text: 'x' }).error), true);
+
+// ---- Trả hàng ----
+const rp = t => { const p = ctx.parseMessage_(t, ctx.knownCodes_()); return [p.action, p.code, p.kho, !!p.returnGoods, p.sizes.map(x => x.size).join(',')]; };
+eq('trả hàng không dấu', rp('nhap TH2040D 40 15E tra hang'), ['NHẬP', 'TH2040D', '15E', true, '40']);
+eq('trả hàng có dấu', rp('Nhập TH2040D 41 YEN trả hàng'), ['NHẬP', 'TH2040D', 'Y3C', true, '41']);
+eq('khách trả', rp('nhap TH2040D 40 15e khach tra'), ['NHẬP', 'TH2040D', '15E', true, '40']);
+eq('nhập thường không phải trả', rp('nhap TH2040D 40 15E'), ['NHẬP', 'TH2040D', '15E', false, '40']);
+eq('"tra hang" với lệnh bán → bỏ qua cờ', rp('ban TH2040D 40 15E tra hang')[3], false);
+txt = ctx.handleText_('nhap TH2040D 40 15E tra hang', true, '');
+eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /không xuất phiếu nhập MISA/.test(txt)], [true, true]);
+txt = ctx.handleText_('Khách đổi ý\nnhap TH2040D 40 15E tra hang\nban TH2040D 41 YEN 800k', true, '');
+eq('trả hàng trong tin nhiều dòng', [/2 lệnh — 2 ghi được/.test(txt), /1\) ↩️ TRẢ HÀNG/.test(txt)], [true, true]);
+const realAppend = ctx.appendByHeader_;
+let captured = null;
+ctx.appendByHeader_ = (sheet, values) => { captured = { sheet, values }; return { type: 'row', sheet, row: 99, written: Object.keys(values), check: {} }; };
+ctx.appendNhap_('TH2040D', 'Đen', '40', 1, '15E', true);
+eq('dòng NHAP trả hàng', [captured.sheet, /^TRA-\d{6}$/.test(captured.values['Số chứng từ (*)']), captured.values.web_stock, captured.values.web_label, captured.values.misa_stock, 'kho_sync' in captured.values],
+  ['NHAP', true, 'Tra_hang', 'Tra_hang', 'Tra_hang', false]);
+ctx.appendNhap_('TH2040D', 'Đen', '40', 1, '15E', false);
+eq('dòng NHAP thường', [captured.values['Số chứng từ (*)'], captured.values.misa_stock], [undefined, 'Zalo_Update']);
+ctx.appendByHeader_ = realAppend;
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

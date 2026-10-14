@@ -212,11 +212,12 @@ class DynamicHeaderScanner:
                     if key and key not in col_map:
                         col_map[key] = col_idx
 
+        # Lấy hàng CUỐI cùng (trong 5 hàng đầu) có tên kỹ thuật: tab NHAP có "product_code" ở cả hàng 1 và hàng 2,
+        # lấy hàng đầu sẽ coi hàng tiêu đề 2 là dữ liệu và ghi nhầm trạng thái vào đó.
         for idx in range(min(5, len(df))):
             vals = [str(v).strip() for v in df.iloc[idx].values if pd.notna(v)]
             if 'product_code' in vals or 'item_size' in vals or 'get_images' in vals:
                 var_row_idx = idx
-                break
 
         return var_row_idx, col_map
 
@@ -2349,6 +2350,11 @@ def process_export_task(choice, loader):
             qty = parse_number(rec.get('Số lượng (*)') or rec.get('item_quantity', 0))
 
             kho_raw = str(rec.get('KHO', '')).strip().upper()
+
+            # Dòng trả hàng / huỷ đơn (Số chứng từ TRA-…): anh nhập trả trong app MISA → không xuất phiếu nhập
+            if doc_no.upper().startswith('TRA-'):
+                row_status_list.append("Bỏ qua - trả hàng")
+                continue
 
             # DANH SÁCH KIỂM TRA LỖI THIẾU DỮ LIỆU
             missing_reasons = []
