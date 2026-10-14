@@ -1,0 +1,4 @@
+{
+  "_doc": "Bản triển khai web app đang chạy của bot Zalo HNC (link /exec = https://script.google.com/macros/s/<deployment_id>/exec, đã setWebhook). commands/bot_deploy.command cập nhật ĐÚNG bản này nên link giữ nguyên. Tra 14/10 bằng clasp list-deployments: bản này đang ở phiên bản @2.",
+  "deployment_id": "AKfycbw2l8kyPQStCd18fQ2byzwf0CCpNHdrIQ-SThgRKKBdzu3-ZLXNBwcX2KQiFmwQCmvUQw"
+}

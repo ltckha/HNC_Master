@@ -1,0 +1,4 @@
+# clasp chỉ đẩy 2 tệp này lên Apps Script — README, deploy.json, tests, .clasp.json ở lại máy
+**/**
+!Code.gs
+!appsscript.json

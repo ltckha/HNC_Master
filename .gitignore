@@ -33,3 +33,6 @@ Thumbs.db
 *.csv
 !templates/*.xlsx
 !templates/*.csv
+
+# clasp — khoá OAuth (không bao giờ đưa lên git)
+.clasprc.json

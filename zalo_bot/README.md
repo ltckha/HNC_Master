@@ -110,8 +110,24 @@ Content-Type: application/json   (hoặc text/plain)
 2. Thấy đúng → đổi `DRY_RUN` thành `false`.
 3. Nhắn 1 tin bán thử → kiểm tra dòng mới ở tab `BAN` và `current_quantity` trong tab KHO.
 
-## Khi sửa code
-Dán code mới vào Apps Script → **Triển khai → Quản lý triển khai → ✏️ → Phiên bản: Phiên bản mới → Triển khai**. Link `/exec` giữ nguyên, không cần chạy lại `setupWebhook`.
+## Cập nhật bot bằng clasp (không cần dán tay)
+
+Bấm đúp `commands/bot_deploy.command`. Lệnh này chạy lần lượt:
+1. Test trên máy: `node zalo_bot/tests/test_zalo_bot.js`. Test sai thì dừng, bot thật không đổi.
+2. `clasp push --force`: đẩy `Code.gs` và `appsscript.json` lên script. scriptId nằm trong `zalo_bot/.clasp.json`.
+3. `clasp create-deployment -i <deployment_id>`: tạo phiên bản mới cho **đúng bản triển khai đang chạy** (trong `zalo_bot/deploy.json`). Link `/exec` giữ nguyên, không cần `setupWebhook` lại.
+
+**Quay về bản cũ:**
+```
+cd zalo_bot
+clasp list-versions                          # xem số phiên bản
+clasp create-deployment -i <deployment_id> -V <số phiên bản cũ>
+```
+
+**Lưu ý**
+- clasp đăng nhập tài khoản ltckha@gmail.com. Khoá lưu ở `~/.clasprc.json`, không bao giờ đưa vào git.
+- Trên Google, tệp mã tên là "Mã". `clasp push` thay toàn bộ nội dung script bằng `Code.gs` + `appsscript.json` của repo.
+- Vẫn có thể cập nhật tay: dán `Code.gs` vào Apps Script → **Triển khai → Quản lý triển khai → ✏️ → Phiên bản mới**.
 
 ## Ghi chú kỹ thuật
 - Chặn người lạ: chỉ chat_id trong `ALLOWED_CHAT_IDS` mới dùng được. Link webhook phải có `?key=WEBHOOK_KEY` (Apps Script không đọc được header bí mật của Zalo).

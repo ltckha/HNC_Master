@@ -609,7 +609,9 @@ function handleSaleRequest_(e) {
   try {
     const props = PropertiesService.getScriptProperties();
     const saleKey = props.getProperty('SALE_KEY') || '';
-    if (saleKey.length < 16 || saleKey === props.getProperty('WEBHOOK_KEY') || e.parameter.sale_key !== saleKey) {
+    if (saleKey.length < 16 || saleKey === props.getProperty('WEBHOOK_KEY')) {
+      out = { ok: false, error: 'chưa cấu hình SALE_KEY (≥16 ký tự, khác WEBHOOK_KEY) trong Script Properties' };
+    } else if (e.parameter.sale_key !== saleKey) {
       out = { ok: false, error: 'unauthorized' };
     } else {
       const body = JSON.parse((e.postData && e.postData.contents) || '{}');
