@@ -104,9 +104,9 @@ POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
   "codes": ["TH2040D", ...], "at": "2026-10-15T03:05:00Z", "dry_run": true }
 ```
 - **`kind: "upload"`:** ghi tab SANPHAM, cột `shopee_upload` / `tiktok_upload` = `Done - yyyy-MM-dd HH:mm` (giờ VN, cùng định dạng main.py) cho các mã trong `codes`. Mã không có trong SANPHAM → trả trong `not_found`. Tối đa 3.000 mã / lần.
-- **`kind: "update"`:** ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab **SUB, cột `shopee_last_update` / `tiktok_last_update`, hàng 2** (dạng `yyyy-MM-dd HH:mm`). Menu HNC cũng ghi vào đúng ô này mỗi lần xuất `SHOPEE_UPDATE` / `TIKTOK_UPDATE`. Thiếu cột thì bot báo lỗi, không tự tạo.
+- **`kind: "update"`:** ghi mốc "lần cập nhật tồn/giá gần nhất" vào **tab `META`** (cột `key` | `value` | `updated_at`), dòng key = `shopee_last_update` / `tiktok_last_update`: `value` = giờ xuất (`yyyy-MM-dd HH:mm`), `updated_at` = giờ ghi. Tìm dòng theo key; chưa có dòng thì thêm dòng mới. Menu HNC cũng ghi vào đúng dòng này mỗi lần xuất `SHOPEE_UPDATE` / `TIKTOK_UPDATE`. Chưa có tab META thì báo lỗi, không tự tạo.
 - `at` bỏ trống = giờ hiện tại.
-- **Trả về:** `{"ok":true,"kind":…,"written":N,"not_found":[…],"dry_run":…}`. Gửi lại đúng nội dung cũ thì trả `duplicate:true` và không ghi lần nữa (nhớ 30 ngày). Ghi xong, bot báo web chép lại SANPHAM (hoặc SUB).
+- **Trả về:** `{"ok":true,"kind":…,"written":N,"not_found":[…],"dry_run":…}`. Gửi lại đúng nội dung cũ thì trả `duplicate:true` và không ghi lần nữa (nhớ 30 ngày). Ghi xong, bot báo web chép lại SANPHAM (hoặc META).
 
 ## Báo web chép lại Sheet khi Sheet đổi
 

@@ -873,7 +873,7 @@ function handleNotify_(body, owner, props) {
 // Web trả 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi log, không gửi dồn lại.
 // =====================================================================
 
-const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB'];
+const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META'];
 const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
 const SYNC_MIN_INTERVAL_MS = 60 * 1000;
 const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints'];
@@ -976,7 +976,7 @@ function testSyncHint() {
 // POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
 // Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", dry_run? }
 //  - upload: SANPHAM cột shopee_upload / tiktok_upload = "Done - yyyy-MM-dd HH:mm" cho mã có trong codes (giống main.py).
-//  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào SUB, cột shopee_last_update / tiktok_last_update, hàng 2.
+//  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab META (key | value | updated_at), dòng key = shopee_last_update / tiktok_last_update.
 // =====================================================================
 
 const EXPORT_CHANNELS = ['shopee', 'tiktok'];
@@ -997,7 +997,7 @@ function handleExportRequest_(e) {
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = handleExport_(body, dryRun);
       if (!dryRun && out.ok && !out.duplicate && out.written) {
-        try { queueSyncHint_([out.kind === 'update' ? 'SUB' : 'SANPHAM']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+        try { queueSyncHint_([out.kind === 'update' ? 'META' : 'SANPHAM']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
       }
     }
   } catch (err) {
@@ -1049,13 +1049,9 @@ function handleExport_(body, dryRun) {
       if (!dryRun && cells.length) getSheet_('SANPHAM').getRangeList(cells).setValue('Done - ' + stamp);
       result = { ok: true, kind, column: statusName, value: 'Done - ' + stamp, written: cells.length, not_found: codes.filter(c => !found[c]) };
     } else {
-      const sub = getSheet_('SUB');
-      const header = sub.getRange(1, 1, 1, sub.getLastColumn()).getValues()[0];
-      const col = headerMap_(header);
-      const name = channel + '_last_update';
-      if (col[name] === undefined) return { ok: false, error: 'Tab SUB chưa có cột ' + name + ' (cần anh Kha cho tạo cột)' };
-      if (!dryRun) sub.getRange(2, col[name] + 1).setValue(stamp);
-      result = { ok: true, kind, cell: 'SUB!' + columnLetter_(col[name] + 1) + '2', value: stamp, written: 1, not_found: [] };
+      const meta = writeMeta_(channel + '_last_update', stamp, dryRun);
+      if (!meta.ok) return { ok: false, error: meta.error };
+      result = { ok: true, kind, cell: meta.cell, value: stamp, written: 1, not_found: [] };
     }
     if (!dryRun) {
       props.setProperty(digestKey, JSON.stringify({ t: Date.now() }));
@@ -1066,6 +1062,36 @@ function handleExport_(body, dryRun) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Ghi 1 mốc vào tab META (cột key | value | updated_at, tìm theo TÊN cột và theo key).
+ * Chưa có dòng key → thêm dòng mới cuối bảng. Chưa có tab / cột → báo lỗi, không tự tạo.
+ */
+function writeMeta_(key, value, dryRun) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('META');
+  if (!sheet) return { ok: false, error: 'chưa có tab META (cần anh Kha cho tạo)' };
+  const data = sheet.getDataRange().getValues();
+  const col = headerMap_(data[0] || []);
+  const missing = ['key', 'value', 'updated_at'].filter(n => col[n] === undefined);
+  if (missing.length) return { ok: false, error: 'tab META thiếu cột: ' + missing.join(', ') };
+  let row = -1;
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][col.key]).trim() === key) { row = r + 1; break; }
+  }
+  if (row === -1) {
+    row = 1;
+    for (let r = data.length; r >= 1; r--) {
+      if (data[r - 1].some(v => String(v).trim() !== '')) { row = r + 1; break; }
+    }
+    if (!dryRun) sheet.getRange(row, col.key + 1).setValue(key);
+  }
+  if (!dryRun) {
+    sheet.getRange(row, col.value + 1).setValue(value);
+    sheet.getRange(row, col.updated_at + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'));
+  }
+  return { ok: true, cell: 'META!' + columnLetter_(col.value + 1) + row };
 }
 
 function digestHex_(text) {
@@ -1376,8 +1402,14 @@ function checkConfig() {
   console.log('Các khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
   console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌') +
     ' | EXPORT_KEY ≥16: ' + (keys[3].length >= 16 ? '✅' : '❌'));
-  const subHeader = getSheet_('SUB').getRange(1, 1, 1, getSheet_('SUB').getLastColumn()).getValues()[0].map(h => String(h).trim());
-  ['shopee_last_update', 'tiktok_last_update'].forEach(n => console.log('SUB cột ' + n + ': ' + (subHeader.indexOf(n) !== -1 ? '✅' : '❌ chưa có')));
+  const meta = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('META');
+  if (!meta) { console.log('Tab META: ❌ chưa có'); } else {
+    const md = meta.getDataRange().getValues();
+    const mh = (md[0] || []).map(h => String(h).trim());
+    console.log('Tab META cột key/value/updated_at: ' + (['key', 'value', 'updated_at'].every(n => mh.indexOf(n) !== -1) ? '✅' : '❌ thiếu'));
+    const keys = md.slice(1).map(r => String(r[mh.indexOf('key')] || '').trim());
+    ['shopee_last_update', 'tiktok_last_update'].forEach(k => console.log('META dòng ' + k + ': ' + (keys.indexOf(k) !== -1 ? '✅' : '⚠️ chưa có (sẽ tự thêm khi ghi lần đầu)')));
+  }
   const owner = props.getProperty('OWNER_CHAT_ID') || '';
   const allowed = (props.getProperty('ALLOWED_CHAT_IDS') || '').split(',').map(s => s.trim());
   console.log('OWNER_CHAT_ID nằm trong ALLOWED_CHAT_IDS: ' + (owner && allowed.indexOf(owner) !== -1 ? '✅' : '⚠️ không'));

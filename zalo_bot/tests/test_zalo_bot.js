@@ -15,7 +15,7 @@ const PROPS = {};
 const WRITES = [];
 DATA.SANPHAM = [['Mã hàng hóa cha', '', '', ''], ['parent_product_code', 'product_code', 'shopee_upload', 'tiktok_upload'],
   ['TH2040', 'TH2040D', '', ''], ['TH2040', 'TH2040N', 'Done', ''], ['CXE', 'CXED', '', 'Thiếu ảnh']];
-DATA.SUB = [['Tên Ngành Hàng', 'Shopee', 'shopee_last_update', 'tiktok_last_update'], ['Giày tây nam', '100', '', '']];
+DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', ''], ['tiktok_last_update', '', '']];
 function mockSheet(n) {
   const d = DATA[n];
   return {
@@ -166,13 +166,17 @@ eq('upload ghi đúng ô tiktok_upload', [r2.written, WRITES[0] && WRITES[0].cel
 r2 = ex({ channel: 'tiktok', kind: 'upload', codes: ['TH2040N'], at: '2026-10-15T03:05:00Z' });
 eq('upload chống trùng', [r2.duplicate, WRITES.length], [true, 1]);
 r2 = ex({ channel: 'shopee', kind: 'update', at: '2026-10-15T04:00:00Z' });
-eq('update ghi mốc SUB hàng 2', [r2.ok, r2.cell, WRITES[1] && WRITES[1].cell, WRITES[1] && WRITES[1].v], [true, 'SUB!C2', [2, 3], '2026-10-15 11:00']);
+eq('update ghi META theo key', [r2.ok, r2.cell, WRITES[1] && WRITES[1].cell, WRITES[1] && WRITES[1].v, WRITES[2] && WRITES[2].cell], [true, 'META!B2', [2, 2], '2026-10-15 11:00', [2, 3]]);
+DATA.META = [['key', 'value', 'updated_at'], ['tiktok_last_update', 'x', 'y']];
+r2 = ex({ channel: 'shopee', kind: 'update', at: '2026-10-15T05:00:00Z' });
+eq('META chưa có dòng key → thêm dòng cuối', [r2.ok, r2.cell, WRITES[3] && WRITES[3].cell, WRITES[3] && WRITES[3].v], [true, 'META!B3', [3, 1], 'shopee_last_update']);
 eq('channel sai', ex({ channel: 'lazada', kind: 'upload', codes: ['TH2040D'] }).ok, false);
 eq('kind sai', ex({ channel: 'shopee', kind: 'x', codes: ['TH2040D'] }).ok, false);
 eq('upload thiếu codes', ex({ channel: 'shopee', kind: 'upload', codes: [] }).ok, false);
 eq('action sai', ctx.handleExport_({ action: 'x', channel: 'shopee', kind: 'update' }, true).ok, false);
-DATA.SUB[0] = ['Tên Ngành Hàng', 'Shopee'];
-eq('SUB chưa có cột → báo lỗi, không ghi', [/chưa có cột tiktok_last_update/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, 2]);
+const nW = WRITES.length;
+delete DATA.META;
+eq('chưa có tab META → báo lỗi, không ghi', [/chưa có tab META/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, nW]);
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

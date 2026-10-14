@@ -110,7 +110,7 @@ else:
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
 # Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
-SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB']
+SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
 
 # Media Ingestion & Asset Management Paths
@@ -245,21 +245,35 @@ class EngineDataLoader:
             self._sync_tabs.add(sheet_name)
 
     def mark_platform_update(self, channel):
-        """Ghi mốc "lần cập nhật tồn/giá gần nhất" của sàn vào SUB, cột <channel>_last_update, hàng 2
-        (chỗ chung với web và bot Zalo). Chưa có cột thì chỉ in nhắc, không tự tạo cột."""
+        """Ghi mốc "lần cập nhật tồn/giá gần nhất" của sàn vào tab META (key | value | updated_at),
+        dòng key = <channel>_last_update — chỗ chung với web và bot Zalo. Tìm theo tên cột và theo key;
+        chưa có dòng key thì thêm dòng; chưa có tab / cột thì chỉ in nhắc, không tự tạo."""
         if not self.is_google_api:
             return
-        col_name = f"{channel}_last_update"
+        key = f"{channel}_last_update"
         try:
-            ws = self.spreadsheet.worksheet('SUB')
-            header = [str(h).strip() for h in ws.row_values(1)]
-            if col_name not in header:
-                print(f"[!] Tab SUB chưa có cột '{col_name}' — chưa ghi mốc cập nhật {channel}.")
+            try:
+                ws = self.spreadsheet.worksheet('META')
+            except Exception:
+                print(f"[!] Chưa có tab META — chưa ghi mốc cập nhật {channel}.")
                 return
-            stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-            ws.update(range_name=gspread.utils.rowcol_to_a1(2, header.index(col_name) + 1), values=[[stamp]])
-            self._mark_sync('SUB')
-            print(f"🕒 Đã ghi mốc cập nhật {channel}: {stamp} (SUB!{gspread.utils.rowcol_to_a1(2, header.index(col_name) + 1)})")
+            rows = ws.get_all_values()
+            header = [str(h).strip() for h in (rows[0] if rows else [])]
+            missing = [c for c in ('key', 'value', 'updated_at') if c not in header]
+            if missing:
+                print(f"[!] Tab META thiếu cột {missing} — chưa ghi mốc cập nhật {channel}.")
+                return
+            ck, cv, cu = header.index('key'), header.index('value'), header.index('updated_at')
+            row = next((r + 1 for r in range(1, len(rows)) if len(rows[r]) > ck and rows[r][ck].strip() == key), None)
+            now = datetime.now()
+            stamp = now.strftime("%Y-%m-%d %H:%M")
+            if row is None:
+                row = len(rows) + 1
+                ws.update(range_name=gspread.utils.rowcol_to_a1(row, ck + 1), values=[[key]])
+            ws.update(range_name=gspread.utils.rowcol_to_a1(row, cv + 1), values=[[stamp]])
+            ws.update(range_name=gspread.utils.rowcol_to_a1(row, cu + 1), values=[[now.strftime("%Y-%m-%d %H:%M:%S")]])
+            self._mark_sync('META')
+            print(f"🕒 Đã ghi mốc cập nhật {channel}: {stamp} (META dòng {row})")
         except Exception as e:
             print(f"[!] Không ghi được mốc cập nhật {channel}: {e}")
 
