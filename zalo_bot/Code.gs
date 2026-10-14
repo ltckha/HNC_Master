@@ -1131,6 +1131,22 @@ function testSale() {
   ].forEach(t => console.log('▶ ' + t.ticket_id + '\n' + JSON.stringify(handleSale_(t, true), null, 1)));
 }
 
+/** Kiểm cấu hình Script Properties: chỉ in tên, độ dài, các khoá có khác nhau không — KHÔNG in giá trị. */
+function checkConfig() {
+  const props = PropertiesService.getScriptProperties();
+  const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID'];
+  names.forEach(n => {
+    const v = props.getProperty(n);
+    console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
+  });
+  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY'].map(n => props.getProperty(n) || '');
+  console.log('3 khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
+  console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌'));
+  const owner = props.getProperty('OWNER_CHAT_ID') || '';
+  const allowed = (props.getProperty('ALLOWED_CHAT_IDS') || '').split(',').map(s => s.trim());
+  console.log('OWNER_CHAT_ID nằm trong ALLOWED_CHAT_IDS: ' + (owner && allowed.indexOf(owner) !== -1 ? '✅' : '⚠️ không'));
+}
+
 /** Trỏ bot Zalo về Web App này (chạy 1 lần sau khi Triển khai). */
 function setupWebhook() {
   const props = PropertiesService.getScriptProperties();
