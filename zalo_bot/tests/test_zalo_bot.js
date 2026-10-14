@@ -21,7 +21,11 @@ const ctx = {
   CacheService: { getScriptCache: () => ({ get: () => null, put() {}, remove() {} }) },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;', ctx);
+const SENT = [];
+ctx.UrlFetchApp = { fetch: (url, opt) => { SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
+ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
+PROPS.BOT_TOKEN = 'x';
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -73,6 +77,39 @@ eq('qty sai', sale({ ticket_id: 'T6', channel: 'web', lines: [{ code: 'TH2040D',
 PROPS['sale_T7'] = JSON.stringify({ t: Date.now(), rows: 1 });
 r = sale({ ticket_id: 'T7', channel: 'web', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] });
 eq('chống trùng', [r.ok, r.duplicate], [true, true]);
+
+// ---- Hàng không size: số lượng ----
+const q = t => { const p = ctx.parseMessage_(t, ctx.knownCodes_()); return [p.code, p.sizes.length, p.qty]; };
+eq('không size x2', q('ban AROMAX60T x2 YEN 70k'), ['AROMAX60T', 0, 2]);
+eq('không size 2 cái', q('ban AROMAX60T 2 cái YEN'), ['AROMAX60T', 0, 2]);
+eq('không size sl 3', q('ban AROMAX60T sl 3 YEN'), ['AROMAX60T', 0, 3]);
+eq('không size /2', q('xuat AROMAX60T /2 Y3C'), ['AROMAX60T', 0, 2]);
+eq('có size thì qty theo size', q('ban TH2040D 40x2 YEN'), ['TH2040D', 1, 0]);
+let txt = ctx.handleText_('ban AROMAX60T x2 YEN 70k', true, '');
+eq('không size ghi × 2', /không size × 2/.test(txt), true);
+
+// ---- Nhiều dòng ----
+txt = ctx.handleText_('ĐƠN WEB #123 — chị Lan\nban TH2040D 40 15E 800k\nban TH2040D 41/2 YEN 800k\nGhi chú: giao chiều', true, '');
+eq('lô 2 lệnh, bỏ dòng thường', [/📋 2 lệnh — 2 ghi được/.test(txt), /1\) ✅ BÁN TH2040D/.test(txt), /2\) ✅ BÁN TH2040D/.test(txt)], [true, true, true]);
+txt = ctx.handleText_('ban TH2040D 41 YEN\nban TH2040D 41 YEN\nban TH2040D 41 YEN', true, '');
+eq('lô trừ tồn dần (tồn 2, bán 3 → dòng 3 cảnh báo)', [(txt.match(/tồn sẽ âm/g) || []).length], [1]);
+txt = ctx.handleText_('ban TH2040D 40 YEN\nban KHONGMA 40 YEN', true, '');
+eq('lô có dòng lỗi', /2 lệnh — 1 ghi được, 1 lỗi/.test(txt), true);
+eq('tin 1 dòng như cũ', /^🧪 CHẠY THỬ — chưa ghi Sheet\n✅ BÁN TH2040D/.test(ctx.handleText_('ban TH2040D 40 YEN', true, '')), true);
+
+// ---- Cửa báo đơn web ----
+PROPS.WEBHOOK_KEY = 'webhookkey_123456'; PROPS.SALE_KEY = 'salekey_1234567890'; PROPS.WEB_NOTIFY_KEY = 'notifykey_1234567890'; PROPS.OWNER_CHAT_ID = 'OWNER1';
+const post = (key, body) => JSON.parse(ctx.doPost({ parameter: { notify_key: key }, postData: { contents: JSON.stringify(body) } }).t);
+SENT.length = 0;
+eq('báo đơn sai khoá', post('sai', { order_id: 'W1', text: 'x' }).error, 'unauthorized');
+let n = post('notifykey_1234567890', { order_id: 'W1', text: 'Đơn mới #W1\nban TH2040D 40 15E 800k' });
+eq('báo đơn gửi tới OWNER, không ghi Sheet', [n.ok, SENT.length, SENT[0] && SENT[0].chat_id], [true, 1, 'OWNER1']);
+n = post('notifykey_1234567890', { order_id: 'W1', text: 'lặp lại' });
+eq('báo đơn chống trùng', [n.ok, n.duplicate, SENT.length], [true, true, 1]);
+n = post('notifykey_1234567890', { order_id: 'W2', text: 'a'.repeat(5000) });
+eq('báo đơn cắt bớt', [n.ok, n.truncated, SENT[1].text.length < 2000], [true, true, true]);
+PROPS.WEB_NOTIFY_KEY = PROPS.SALE_KEY;
+eq('khoá báo đơn trùng SALE_KEY → từ chối', /chưa cấu hình WEB_NOTIFY_KEY/.test(post(PROPS.SALE_KEY, { order_id: 'W3', text: 'x' }).error), true);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

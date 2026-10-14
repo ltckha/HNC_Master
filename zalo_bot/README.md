@@ -22,6 +22,8 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 | `hd` / `?` / `huong dan` | Bảng hướng dẫn. Tin không hiểu cũng được trả lời bằng bảng này |
 
 - **Kho:** `YEN` / `3C` / `Y3C` → **Y3C**; `TBH` / `15E` → **15E**.
+- **Nhiều dòng:** 1 tin có nhiều dòng → mỗi dòng bắt đầu bằng `ban` / `nhap` / `xuat` là 1 lệnh, dòng khác (tên khách, ghi chú) bỏ qua. Bot trả kết quả từng dòng; `huy` huỷ cả lô. Cảnh báo tồn tính dồn trong lô. Tin 1 dòng chạy như cũ. Dùng để chuyển tiếp nguyên tin báo đơn web cho bot ghi.
+- **Hàng không size, số lượng > 1:** `ban AROMAX60T x2 YEN 70k`, cũng nhận `x 2`, `*2`, `/2`, `sl 2`, `sl2`, `2 cái`, `2 đôi`.
 - **Size / số lượng:** `40` (1 đôi), `40/2`, `40.2`, `40x2`, `40*2`, `40:2`, `40-2`, `40 x2`, `40 2 đôi`, `40 sl 2`, `2 đôi 40`, `38,39,40`, dải `38-43` (mỗi size 1 đôi). Size trùng thì cộng dồn.
 - **Giá:** `800k`, `800000`, `800.000đ`, `800,000`, `1tr2`, `1.5tr`. Không ghi giá thì cột Giá để trống (giá bán có thể khác giá niêm yết).
 - **Mã:** bot so với danh sách mã thật trong tab KHO trước (nhận được mã không có số như `CXED`, mã ngắn như `T1D`, mã giống giá như `119K`). Mã mới chưa có trong KHO thì đoán theo mẫu chữ + số + chữ màu.
@@ -67,6 +69,26 @@ Content-Type: application/json   (hoặc text/plain)
 **Ghi vào BAN:** mỗi dòng phiếu = 1 dòng BAN (Ngày, product_code, product_color tự lấy, Giá, item_size, item_quantity, KHO, `channel`, `seller`). Lệnh `ban` gõ qua Zalo ghi `channel` = `cua_hang`, `seller` = tên Zalo người nhắn. Nếu tab BAN chưa có cột `channel` / `seller` thì bot bỏ qua 2 cột đó, phần còn lại ghi bình thường.
 
 **Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
+
+## Cửa "báo đơn web" (API)
+
+Web gửi tin báo đơn mới tới **chat Zalo của anh** qua bot. Cửa này **chỉ nhắn tin**: không đọc lệnh, không ghi Sheet.
+
+**Cấu hình** (Script Properties):
+- `WEB_NOTIFY_KEY`: chuỗi ngẫu nhiên ≥ 16 ký tự, khác `WEBHOOK_KEY` và `SALE_KEY`. Đặt cùng giá trị vào secret của Worker web. Không gửi qua chat.
+- `OWNER_CHAT_ID`: chat_id Zalo của anh. Nhắn bot 1 tin từ một tài khoản chưa được cấp quyền để biết chat_id, hoặc lấy trong `ALLOWED_CHAT_IDS`.
+
+**Gọi:**
+```
+POST {WEBAPP_URL}?notify_key=<WEB_NOTIFY_KEY>
+Content-Type: application/json
+
+{ "order_id": "W-20261015-001", "text": "🛒 Đơn web #W-20261015-001\nKhách: …\nban TH2040D 40 15E 800k" }
+```
+- `order_id`: 1-64 ký tự chữ / số / `_ . : -`. Gửi lại cùng `order_id` → `{"ok":true,"duplicate":true}`, không nhắn lần 2 (nhớ 30 ngày).
+- `text` dài quá 1.800 ký tự thì bị cắt bớt (`"truncated":true`).
+- Trả về: `{"ok":true,"order_id":…}`. Lỗi: `unauthorized`, `chưa cấu hình …`, `Zalo không nhận tin` (khi Zalo từ chối, lần sau gửi lại được).
+- Gợi ý: để sẵn các dòng `ban …` trong `text`. Anh xác nhận với khách xong thì **chuyển tiếp nguyên tin** cho bot, bot ghi BAN từng dòng.
 
 ## Cài đặt (làm 1 lần)
 

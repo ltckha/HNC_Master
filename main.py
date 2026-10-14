@@ -10,6 +10,7 @@ Synced with Google Drive: /Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gm
 """
 
 import os
+import csv
 import sys
 import re
 import glob
@@ -480,6 +481,117 @@ def get_stock_maps(loader):
         stock_total_dict[sku] = stock_15e_dict.get(sku, 0.0) + stock_y3c_dict.get(sku, 0.0)
 
     return stock_15e_dict, stock_y3c_dict, stock_total_dict
+
+
+CHANNEL_LINKS_FILE = "channel_links.csv"
+CHANNEL_LINKS_COLUMNS = ["product_code", "channel", "item_id", "shopid", "url"]
+
+
+def build_channel_links(channel, ws, sp_codes):
+    """Đọc ID sản phẩm trên sàn từ sheet mẫu cập nhật (theo tên cột hàng 1) → ({product_code: item_id}, shopid, số SKU không khớp).
+    Shopee: et_title_product_id + et_title_variation_sku (mã+size), dữ liệu từ hàng 7, shopid ở hàng 2.
+    TikTok: product_id + seller_sku (mã), dữ liệu từ hàng 6. Thiếu cột → None."""
+    header = {}
+    for c in range(1, ws.max_column + 1):
+        k = str(ws.cell(row=1, column=c).value or '').strip()
+        if k and k not in header:
+            header[k] = c
+    if channel == 'shopee':
+        id_col, sku_col = header.get('et_title_product_id'), header.get('et_title_variation_sku')
+        name_col, status_col, first_row = header.get('et_title_variation_name'), None, 7
+    else:
+        id_col, sku_col = header.get('product_id'), header.get('seller_sku')
+        name_col, status_col, first_row = header.get('variation_value'), header.get('product_status'), 6
+    if id_col is None or sku_col is None:
+        return None
+
+    shopid = ''
+    if channel == 'shopee':
+        for c in range(1, ws.max_column + 1):
+            v = str(ws.cell(row=2, column=c).value or '').strip()
+            if re.fullmatch(r'\d{5,}', v):
+                shopid = v
+                break
+
+    codes_by_len = sorted(sp_codes, key=len, reverse=True)
+
+    def to_code(sku, var_name):
+        sku = sku.strip().upper()
+        if not sku:
+            return None
+        if sku in sp_codes:
+            return sku
+        tail = var_name.split(',')[-1].strip().upper() if ',' in var_name else ''
+        if tail and sku.endswith(tail) and sku[:-len(tail)] in sp_codes:
+            return sku[:-len(tail)]
+        for code in codes_by_len:
+            if sku.startswith(code) and sku[len(code):].isdigit():
+                return code
+        return None
+
+    stats = {}  # code → {item_id: [số biến thể, đang bán]}
+    unmatched = 0
+    for r in range(first_row, ws.max_row + 1):
+        item_id = str(ws.cell(row=r, column=id_col).value or '').strip()
+        sku = str(ws.cell(row=r, column=sku_col).value or '').strip()
+        if not item_id or not sku:
+            continue
+        var_name = str(ws.cell(row=r, column=name_col).value or '') if name_col else ''
+        code = to_code(sku, var_name)
+        if not code:
+            unmatched += 1
+            continue
+        info = stats.setdefault(code, {}).setdefault(item_id, [0, False])
+        info[0] += 1
+        if status_col and 'Trên kệ' in str(ws.cell(row=r, column=status_col).value or ''):
+            info[1] = True
+
+    # Một mã gắn nhiều item_id → giữ tin đang bán, nhiều biến thể hơn, rồi ID lớn hơn (mới hơn)
+    links = {}
+    for code, items in stats.items():
+        best = max(items.items(), key=lambda kv: (kv[1][1], kv[1][0], int(kv[0]) if kv[0].isdigit() else 0))
+        links[code] = best[0]
+    return links, shopid, unmatched
+
+
+def export_channel_links(channel, ws, sp_codes):
+    """Ghi đè EXPORT_DIR/channel_links.csv: thay các dòng của kênh này, giữ nguyên dòng của kênh kia.
+    Cột: product_code, channel, item_id (Shopee item_id / TikTok product_id), shopid, url. Trả về (số mã, số SKU không khớp)."""
+    built = build_channel_links(channel, ws, sp_codes)
+    if built is None:
+        print(f"[!] Không ghi {CHANNEL_LINKS_FILE}: file mẫu {channel} thiếu cột ID sản phẩm / SKU.")
+        return None
+    links, shopid, unmatched = built
+    path = os.path.join(EXPORT_DIR, CHANNEL_LINKS_FILE)
+
+    rows = []
+    if os.path.exists(path):
+        with open(path, newline='', encoding='utf-8') as f:
+            rows = [r for r in csv.DictReader(f) if r.get('channel') != channel]
+    for code in sorted(links):
+        item_id = links[code]
+        if channel == 'shopee':
+            url = f"https://shopee.vn/product/{shopid}/{item_id}" if shopid else ''
+        else:
+            url = f"https://shop.tiktok.com/vn/pdp/{item_id}"
+        rows.append({'product_code': code, 'channel': channel, 'item_id': item_id, 'shopid': shopid, 'url': url})
+    rows.sort(key=lambda r: (r.get('channel', ''), r.get('product_code', '')))
+
+    tmp_path = path + '.tmp'
+    with open(tmp_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=CHANNEL_LINKS_COLUMNS, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(rows)
+    os.replace(tmp_path, path)
+    return len(links), unmatched
+
+
+def sanpham_codes(df_sp, col_map_sp):
+    """Tập product_code (viết hoa) trong SANPHAM."""
+    idx = col_map_sp.get('product_code')
+    if idx is None:
+        return set()
+    return {str(df_sp.iloc[r][idx] or '').strip().upper() for r in range(2, len(df_sp)) if str(df_sp.iloc[r][idx] or '').strip()}
 
 
 def get_sub_info(loader):
@@ -1089,6 +1201,12 @@ def process_export_task(choice, loader):
             "3": "FULL"
         }
         mode_label = mode_name_map.get(update_mode, "UPDATE")
+        try:
+            link_result = export_channel_links('shopee', ws_tpl, sanpham_codes(df_sp, col_map_sp))
+            if link_result:
+                print(f"🔗 {CHANNEL_LINKS_FILE}: {link_result[0]} mã Shopee (bỏ qua {link_result[1]} SKU không khớp mã SANPHAM)")
+        except Exception as e:
+            print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file Shopee vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"SHOPEE_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
         wb.close()
@@ -1334,6 +1452,12 @@ def process_export_task(choice, loader):
             "3": "FULL_ALL_INFO"
         }
         mode_label = mode_name_map.get(update_mode, "UPDATE")
+        try:
+            link_result = export_channel_links('tiktok', ws_tpl, sanpham_codes(df_sp, col_map_sp))
+            if link_result:
+                print(f"🔗 {CHANNEL_LINKS_FILE}: {link_result[0]} mã TikTok (bỏ qua {link_result[1]} SKU không khớp mã SANPHAM)")
+        except Exception as e:
+            print(f"[!] Lỗi khi ghi {CHANNEL_LINKS_FILE} (file TikTok vẫn xuất bình thường): {e}")
         exported_filepath = os.path.join(EXPORT_DIR, f"TIKTOK_UPDATE_{mode_label}_{timestamp_file}.xlsx")
         wb.save(exported_filepath)
         wb.close()

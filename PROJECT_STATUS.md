@@ -42,6 +42,7 @@
   - `MISA_PRODUCTS_NEW_YYYYMMDD_HHMMSS.xlsx` & `MISA_PRODUCTS_UPDATE_YYYYMMDD_HHMMSS.xlsx` *(khi có cả mã mới và mã cập nhật)*
   - `MISA_STOCK_15E_YYYYMMDD_HHMMSS.xlsx` & `MISA_STOCK_3C_YYYYMMDD_HHMMSS.xlsx`
   - `WEB_LABEL_YYYYMMDD_HHMMSS.csv` *(và file ghi đè cố định `/IN Mini Code/IN.csv`)*
+  - `channel_links.csv` *(tên cố định, ghi đè mỗi lần xuất SHOPEE_UPDATE / TIKTOK_UPDATE; cột product_code, channel, item_id, shopid, url; xuất kênh này giữ nguyên dòng của kênh kia; web đọc để ra link đúng SP)*
 
 ---
 
