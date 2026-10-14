@@ -11,6 +11,7 @@ Synced with Google Drive: /Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gm
 
 import os
 import csv
+import functools
 import sys
 import re
 import glob
@@ -108,6 +109,8 @@ else:
 
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
+# Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
+SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
 
 # Media Ingestion & Asset Management Paths
@@ -233,7 +236,35 @@ class EngineDataLoader:
         self.gc = None
         self.spreadsheet = None
         self.is_google_api = False
+        self._sync_tabs = set()  # tab đã ghi trong tác vụ hiện tại → báo web chép lại khi tác vụ xong
         self._init_connection()
+
+    def _mark_sync(self, sheet_name):
+        if sheet_name in SYNC_WATCH_TABS:
+            self._sync_tabs.add(sheet_name)
+
+    def flush_sync_hint(self):
+        """Báo web giayhainancy.vn chép lại các tab vừa ghi (Sheets API không chạy trigger Apps Script).
+        POST SYNC_HINT_URL?key=SYNC_HINT_KEY, body {"tabs":[...]}. Thiếu cấu hình hoặc lỗi → chỉ in cảnh báo."""
+        tabs = set(self._sync_tabs)
+        self._sync_tabs.clear()
+        if not tabs:
+            return
+        url = os.getenv('SYNC_HINT_URL', '').strip()
+        key = os.getenv('SYNC_HINT_KEY', '').strip()
+        if not url or not key:
+            return
+        if tabs & {'BAN', 'NHAP', 'XUAT'}:
+            tabs |= {'KHO15E', 'KHOY3C'}
+        ordered = [t for t in SYNC_WATCH_TABS if t in tabs]
+        try:
+            r = requests.post(url, params={'key': key}, json={'tabs': ordered}, timeout=15)
+            if r.status_code in (200, 202):
+                print(f"🔄 Đã báo web chép lại Sheet: {', '.join(ordered)}")
+            else:
+                print(f"[!] Báo web chép Sheet lỗi HTTP {r.status_code} — web vẫn tự chép theo vòng dự phòng.")
+        except Exception as e:
+            print(f"[!] Không báo được web chép Sheet ({e}) — web vẫn tự chép theo vòng dự phòng.")
 
     def _init_connection(self):
         if not HAS_GSPREAD:
@@ -300,6 +331,7 @@ class EngineDataLoader:
                     for i in range(0, len(cell_updates), 100):
                         chunk = cell_updates[i:i+100]
                         ws.batch_update(chunk)
+                        self._mark_sync(sheet_name)
                         if i + 100 < len(cell_updates):
                             time.sleep(0.5)
                 return True
@@ -339,6 +371,7 @@ class EngineDataLoader:
                 for i in range(0, len(cell_updates), 100):
                     chunk = cell_updates[i:i+100]
                     ws.batch_update(chunk)
+                    self._mark_sync(sheet_name)
                     time.sleep(0.5)
                 return True
             except Exception as e:
@@ -364,6 +397,7 @@ class EngineDataLoader:
                 start_cell = gspread.utils.rowcol_to_a1(start_row, p_idx + 1)
                 end_cell = gspread.utils.rowcol_to_a1(end_row, f_idx + 1)
                 ws.update(range_name=f"{start_cell}:{end_cell}", values=matrix)
+                self._mark_sync(sheet_name)
                 return True
 
             cell_updates = []
@@ -388,6 +422,7 @@ class EngineDataLoader:
             for i in range(0, len(cell_updates), 300):
                 chunk = cell_updates[i:i+300]
                 ws.batch_update(chunk)
+                self._mark_sync(sheet_name)
                 time.sleep(0.5)
             return True
         except Exception as e:
@@ -403,6 +438,7 @@ class EngineDataLoader:
             try:
                 ws = self.spreadsheet.worksheet(sheet_name)
                 ws.append_rows(new_rows, value_input_option='USER_ENTERED')
+                self._mark_sync(sheet_name)
                 return True
             except Exception as e:
                 print(f"[!] Lỗi khi append Google Sheet API ({sheet_name}): {e}")
@@ -422,10 +458,25 @@ class EngineDataLoader:
             last_col_letter = gspread.utils.rowcol_to_a1(1, num_cols).rstrip('0123456789')
             range_name = f"A{start_row}:{last_col_letter}{end_row}"
             ws.update(range_name=range_name, values=new_rows, value_input_option='USER_ENTERED')
+            self._mark_sync(sheet_name)
             return True
         except Exception as e:
             print(f"[!] Lỗi khi ghi Google Sheet API ({sheet_name}) tại {start_row}: {e}")
             return False
+
+
+def sync_hint_after(fn):
+    """Hết tác vụ (kể cả khi lỗi) thì báo web chép lại các tab tác vụ đã ghi."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            for a in list(args) + list(kwargs.values()):
+                if isinstance(a, EngineDataLoader):
+                    a.flush_sync_hint()
+                    break
+    return wrapper
 
 
 def get_stock_maps(loader):
@@ -831,6 +882,7 @@ def unroll_sizes(sizes_str):
     return parts if parts else [s]
 
 
+@sync_hint_after
 def process_export_task(choice, loader):
     """Engine chính xử lý 11 tác vụ xuất file & cào ảnh"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2601,6 +2653,7 @@ def process_export_task(choice, loader):
         print(success_msg)
 
 
+@sync_hint_after
 def process_media_management(loader, auto_ingest=True):
     """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM."""
     if not os.path.exists(MEDIA_DEST_DIR):
@@ -3531,6 +3584,7 @@ def read_multiline_input(prompt_text, hint_text=""):
     return "\n".join(lines).strip()
 
 
+@sync_hint_after
 def process_ai_product_ingestion(loader):
     """Quy trình toàn diện AI Tự Động Nhập Hàng Từ Hình Ảnh (Hỗ trợ Đa Sản Phẩm & Restock)."""
     if HAS_RICH:

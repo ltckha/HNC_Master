@@ -908,7 +908,7 @@ function queueSyncHint_(tabs) {
   flushSyncHint_(false);
 }
 
-/** Gửi hàng chờ nếu có và đã đủ 60 giây. Trả về mã HTTP, hoặc null nếu không gửi. */
+/** Gửi hàng chờ nếu có và đã đủ 60 giây. Trả về { code, body }, hoặc null nếu không gửi. */
 function flushSyncHint_(force) {
   const props = PropertiesService.getScriptProperties();
   const url = props.getProperty('SYNC_HINT_URL');
@@ -935,8 +935,9 @@ function flushSyncHint_(force) {
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
-  if (code !== 202 && code !== 200) console.error('sync-hint lỗi ' + code + ' (tabs ' + tabs.join(',') + '): ' + res.getContentText().slice(0, 200));
-  return code;
+  const body = res.getContentText();
+  if (code !== 202 && code !== 200) console.error('sync-hint lỗi ' + code + ' (tabs ' + tabs.join(',') + '): ' + body.slice(0, 200));
+  return { code, body };
 }
 
 /** Cài trigger onEdit + onChange + mỗi phút (chạy 1 lần; không tạo trùng nếu đã có). */
@@ -953,7 +954,12 @@ function setupChangeTrigger() {
 function testSyncHint() {
   const cache = CacheService.getScriptCache();
   cache.put('sync_q', JSON.stringify(['SANPHAM']), 21600);
-  console.log('sync-hint trả về: ' + flushSyncHint_(true) + ' (202 = web đã nhận)');
+  const r = flushSyncHint_(true);
+  if (!r) { console.log('Không gửi: thiếu SYNC_HINT_URL / SYNC_HINT_KEY trong Script Properties.'); return; }
+  let tabs = '';
+  try { tabs = JSON.stringify(JSON.parse(r.body).tabs || []); } catch (e) { /* web không trả JSON */ }
+  console.log('sync-hint trả về: ' + r.code + (r.code === 202 ? ' ✅ web đã nhận' : ' ❌') + (tabs ? ' | web sẽ đọc: ' + tabs : '') +
+    (r.code === 403 ? ' (sai khoá)' : r.code === 503 ? ' (web chưa đặt khoá)' : r.code === 429 ? ' (quá 60 lần/giờ)' : ''));
 }
 
 // =====================================================================

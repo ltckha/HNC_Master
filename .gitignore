@@ -12,6 +12,7 @@ credentials.json
 *.key
 .env
 .env.*
+!.env.example
 
 # OS Generated Files
 .DS_Store
