@@ -4,39 +4,43 @@ Hệ thống điều phối dữ liệu sản phẩm, quản lý tồn kho đa n
 
 ---
 
-## 🌟 TÍNH NĂNG CỐT LÕI (4 NỀN TẢNG)
+## 🌟 TÍNH NĂNG
 
-### 1. 👠 WEBSITE HẢI NANCY
-- **Xuất File Đăng Sản Phẩm Mới**: Sinh file tab-delimited chuẩn hóa để import lên Website.
-- **Xuất File Tồn Kho (Stock Import)**: Tự động tách kho 15E / Y3C.
-  - Hỗ trợ xuất theo **Phiếu Nhập mới** (từ tab `NHAP`).
-  - Hỗ trợ xuất **FULL Toàn Bộ Tồn Kho Realtime** (quét từ `KHO15E` & `KHOY3C`).
-- **Tự động Cào Link Ảnh Web**: Quét và cào tối đa 10 ảnh chất lượng cao chuẩn theo `product_code`.
-- **In Tem Barcode & QR Code**: Sinh danh sách in tem và tự động ghi đè file `IN.csv`.
-- **Đồng Bộ SKU Mới Vào 2 Kho**: Quét các dòng hàng mới từ tab `NHAP` và tự động thêm dòng tính tồn kho vào `KHO15E` / `KHOY3C` với công thức tự động.
+Dữ liệu gốc: Google Sheet `HNC_Control_Center` (SANPHAM, NHAP, XUAT, BAN, KHO15E, KHOY3C, SUB, META). Tồn kho = tồn đầu + NHAP − XUAT − BAN, tính bằng công thức theo FSKU (kho + mã + size).
 
-### 2. 🛍️ SHOPEE
-- **Xuất File Đăng Sản Phẩm Mới**: Mass Upload chuẩn mẫu ngành hàng Shopee.
-- **Xuất File Cập Nhật Giá / Tồn Kho (Shopee Mass Update)**:
-  - Cập nhật số lượng tồn kho (Kho 15E + Y3C, an toàn $\ge 0$).
-  - Cập nhật giá bán ($\text{product\_price} \times 140\%$).
-  - Cập nhật cả hai (Giá bán & Tồn kho Realtime).
+### 1. 🏷️ Tem & kho (menu `main.py` [1])
+- **In tem Barcode & QR**: sinh danh sách in và ghi đè `IN.csv` cho Brother P-touch.
+- **Đồng bộ SKU mới vào 2 kho**: dòng NHAP mới → thêm dòng tính tồn vào `KHO15E` / `KHOY3C`.
+- *Đã ẩn (15/10/2026)*: đăng SP, tồn kho và cào ảnh của **website cũ**; web mới đọc thẳng Sheet. Code giữ tới khi chuyển tên miền.
 
-### 3. 🎵 TIKTOK SHOP
-- **Xuất File Đăng Sản Phẩm Mới (38 Cột Chuẩn)**: Điền đầy đủ hình ảnh, size chart, kích thước, trọng lượng và 10 trường thuộc tính chi tiết (Xuất xứ, Chất liệu, Mùa, Dịp, Mũi, Gót, Tên & Địa chỉ tổ chức chịu trách nhiệm...).
-- **Xuất File Cập Nhật (TikTok Mass Update)**: Hỗ trợ cập nhật Tồn kho, Giá bán hoặc **Cập nhật TẤT CẢ dữ liệu sản phẩm**.
+### 2. 🛍️ Shopee & 🎵 TikTok Shop (menu [2], [3])
+- **Đăng mới**: Mass Upload theo mẫu sàn; giá = giá Sheet × hệ số trong SUB; tách size; link ảnh.
+- **Cập nhật tồn / giá**: tồn = 15E + Y3C, âm thì về 0. Từ 15/10 xuất hằng ngày trên web `/admin/san`; menu HNC giữ làm dự phòng.
+  - Mẫu `HNC_Templates/tpl_*_update.xlsx` đọc theo tên cột hàng 1. Mẫu TikTok cần cột `quantity`.
+  - Ghi mốc `META.*_last_update` khi có ghi tồn. Xuất kèm `channel_links.csv` cho web.
 
-### 4. 📊 MISA ESHOP
-- **Xuất File Danh Mục Hàng Hóa**: Phân tầng Cha - Con tự động cho MISA eShop.
-- **Xuất File Nhập Kho Mua Hàng**: Tự động tính toán 22 cột hóa đơn chứng từ, chiết khấu, thuế GTGT và phân tách kho `15E` / `3C`.
+### 3. 📊 MISA eShop (menu [4])
+- **Danh mục hàng hoá** phân tầng cha – con (`MISA_PRODUCTS_NEW_*` / `MISA_PRODUCTS_UPDATE_*`).
+- **Phiếu nhập kho** 22 cột, tách kho `15E` / `3C`. Bỏ qua dòng NHAP từ Zalo (`Zalo_Update`) và dòng trả hàng (`TRA-…`).
+
+### 4. 📁 Media & 📸 AI nhập từ ảnh (menu [5], [6])
+- Gom tư liệu Photoroom / Downloads về `/Volumes/Media/HNC_Master/<mã>`.
+- AI (Gemini) nhập SP mới / restock từ ảnh vào SANPHAM + NHAP.
+
+### 5. 💬 Bot Zalo HNC (`zalo_bot/`, Google Apps Script gắn vào Sheet)
+- **Lệnh nhân viên**: kiểm hàng (giá, tồn, vị trí K/B/T/S/TH), `ban` / `nhap` / `xuat` / `chuyen kho` / `chuyen vi tri`, nhiều dòng trong 1 tin, `huy`, `bc` (báo cáo bán), `hd` (hướng dẫn).
+  - Khách trả hàng: `nhap … tra hang` (Số chứng từ `TRA-…`).
+- **Hoá đơn nhà cung cấp**: `hoadon`. Bot tự nhận hoá đơn từ thư mục Drive và nhắc sáng thứ Hai.
+- **Cửa cho web / app**: ghi bán `?sale_key`, báo đơn web `?notify_key`, đánh dấu đã xuất file sàn `?export_key`.
+- **Đồng bộ web**: Sheet đổi thì báo web chép lại (bot qua trigger, `main.py` sau mỗi tác vụ ghi Sheet).
+- Chi tiết: [`zalo_bot/README.md`](zalo_bot/README.md). Cập nhật bot: `commands/bot_deploy.command` (test → clasp push → giữ link `/exec`).
 
 ---
 
 ## 🛠️ CÀI ĐẶT & CHẠY ỨNG DỤNG
 
 ### 1. Yêu cầu hệ thống
-- Python 3.9+
-- macOS / Linux / Windows
+- Python 3.11 (venv trên Mac mini M4)
 
 ### 2. Cài đặt thư viện
 ```bash
@@ -45,9 +49,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Cấu hình Google Sheets API
-1. Đặt file khóa Service Account Google Cloud vào thư mục gốc với tên `credentials.json`.
-2. Chia sẻ quyền chỉnh sửa (Editor) trên Google Sheet `HNC_Control_Center` cho email Service Account.
+### 3. Cấu hình
+1. Đặt file khóa Service Account Google Cloud vào thư mục gốc với tên `credentials.json`, rồi chia sẻ quyền Editor của Sheet `HNC_Control_Center` cho email Service Account.
+2. Copy `.env.example` thành `.env`, rồi điền `GEMINI_API_KEY`, `SYNC_HINT_URL`, `SYNC_HINT_KEY`.
 
 ### 4. Khởi chạy
 ```bash
