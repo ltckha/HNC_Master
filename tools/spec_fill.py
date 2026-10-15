@@ -238,7 +238,8 @@ def gemini_call(api_key, images, prompt):
     parts.append({"text": prompt})
     payload = {"contents": [{"parts": parts}], "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"}}
     last_err = None
-    for model in GEMINI_MODELS:
+    global GEMINI_MODELS
+    for model in list(GEMINI_MODELS):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         for attempt in range(2):
             try:
@@ -251,7 +252,13 @@ def gemini_call(api_key, images, prompt):
                     break
                 text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                 text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
-                return model, json.loads(text)
+                ans = json.loads(text)
+                if isinstance(ans, list):  # có lúc mô hình bọc kết quả trong mảng
+                    ans = next((x for x in ans if isinstance(x, dict)), {})
+                if not isinstance(ans, dict):
+                    ans = {}
+                GEMINI_MODELS = [model] + [m for m in GEMINI_MODELS if m != model]  # lần sau gọi thẳng mô hình chạy được
+                return model, ans
             except Exception as e:  # thử mô hình kế tiếp
                 last_err = f"{model}: {e}"
                 break
@@ -279,10 +286,23 @@ def cmd_ai(args):
         vocab[c] = [v for v, _ in cnt.most_common(15)]
 
     order = sorted(need, key=lambda c: (-sold.get(c, 0), -stock.get(c, 0), c))
+    # Lưu ngay sau mỗi mẫu vào file trong ngày; chạy lại thì bỏ qua mẫu đã gọi (không tốn lượt Gemini lần 2)
+    out_path = os.path.join(EXPORT_DIR, f"SPEC_FILL_AI_{datetime.now().strftime('%Y%m%d')}.csv")
+    done = set()
+    if os.path.exists(out_path):
+        with open(out_path, encoding="utf-8-sig") as f:
+            done = {r["product_code"] for r in csv.DictReader(f)}
+    new_file = not os.path.exists(out_path)
+    out_f = open(out_path, "a", newline="", encoding="utf-8-sig")
+    writer = csv.DictWriter(out_f, fieldnames=CSV_FIELDS)
+    if new_file:
+        writer.writeheader()
     picked, results = [], []
     for code in order:
         if len(picked) >= args.limit:
             break
+        if code in done:
+            continue
         imgs = images_for(code, by_code[code], idx)
         if not imgs:
             continue
@@ -303,15 +323,19 @@ def cmd_ai(args):
             print(f"⚠️ {code}: {e}")
             continue
         n_ok = 0
+        rows_out = []
         for item in need[code]:
-            v = str(ans.get(item["cot"], ans.get(item["cot"].rstrip(":"), "")) or "").strip()
+            v = str(ans.get(item["cot"], ans.get(item["cot"].strip(), ans.get(item["cot"].rstrip(": "), ""))) or "").strip()
+            rows_out.append(dict(item, de_xuat=v, nguon="c"))  # dòng rỗng = AI không chắc (giữ để đánh dấu đã gọi)
             if v:
                 n_ok += 1
                 results.append(dict(item, de_xuat=v, nguon="c"))
-        print(f"✓ {code} ({model}, {len(imgs)} ảnh): đề xuất {n_ok}/{len(need[code])} ô")
-    print(f"\nĐã gọi Gemini cho {len(picked)} mẫu; đề xuất {len(results)} ô.")
-    if results:
-        print("CSV:", save_csv(results, "SPEC_FILL_AI"))
+        writer.writerows(rows_out)
+        out_f.flush()
+        print(f"✓ {code} ({model}, {len(imgs)} ảnh): đề xuất {n_ok}/{len(need[code])} ô", flush=True)
+    out_f.close()
+    print(f"\nĐã gọi Gemini cho {len(picked)} mẫu mới (bỏ qua {len(done)} mẫu đã gọi hôm nay); đề xuất {len(results)} ô.")
+    print("CSV:", out_path)
 
 
 def cmd_apply(args):
