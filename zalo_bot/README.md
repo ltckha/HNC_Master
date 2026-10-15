@@ -91,6 +91,30 @@ Content-Type: application/json
 - Trả về: `{"ok":true,"order_id":…}`. Lỗi: `unauthorized`, `chưa cấu hình …`, `Zalo không nhận tin` (khi Zalo từ chối, lần sau gửi lại được).
 - Gợi ý: để sẵn các dòng `ban …` trong `text`. Anh xác nhận với khách xong thì **chuyển tiếp nguyên tin** cho bot, bot ghi BAN từng dòng.
 
+## Theo dõi hoá đơn nhà cung cấp (lệnh `hoadon`)
+
+Không thêm tab hay cột nào vào Sheet; bot tự tính từ dữ liệu sẵn có.
+
+- **Phiếu** = ngày nhập + nhà cung cấp + kho, gom từ tab NHAP.
+  - Nhà cung cấp lấy theo mã ở cột `supplier` của SANPHAM; mã NCC và tên pháp lý lấy ở SUB.
+  - **2 kho = 2 hộ kinh doanh**, mỗi hộ 1 hoá đơn riêng. Mã phiếu dạng `260925-TP-15E` (ngày yyMMdd, mã NCC bỏ chữ "NCC", kho).
+  - Dòng NHAP chưa có KHO (chưa chia hàng) thì chưa đòi hoá đơn. Bỏ dòng trả hàng (`TRA-`) và dòng SL 0.
+  - Tiền = SL × `invoice_price` (đơn giá hoá đơn trong SANPHAM).
+- **Hoá đơn đã về:** bot tự đọc thư mục Drive `My Drive/Thue2026/Hoá đơn 2026/<hộ>/<nhà cung cấp>/<yyyymmdd>/` (thư mục ngày có file).
+  - Hộ "Hải Nancy" = kho **15E**, "Yen Leather" = kho **Y3C**.
+  - Mỗi thư mục ngày được ghép với **phiếu gần nhất chưa ghép** có ngày nhập ≤ ngày hoá đơn.
+  - Đổi thư mục (vd năm 2027): đặt `INVOICE_FOLDER_ID`.
+- **Lệnh:**
+  - `hoadon`: danh sách phiếu từ 01/09/2026 chưa có hoá đơn, nhóm theo nhà cung cấp; ⏰ = quá 7 ngày.
+  - `hoadon <mã phiếu>`: trạng thái + **câu nhắn soạn sẵn** gửi nhà cung cấp (tên / MST / địa chỉ của hộ kinh doanh, từng mã × SL × đơn giá, tổng).
+  - `hoadon <mã phiếu> da` / `khong` / `chua`: sửa tay, thắng kết quả tự ghép. Mã phiếu gõ một phần thì áp cho mọi phiếu khớp (vd `hoadon 260925-TP da` = cả 2 kho). Lưu ở Script Properties `hdon_<mã>`.
+- **Nhắc tuần:** trigger `weeklyInvoiceReminder` 8:00 sáng thứ Hai gửi `OWNER_CHAT_ID` các phiếu quá 7 ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn (tối đa 10 câu).
+- **Cấu hình** (Script Properties):
+  - `HKD_15E`, `HKD_Y3C` = `Tên | MST | Địa chỉ`.
+  - Chạy lại `setupChangeTrigger` để thêm trigger nhắc tuần.
+  - Lần đầu Google sẽ hỏi quyền đọc Drive.
+  - `checkConfig` báo HKD, thư mục Drive và trigger. `testInvoice` in danh sách + tin nhắc mà không gửi Zalo.
+
 ## Cửa "đánh dấu đã xuất file sàn" (API, web gọi)
 
 Web cũng xuất file Shopee / TikTok, chạy song song với menu HNC. Web xuất xong thì gọi cửa này để cờ trên Sheet khớp với menu HNC.

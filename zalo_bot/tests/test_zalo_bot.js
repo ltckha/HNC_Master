@@ -13,9 +13,23 @@ const DATA = {
 };
 const PROPS = {};
 const WRITES = [];
-DATA.SANPHAM = [['Mã hàng hóa cha', '', '', ''], ['parent_product_code', 'product_code', 'shopee_upload', 'tiktok_upload'],
-  ['TH2040', 'TH2040D', '', ''], ['TH2040', 'TH2040N', 'Done', ''], ['CXE', 'CXED', '', 'Thiếu ảnh']];
+DATA.SANPHAM = [['Mã hàng hóa cha', '', '', '', '', '', ''], ['parent_product_code', 'product_code', 'shopee_upload', 'tiktok_upload', 'supplier', 'invoice_price', 'CON_NAME'],
+  ['TH2040', 'TH2040D', '', '', 'Tuấn Phong', '500000', 'Giày tây TH2040D'], ['TH2040', 'TH2040N', 'Done', '', 'Tuấn Phong', '500.000 đ', 'Giày tây TH2040N'],
+  ['CXE', 'CXED', '', 'Thiếu ảnh', 'Chú Dũng', '300000', 'Giày CXED']];
+DATA.SUB = [['Tên Ngành Hàng', 'Mã đối tượng', 'Tên đối tượng', 'Số điện thoại', 'supplier', 'Thuế suất'],
+  ['Giày tây nam', 'NCCTP', 'CÔNG TY TP', '0901', 'Tuấn Phong', '8%'], ['Giày mọi nam', 'NCCQT', 'HKD QT', '0902', 'Chú Dũng', '0']];
+DATA.NHAP = [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'product_color', 'KHO', 'item_size', 'Số lượng (*)'],
+  ['', '', 'product_code', 'product_color', 'KHO', 'item_size', 'item_quantity'],
+  ['10/09/2026', '', 'TH2040D', 'Đen', '15E', '40', '2'], ['10/09/2026', '', 'TH2040N', 'Nâu', '15E', '41', '1'],
+  ['10/09/2026', '', 'TH2040D', 'Đen', 'Y3C', '42', '1'], ['20/09/2026', '', 'TH2040D', 'Đen', '15E', '39', '3'],
+  ['21/09/2026', '', 'CXED', 'Đen', '', '40', '1'], ['22/09/2026', 'TRA-220926', 'TH2040D', 'Đen', '15E', '40', '1'],
+  ['23/09/2026', '', 'CXED', 'Đen', 'YEN', '40', '0'], ['05/08/2026', '', 'TH2040D', 'Đen', '15E', '40', '1']];
+const DRIVE = { 'Hải Nancy': { 'Tuấn Phong': ['20260912'] }, 'Yen Leather': { 'Chú Dũng': ['20260930'] } };
 DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', ''], ['tiktok_last_update', '', '']];
+function driveIt(a) { let i = 0; return { hasNext: () => i < a.length, next: () => a[i++] }; }
+function driveFolder(name, kids, hasFiles) {
+  return { getName: () => name, getFolders: () => driveIt(kids), getFoldersByName: n => driveIt(kids.filter(k => k.getName() === n)), getFiles: () => driveIt(hasFiles ? [1] : []) };
+}
 function mockSheet(n) {
   const d = DATA[n];
   return {
@@ -40,6 +54,7 @@ const ctx = {
   SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? mockSheet(n) : null }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => PROPS[k] || null, setProperty: (k, v) => { PROPS[k] = v; }, getProperties: () => PROPS, deleteProperty: k => { delete PROPS[k]; } }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }), getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
+  DriveApp: { getFolderById: () => driveFolder('root', Object.keys(DRIVE).map(h => driveFolder(h, Object.keys(DRIVE[h]).map(sp => driveFolder(sp, DRIVE[h][sp].map(d => driveFolder(d, [], true))))))) },
   CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
 };
 vm.createContext(ctx);
@@ -50,7 +65,7 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -180,6 +195,25 @@ eq('action sai', ctx.handleExport_({ action: 'x', channel: 'shopee', kind: 'upda
 const nW = WRITES.length;
 delete DATA.META;
 eq('chưa có tab META → báo lỗi, không ghi', [/chưa có tab META/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, nW]);
+
+// ---- Hoá đơn nhà cung cấp ----
+ctx.MEMO = {};
+let tks = ctx.invoiceTickets_();
+eq('gom phiếu ngày + NCC + kho (bỏ KHO trống, TRA-, SL 0)', tks.map(t => [t.id, t.qty, t.amount]),
+  [['260920-TP-15E', 3, 1500000], ['260910-TP-15E', 3, 1500000], ['260910-TP-Y3C', 1, 500000], ['260805-TP-15E', 1, 500000]]);
+let ist = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets;
+eq('hoá đơn 12/09 ghép phiếu gần nhất trước đó (10/09), không ghép phiếu 05/08', ist.map(t => t.id + ':' + t.status), ['260920-TP-15E:chua', '260910-TP-15E:da', '260910-TP-Y3C:chua', '260805-TP-15E:chua']);
+txt = ctx.doInvoice_('hoadon', true).text;
+eq('danh sách chỉ phiếu từ 01/09 chưa có', [/PHIẾU CHƯA CÓ HOÁ ĐƠN: 2/.test(txt), /260920-TP-15E/.test(txt), /260910-TP-Y3C/.test(txt), /260805/.test(txt)], [true, true, true, false]);
+PROPS.HKD_15E = 'HKD A | 0312345678 | 15E Tăng Bạt Hổ';
+txt = ctx.doInvoice_('hoadon 260920-tp-15e', true).text;
+eq('câu nhắn soạn sẵn ghi rõ hộ + MST + hàng', [/Đơn vị mua: HKD A/.test(txt), /MST: 0312345678/.test(txt), /TH2040D Giày tây TH2040D: 3 × 500\.000đ = 1\.500\.000đ/.test(txt), /kho 15E/.test(txt)], [true, true, true, true]);
+txt = ctx.doInvoice_('hoadon 260920-TP-15E da', false).text;
+eq('ghi đã nhận tay', [/Đã ghi ✅ đã có hoá đơn: 260920-TP-15E/.test(txt), JSON.parse(PROPS['hdon_260920-TP-15E']).s], [true, 'da']);
+ctx.doInvoice_('hoadon 260910-TP-Y3C khong', false);
+eq('hết phiếu chưa có', /Không còn phiếu nào/.test(ctx.doInvoice_('hoadon', true).text), true);
+eq('mã phiếu sai', /Không có phiếu nào/.test(ctx.doInvoice_('hoadon 999999', true).text), true);
+eq('lệnh hoadon nhận dạng', [ctx.parseMessage_('hoá đơn').action, ctx.parseMessage_('Hoadon 260920 da').action], ['HOÁ ĐƠN NCC', 'HOÁ ĐƠN NCC']);
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

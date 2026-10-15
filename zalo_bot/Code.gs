@@ -38,6 +38,7 @@ const ACTIONS = {
   UNDO: 'HUỶ',
   REPORT: 'BÁO CÁO',
   HELP: 'HƯỚNG DẪN',
+  INVOICE: 'HOÁ ĐƠN NCC',
 };
 
 const HELP_TEXT = [
@@ -52,6 +53,7 @@ const HELP_TEXT = [
   '📑 Nhiều dòng: mỗi dòng 1 lệnh ban/nhap/xuat (gửi chung 1 tin)',
   '↩️ Huỷ thao tác vừa rồi (10 phút, cả lô): huy',
   '📊 Báo cáo bán: bc  |  bc hom qua  |  bc 10/10',
+  '🧾 Hoá đơn NCC: hoadon  |  hoadon <mã phiếu>  |  hoadon <mã phiếu> da / khong / chua',
   '— Kho: YEN/3C = Y3C, TBH/15E = 15E',
   '— Size: 40 | 40/2 | 40x2 | 40.2 | 2 đôi 40 | 38-43',
   '— Hàng không size: x2 | 2 cái | sl 2',
@@ -175,6 +177,7 @@ function runOne_(text, dryRun, chatId) {
     case ACTIONS.HELP: res = { text: HELP_TEXT }; break;
     case ACTIONS.CHECK: res = doCheck_(p); break;
     case ACTIONS.REPORT: res = doReport_(p); break;
+    case ACTIONS.INVOICE: res = doInvoice_(p.text, dryRun); break;
     case ACTIONS.UNDO: res = doUndo_(chatId, dryRun); break;
     case ACTIONS.MOVE_LOC: res = doMoveLocation_(p, dryRun); break;
     case ACTIONS.TRANSFER: res = doTransfer_(p, dryRun); break;
@@ -251,6 +254,7 @@ function parseMessage_(textRaw, known) {
   if ((toks.length <= 3 && (/^(hd|hdsd|help|\?|menu)$/.test(toks[0] || ''))) || /^huong\s*dan/.test(n)) action = ACTIONS.HELP;
   else if (/^(huỷ|hủy|huy|undo)$/.test((rawToks[0] || '').replace(/[.!]+$/, '')) || /^hoan\s*tac/.test(n)) action = ACTIONS.UNDO;
   else if (toks[0] === 'bc' || /^bao\s*cao/.test(n)) action = ACTIONS.REPORT;
+  else if (/^hoa\s*don(\s|$)/.test(n)) action = ACTIONS.INVOICE;
   else if (/chuyen\s*vi\s*tri/.test(n)) action = ACTIONS.MOVE_LOC;
   else if (/chuyen\s*kho/.test(n)) action = ACTIONS.TRANSFER;
   else if (hasRaw(['bán', 'ban'])) action = ACTIONS.SELL;
@@ -261,7 +265,7 @@ function parseMessage_(textRaw, known) {
     action, kho: '', khoFrom: '', khoTo: '', location: '', color: '', price: '',
     code: '', baseCode: '', sizes: [], qty: 0, sizeErrors: [], reportDate: null, text,
   };
-  if (action === ACTIONS.HELP || action === ACTIONS.UNDO) return p;
+  if (action === ACTIONS.HELP || action === ACTIONS.UNDO || action === ACTIONS.INVOICE) return p;
   // Trả hàng / huỷ đơn: "tra hang", "trả hàng", "tra lai", "khach tra", "hang tra" (chỉ có tác dụng với lệnh nhập)
   p.returnGoods = action === ACTIONS.IN && /(^|\s)(tra\s*hang|tra\s*lai|khach\s*tra|hang\s*tra)(\s|$|[.,!])/.test(n);
   if (action === ACTIONS.REPORT) { p.reportDate = parseReportDate_(n); return p; }
@@ -876,7 +880,7 @@ function handleNotify_(body, owner, props) {
 const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META'];
 const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
 const SYNC_MIN_INTERVAL_MS = 60 * 1000;
-const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints'];
+const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder'];
 
 /** Trigger cài đặt onEdit (người sửa ô). */
 function onSheetEditHint(e) {
@@ -949,13 +953,16 @@ function flushSyncHint_(force) {
   return { code, body };
 }
 
-/** Cài trigger onEdit + onChange + mỗi phút (chạy 1 lần; không tạo trùng nếu đã có). */
+/** Cài trigger onEdit + onChange + mỗi phút + nhắc hoá đơn sáng thứ Hai (chạy 1 lần; không tạo trùng nếu đã có). */
 function setupChangeTrigger() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const have = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
   if (have.indexOf('onSheetEditHint') === -1) ScriptApp.newTrigger('onSheetEditHint').forSpreadsheet(ss).onEdit().create();
   if (have.indexOf('onSheetChangeHint') === -1) ScriptApp.newTrigger('onSheetChangeHint').forSpreadsheet(ss).onChange().create();
   if (have.indexOf('flushSyncHints') === -1) ScriptApp.newTrigger('flushSyncHints').timeBased().everyMinutes(1).create();
+  if (have.indexOf('weeklyInvoiceReminder') === -1) {
+    ScriptApp.newTrigger('weeklyInvoiceReminder').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
+  }
   console.log('Trigger hiện có: ' + ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()).join(', '));
 }
 
@@ -1101,6 +1108,257 @@ function writeMeta_(key, value, dryRun) {
 function digestHex_(text) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8)
     .map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+// =====================================================================
+// THEO DÕI HOÁ ĐƠN NHÀ CUNG CẤP (không thêm tab / cột)
+// Phiếu = ngày nhập + nhà cung cấp + kho (2 kho = 2 hộ kinh doanh, mỗi hộ 1 hoá đơn riêng), gom từ tab NHAP.
+// Dòng NHAP chưa có KHO = chưa chia hàng = chưa đòi hoá đơn. Bỏ dòng trả hàng (Số chứng từ TRA-…).
+// Hoá đơn đã về: tự nhận từ thư mục Drive "Hoá đơn 2026/<hộ>/<nhà cung cấp>/<yyyymmdd>/" (có file);
+// mỗi thư mục ngày ghép với phiếu gần nhất chưa ghép có ngày nhập ≤ ngày hoá đơn; anh sửa tay bằng lệnh "hoadon <mã phiếu> da / khong / chua" (lưu Script Properties, không ghi Sheet).
+// =====================================================================
+
+const INVOICE_START = '2026-09-01';       // chỉ theo dõi / nhắc phiếu từ ngày này
+const INVOICE_MATCH_FROM = '2026-01-01';  // ghép hoá đơn với phiếu từ đầu năm để hoá đơn cũ không ghép nhầm vào phiếu mới
+const INVOICE_REMIND_DAYS = 7;
+const INVOICE_FOLDER_DEFAULT = '1KLzyJnbtSEd2BhE_GPxshqxTNqmR5hs4'; // My Drive/Thue2026/Hoá đơn 2026 (đổi bằng INVOICE_FOLDER_ID)
+const INVOICE_HKD_FOLDERS = { '15E': 'Hải Nancy', 'Y3C': 'Yen Leather' };
+const NO_SUPPLIER = '(chưa có NCC)';
+
+/** Các phiếu (ngày + NCC + kho) từ NHAP, kèm dòng hàng gộp theo mã và tiền theo đơn giá hoá đơn SANPHAM. */
+function invoiceTickets_() {
+  const nh = sheetValues_('NHAP');
+  const col = headerMap_(nh[0]);
+  requireColumns_('NHAP', col, ['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'KHO', 'Số lượng (*)']);
+
+  const sp = sheetValues_('SANPHAM');
+  let hr = 0;
+  for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+  const sc = headerMap_(sp[hr]);
+  const nameCol = sc.CON_NAME !== undefined ? sc.CON_NAME : sc.product_name;
+  const prod = {};
+  for (let r = hr + 1; r < sp.length; r++) {
+    const c = String(sp[r][sc.product_code] || '').trim().toUpperCase();
+    if (c) prod[c] = { supplier: sc.supplier !== undefined ? String(sp[r][sc.supplier] || '').trim() : '',
+      price: sc.invoice_price !== undefined ? moneyValue_(sp[r][sc.invoice_price]) : 0,
+      name: nameCol !== undefined ? String(sp[r][nameCol] || '').trim() : '' };
+  }
+
+  const tickets = {};
+  for (let r = 1; r < nh.length; r++) {
+    const code = String(nh[r][col.product_code] || '').trim().toUpperCase();
+    if (!code || code === 'PRODUCT_CODE') continue;
+    if (String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase().indexOf('TRA-') === 0) continue;
+    const kho = KHO_ALIASES[String(nh[r][col.KHO] || '').trim().toUpperCase()];
+    if (!kho) continue; // chưa chia kho → chưa đòi hoá đơn
+    const date = dateKey_(nh[r][col['Ngày chứng từ (*)']]);
+    if (!date || date < INVOICE_MATCH_FROM) continue;
+    const qty = Number(nh[r][col['Số lượng (*)']]) || 0;
+    if (qty <= 0) continue;
+    const p = prod[code] || { supplier: '', price: 0, name: '' };
+    const supplier = p.supplier || NO_SUPPLIER;
+    const key = date + '|' + supplier + '|' + kho;
+    const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {} });
+    const line = t.lines[code] || (t.lines[code] = { code, name: p.name, price: p.price, qty: 0 });
+    line.qty += qty;
+    t.qty += qty;
+    t.amount += qty * p.price;
+  }
+
+  const sup = supplierInfo_();
+  return Object.keys(tickets).map(k => {
+    const t = tickets[k];
+    const info = sup[t.supplier] || {};
+    const short = String(info.code || '').replace(/^NCC/i, '') || norm_(t.supplier).replace(/[^a-z0-9]/g, '').toUpperCase().slice(0, 8) || 'NCC';
+    t.id = t.date.slice(2).replace(/-/g, '') + '-' + short + '-' + t.kho;
+    t.info = info;
+    t.lines = Object.keys(t.lines).sort().map(c => t.lines[c]);
+    return t;
+  }).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : 1));
+}
+
+/** Nhà cung cấp trong SUB (cột supplier, Mã đối tượng, Tên đối tượng, Số điện thoại, Thuế suất). */
+function supplierInfo_() {
+  const sub = sheetValues_('SUB');
+  const c = headerMap_(sub[0] || []);
+  const out = {};
+  if (c.supplier === undefined) return out;
+  for (let r = 1; r < sub.length; r++) {
+    const s = String(sub[r][c.supplier] || '').trim();
+    if (!s) continue;
+    const g = n => (c[n] !== undefined ? String(sub[r][c[n]] || '').trim() : '');
+    out[s] = { code: g('Mã đối tượng'), legal: g('Tên đối tượng'), phone: g('Số điện thoại'), tax: g('Thuế suất') };
+  }
+  return out;
+}
+
+/** Ngày hoá đơn đã lưu trên Drive: { kho: { tên NCC đã bỏ dấu: [yyyy-MM-dd…] } }. Lỗi đọc Drive → null. */
+function invoiceFolders_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('invoice_folders');
+  if (hit) return JSON.parse(hit);
+  try {
+    const id = PropertiesService.getScriptProperties().getProperty('INVOICE_FOLDER_ID') || INVOICE_FOLDER_DEFAULT;
+    const root = DriveApp.getFolderById(id);
+    const out = {};
+    Object.keys(INVOICE_HKD_FOLDERS).forEach(kho => {
+      out[kho] = {};
+      const hk = root.getFoldersByName(INVOICE_HKD_FOLDERS[kho]);
+      while (hk.hasNext()) {
+        const sups = hk.next().getFolders();
+        while (sups.hasNext()) {
+          const sf = sups.next();
+          const dates = [];
+          const ds = sf.getFolders();
+          while (ds.hasNext()) {
+            const df = ds.next();
+            const m = String(df.getName()).match(/^(\d{4})(\d{2})(\d{2})/);
+            if (m && df.getFiles().hasNext()) dates.push(m[1] + '-' + m[2] + '-' + m[3]);
+          }
+          const k = norm_(sf.getName()).replace(/\s+/g, ' ').trim();
+          out[kho][k] = (out[kho][k] || []).concat(dates).sort();
+        }
+      }
+    });
+    cache.put('invoice_folders', JSON.stringify(out), 600);
+    return out;
+  } catch (err) {
+    console.error('Không đọc được thư mục hoá đơn: ' + (err && err.message ? err.message : err));
+    return null;
+  }
+}
+
+/** Gắn trạng thái cho từng phiếu: sửa tay (Script Properties) > tự nhận từ thư mục Drive > chưa. */
+function invoiceStatus_(tickets) {
+  const folders = invoiceFolders_();
+  const auto = {};
+  if (folders) {
+    const groups = {};
+    tickets.slice().sort((a, b) => (a.date < b.date ? -1 : 1)).forEach(t => {
+      const k = t.kho + '|' + norm_(t.supplier).replace(/\s+/g, ' ').trim();
+      (groups[k] = groups[k] || []).push(t);
+    });
+    Object.keys(groups).forEach(k => {
+      const [kho, sup] = k.split('|');
+      const dates = ((folders[kho] || {})[sup] || []).slice().sort();
+      const list = groups[k];
+      dates.forEach(d => {
+        // Phiếu GẦN NHẤT chưa ghép có ngày nhập không sau ngày hoá đơn (hoá đơn thường xin ngay sau đợt nhập)
+        for (let i = list.length - 1; i >= 0; i--) {
+          if (!auto[list[i].id] && list[i].date <= d) { auto[list[i].id] = d; break; }
+        }
+      });
+    });
+  }
+  const props = PropertiesService.getScriptProperties();
+  tickets.forEach(t => {
+    let manual = null;
+    try { manual = JSON.parse(props.getProperty('hdon_' + t.id) || 'null'); } catch (e) { /* bỏ qua */ }
+    if (manual && manual.s) { t.status = manual.s; t.source = 'tay ' + (manual.at || ''); }
+    else if (auto[t.id]) { t.status = 'da'; t.source = 'thư mục ' + auto[t.id]; }
+    else { t.status = 'chua'; t.source = ''; }
+  });
+  return { tickets, driveOk: !!folders };
+}
+
+function invoiceAgeDays_(t) {
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  return Math.round((Date.parse(today) - Date.parse(t.date)) / 86400000);
+}
+
+/** Câu nhắn soạn sẵn gửi nhà cung cấp, ghi rõ hộ kinh doanh nhận hoá đơn. */
+function invoiceMessage_(t) {
+  const raw = PropertiesService.getScriptProperties().getProperty('HKD_' + t.kho) || '';
+  const parts = raw.split('|').map(x => x.trim());
+  const d = t.date.split('-');
+  const lines = [
+    'Chào ' + (t.supplier === NO_SUPPLIER ? 'anh/chị' : t.supplier) + ',',
+    'Hiệu giày Hải Nancy nhờ anh/chị xuất hoá đơn cho hàng nhập ngày ' + d[2] + '/' + d[1] + '/' + d[0] + ' (kho ' + t.kho + '):',
+  ];
+  if (raw) {
+    lines.push('• Đơn vị mua: ' + (parts[0] || ''));
+    if (parts[1]) lines.push('• MST: ' + parts[1]);
+    if (parts[2]) lines.push('• Địa chỉ: ' + parts.slice(2).join(' | '));
+  } else {
+    lines.push('• Đơn vị mua: (chưa có thông tin — anh điền HKD_' + t.kho + ' trong Apps Script)');
+  }
+  lines.push('Hàng hoá:');
+  t.lines.forEach(l => lines.push('- ' + l.code + (l.name ? ' ' + l.name.slice(0, 40) : '') + ': ' + l.qty +
+    (l.price ? ' × ' + money_(l.price) + ' = ' + money_(l.qty * l.price) : '')));
+  lines.push('Tổng: ' + t.qty + ' sản phẩm' + (t.amount ? ' — ' + money_(t.amount) : ''));
+  lines.push('Cảm ơn anh/chị!');
+  return lines.join('\n');
+}
+
+/** Lệnh Zalo: hoadon | hoadon <mã phiếu> | hoadon <mã phiếu> da / khong / chua */
+function doInvoice_(text, dryRun) {
+  const rest = norm_(text).replace(/^hoa\s*don/, '').trim();
+  const toks = rest.split(/\s+/).filter(Boolean);
+  const st = invoiceStatus_(invoiceTickets_());
+  const tickets = st.tickets.filter(t => t.date >= INVOICE_START);
+  const note = st.driveOk ? '' : '\n⚠️ Chưa đọc được thư mục hoá đơn trên Drive — chỉ dựa vào lệnh tay.';
+
+  if (!toks.length) {
+    const pending = tickets.filter(t => t.status === 'chua');
+    if (!pending.length) return { text: '🧾 Không còn phiếu nào chưa có hoá đơn (từ ' + INVOICE_START.split('-').reverse().join('/') + ').' + note };
+    const bySup = {};
+    pending.forEach(t => { (bySup[t.supplier] = bySup[t.supplier] || []).push(t); });
+    const out = ['🧾 PHIẾU CHƯA CÓ HOÁ ĐƠN: ' + pending.length + ' (đã có ' + tickets.filter(t => t.status === 'da').length +
+      ', không cần ' + tickets.filter(t => t.status === 'khong').length + ')'];
+    Object.keys(bySup).sort().forEach(s => {
+      out.push('• ' + s);
+      bySup[s].forEach(t => {
+        const age = invoiceAgeDays_(t);
+        out.push('  ' + t.id + ': ' + t.qty + ' sp' + (t.amount ? ', ' + money_(t.amount) : '') + (age >= INVOICE_REMIND_DAYS ? ' ⏰ ' + age + ' ngày' : ''));
+      });
+    });
+    out.push('Xem câu nhắn: hoadon <mã phiếu> · Ghi nhận: hoadon <mã phiếu> da / khong');
+    return { text: out.join('\n') + note };
+  }
+
+  const key = toks[0].toUpperCase();
+  const matches = st.tickets.filter(t => t.id.indexOf(key) === 0);
+  if (!matches.length) return { text: '❓ Không có phiếu nào bắt đầu bằng "' + key + '". Nhắn "hoadon" để xem danh sách mã phiếu.' };
+  const stTok = toks[1] || '';
+  const newStatus = /^(da|roi|xong|ok)$/.test(stTok) ? 'da' : /^(khong|ko|k)$/.test(stTok) ? 'khong' : /^chua$/.test(stTok) ? 'chua' : '';
+  if (!newStatus) {
+    return { text: matches.slice(0, 3).map(t => '🧾 ' + t.id + ' — ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không cần', chua: '⏳ chưa có' })[t.status] +
+      (t.source ? ' (' + t.source + ')' : '') + '\n\n' + invoiceMessage_(t)).join('\n\n—\n\n') };
+  }
+  if (!dryRun) {
+    const props = PropertiesService.getScriptProperties();
+    const at = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+    matches.forEach(t => props.setProperty('hdon_' + t.id, JSON.stringify({ s: newStatus, at })));
+  }
+  return { text: '🧾 Đã ghi ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không cần hoá đơn', chua: '⏳ chưa có hoá đơn' })[newStatus] + ': ' + matches.map(t => t.id).join(', ') };
+}
+
+/** Trigger sáng thứ Hai: nhắc anh các phiếu quá INVOICE_REMIND_DAYS ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn. */
+function weeklyInvoiceReminder() {
+  try {
+    MEMO = {};
+    const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
+    if (!owner) return;
+    invoiceReminderMessages_().forEach(m => sendMessage_(owner, m));
+  } catch (err) { console.error(err && err.stack ? err.stack : err); }
+}
+
+function invoiceReminderMessages_() {
+  const due = invoiceStatus_(invoiceTickets_()).tickets
+    .filter(t => t.date >= INVOICE_START && t.status === 'chua' && invoiceAgeDays_(t) >= INVOICE_REMIND_DAYS);
+  if (!due.length) return [];
+  const msgs = ['⏰ ' + due.length + ' phiếu nhập quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn. Câu nhắn soạn sẵn bên dưới — chép gửi nhà cung cấp.\n' +
+    'Đã nhận thì nhắn: hoadon <mã phiếu> da · Không cần: hoadon <mã phiếu> khong'];
+  due.slice(0, 10).forEach(t => msgs.push('🧾 ' + t.id + ' (' + invoiceAgeDays_(t) + ' ngày)\n\n' + invoiceMessage_(t)));
+  if (due.length > 10) msgs.push('… còn ' + (due.length - 10) + ' phiếu nữa — nhắn "hoadon" để xem hết.');
+  return msgs;
+}
+
+/** Chạy thử trong trình soạn thảo: in danh sách phiếu + tin nhắc tuần (KHÔNG gửi Zalo). */
+function testInvoice() {
+  MEMO = {};
+  console.log(doInvoice_('hoadon', true).text);
+  invoiceReminderMessages_().forEach(m => console.log(m));
 }
 
 // =====================================================================
@@ -1417,6 +1675,9 @@ function checkConfig() {
   const owner = props.getProperty('OWNER_CHAT_ID') || '';
   const allowed = (props.getProperty('ALLOWED_CHAT_IDS') || '').split(',').map(s => s.trim());
   console.log('OWNER_CHAT_ID nằm trong ALLOWED_CHAT_IDS: ' + (owner && allowed.indexOf(owner) !== -1 ? '✅' : '⚠️ không'));
+  ['HKD_15E', 'HKD_Y3C'].forEach(n => { const v = props.getProperty(n) || ''; console.log(n + ': ' + (v ? '✅ có (' + v.split('|').length + ' phần: tên | MST | địa chỉ)' : '❌ chưa có')); });
+  const folders = invoiceFolders_();
+  console.log('Thư mục hoá đơn Drive: ' + (folders ? '✅ đọc được (' + Object.keys(folders).map(k => k + ': ' + Object.keys(folders[k]).length + ' NCC').join(', ') + ')' : '❌ chưa đọc được'));
   const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
   SYNC_TRIGGER_HANDLERS.forEach(h => console.log('Trigger ' + h + ': ' + (handlers.indexOf(h) !== -1 ? '✅' : '❌ chưa có (chạy setupChangeTrigger)')));
 }
