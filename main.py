@@ -134,6 +134,14 @@ STATUS_COLUMNS = {
 }
 
 
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def clean_code(value):
+    """Mã SP sạch: bỏ ký tự điều khiển ẩn (vd \\x08 khi dán) và khoảng trắng 2 đầu — tránh hỏng FSKU / tồn kho / feed web."""
+    return _CONTROL_CHARS.sub('', str(value or '')).strip()
+
+
 def safe_write_cell(ws, row, col, value):
     """Ghi dữ liệu an toàn vào ô openpyxl, bỏ qua nếu là MergedCell."""
     try:
@@ -2644,7 +2652,7 @@ def process_export_task(choice, loader):
         cur_row_y3c = len(df_y3c) + 1
 
         for rec in pending_records:
-            pcode = str(rec.get('product_code', '')).strip()
+            pcode = clean_code(rec.get('product_code', ''))  # bỏ ký tự ẩn trước khi thêm SKU vào KHO
             color = str(rec.get('product_color', '')).strip()
             sz = str(rec.get('item_size', '')).strip()
             if sz.endswith('.0'): sz = sz[:-2]
@@ -3439,6 +3447,8 @@ def batch_commit_ingestion(loader, confirmed_products):
     """Ghi hàng loạt sản phẩm mới vào SANPHAM và toàn bộ dòng nhập kho vào NHAP (Quét Header Động)."""
     if not confirmed_products:
         return {'sp_added': 0, 'restock_count': 0, 'nhap_rows': 0}
+    for data in confirmed_products:
+        data['product_code'] = clean_code(data.get('product_code', '')).upper()
 
     today_str = datetime.now().strftime("%d/%m/%Y")
     doc_no = f"PN_{datetime.now().strftime('%Y%m%d_%H%M')}"
