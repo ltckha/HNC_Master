@@ -11,23 +11,21 @@
    - Trước khi sửa code, xuất dữ liệu lớn, hay chạy lệnh, **bắt buộc phải trình bày giải pháp kỹ thuật chi tiết và được anh Kha đồng ý trước**.
    - Không tự ý suy đoán cấu trúc cột tính toán tài chính, giá và tồn kho.
 
-2. **GIT: CHỈ PUSH NHÁNH RIÊNG + PULL REQUEST (luật chung 4 repo, chốt 11/10/2026):**
-   - Chỉ push lên **nhánh riêng** (vd `claude/<chủ-đề>`) rồi mở Pull Request. **Cấm push thẳng `main`.**
-   - `main` chỉ thay đổi khi anh Kha bấm **Merge** trên GitHub (thao tác này được coi là lệnh push của anh Kha).
-   - Trước khi push: rà diff, đảm bảo không lọt `.env`, `credentials.json`, token, cookie.
+2. **GIT: THEO `~/Developer/Ecosystem-Hub/docs/LUAT_CHUNG.md` LUẬT 1:**
+   - Commit cục bộ; chỉ push khi anh Kha nhắn **"đẩy"** hoặc bấm `push_all.command` cuối ngày → quét bí mật rồi push thẳng `main`.
    - Cấm `git commit -am`, `git add -A`, `git add .`. Luôn `git add` từng file.
 
-3. **MÔ HÌNH PHỐI HỢP CẶP BÀI TRÙNG (DUAL-CLAUDE ARCHITECTURE):**
-   - **Claude Cowork (Cloud):** Đảm nhận tư duy vĩ mô: Rà soát công thức tính giá, đối chiếu logic nghiệp vụ 4 sàn, quy hoạch tính năng.
-   - **Claude Code (Local Mac M4):** Kỹ sư trưởng thực thi hiện trường: Chạy lệnh terminal, kích hoạt môi trường ảo Python `venv`, xuất file dữ liệu, đồng bộ Google Sheets.
-   - **Antigravity (IDE Pair-Programmer):** Đồng hành cùng anh Kha tại IDE.
+3. **PHỐI HỢP CÁC PHIÊN (theo LUAT_CHUNG luật 2, 7, 9):**
+   - Phiên **"Điều phối hệ sinh thái Kha"** lập kế hoạch và giao việc HNC; hộp thư Cowork chỉ đi qua Điều phối.
+   - Phiên **"Thực thi – HNC_Master"** (Claude Code trên Mac mini M4) sửa code, chạy lệnh, xuất file, đồng bộ Google Sheets.
+   - Không trao đổi trực tiếp với Antigravity.
 
 4. **MỖI REPO MỘT PHIÊN THỰC THI:**
    - Chỉ phiên **"Thực thi – HNC_Master"** được sửa code và commit trong repo này.
    - Việc cần đụng repo khác (Auto-Video-Factory, Video-Post, Omni-Video) → nhắn phiên "Thực thi – <repo>" của repo đó, không tự sửa chéo.
 
 5. **TRI THỨC BRAND — NGUỒN DUY NHẤT LÀ AUTO-VIDEO-FACTORY:**
-   - Tên chuẩn, mã brand, bí danh lấy từ `Auto-Video-Factory/knowledge/brands/`. Tab Sheet `Brands_Registry` (đang xây) sẽ được sinh ra từ đó.
+   - Tên chuẩn, mã brand, bí danh lấy từ `Auto-Video-Factory/knowledge/brands/`. Tab Sheet `brands` được sinh ra từ đó.
    - Không viết cứng danh sách brand trong repo này. Cần thêm/sửa brand → nhắn phiên "Thực thi – Auto-Video-Factory".
 
 ---
