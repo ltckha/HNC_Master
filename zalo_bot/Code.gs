@@ -1140,6 +1140,7 @@ function invoiceTickets_() {
   for (let r = hr + 1; r < sp.length; r++) {
     const c = String(sp[r][sc.product_code] || '').trim().toUpperCase();
     if (c) prod[c] = { supplier: sc.supplier !== undefined ? String(sp[r][sc.supplier] || '').trim() : '',
+      parent: (sc.parent_product_code !== undefined ? String(sp[r][sc.parent_product_code] || '').trim().toUpperCase() : '') || c.replace(/[A-Z]$/, ''),
       price: sc.invoice_price !== undefined ? moneyValue_(sp[r][sc.invoice_price]) : 0,
       name: nameCol !== undefined ? String(sp[r][nameCol] || '').trim() : '' };
   }
@@ -1155,11 +1156,11 @@ function invoiceTickets_() {
     if (!date || date < INVOICE_MATCH_FROM) continue;
     const qty = Number(nh[r][col['Số lượng (*)']]) || 0;
     if (qty <= 0) continue;
-    const p = prod[code] || { supplier: '', price: 0, name: '' };
+    const p = prod[code] || { supplier: '', price: 0, name: '', parent: code.replace(/[A-Z]$/, '') };
     const supplier = p.supplier || NO_SUPPLIER;
     const key = date + '|' + supplier + '|' + kho;
     const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {} });
-    const line = t.lines[code] || (t.lines[code] = { code, name: p.name, price: p.price, qty: 0 });
+    const line = t.lines[code] || (t.lines[code] = { code, parent: p.parent || code, name: p.name, price: p.price, qty: 0 });
     line.qty += qty;
     t.qty += qty;
     t.amount += qty * p.price;
@@ -1283,9 +1284,11 @@ function invoiceMessage_(t) {
     lines.push('• Đơn vị mua: (chưa có thông tin — anh điền HKD_' + t.kho + ' trong Apps Script)');
   }
   lines.push('Hàng hoá:');
-  t.lines.forEach(l => lines.push('- ' + l.code + (l.name ? ' ' + l.name.slice(0, 40) : '') + ': ' + l.qty +
-    (l.price ? ' × ' + money_(l.price) + ' = ' + money_(l.qty * l.price) : '')));
-  lines.push('Tổng: ' + t.qty + ' sản phẩm' + (t.amount ? ' — ' + money_(t.amount) : ''));
+  // Gọn: gom theo mã cha (cùng mẫu khác màu cộng lại), không ghi tên / giá
+  const byParent = {};
+  t.lines.forEach(l => { byParent[l.parent] = (byParent[l.parent] || 0) + l.qty; });
+  Object.keys(byParent).sort().forEach(pc => lines.push(pc + ' x ' + byParent[pc]));
+  lines.push('Tổng: ' + t.qty + ' sản phẩm');
   lines.push('Cảm ơn anh/chị!');
   return lines.join('\n');
 }

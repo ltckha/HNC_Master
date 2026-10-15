@@ -106,7 +106,7 @@ Không thêm tab hay cột nào vào Sheet; bot tự tính từ dữ liệu sẵ
   - Đổi thư mục (vd năm 2027): đặt `INVOICE_FOLDER_ID`.
 - **Lệnh:**
   - `hoadon`: danh sách phiếu từ 01/09/2026 chưa có hoá đơn, nhóm theo nhà cung cấp; ⏰ = quá 7 ngày.
-  - `hoadon <mã phiếu>`: trạng thái + **câu nhắn soạn sẵn** gửi nhà cung cấp (tên / MST / địa chỉ của hộ kinh doanh, từng mã × SL × đơn giá, tổng).
+  - `hoadon <mã phiếu>`: trạng thái + **câu nhắn soạn sẵn** gửi nhà cung cấp: tên / MST / địa chỉ của hộ kinh doanh, hàng gom gọn theo **mã cha** (cùng mẫu khác màu cộng lại, vd `CT2637 x 6`), dòng `Tổng: N sản phẩm`, không ghi tên / giá.
   - `hoadon <mã phiếu> da` / `khong` / `chua`: sửa tay, thắng kết quả tự ghép. Mã phiếu gõ một phần thì áp cho mọi phiếu khớp (vd `hoadon 260925-TP da` = cả 2 kho). Lưu ở Script Properties `hdon_<mã>`.
 - **Nhắc tuần:** trigger `weeklyInvoiceReminder` 8:00 sáng thứ Hai gửi `OWNER_CHAT_ID` các phiếu quá 7 ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn (tối đa 10 câu).
 - **Cấu hình** (Script Properties):
