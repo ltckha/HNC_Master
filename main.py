@@ -3727,7 +3727,7 @@ def print_main_menu():
     menu_text = """===================================================================
              🚀 [bold white]HNC CONTROL CENTER - MAC MINI M4 ENGINE[/bold white]
 ===================================================================
-  [1] [bold #FFD700]👠 WEBSITE HẢI NANCY[/bold #FFD700]
+  [1] [bold #FFD700]🏷️ TEM & KHO (in tem, đồng bộ SKU vào kho)[/bold #FFD700]
   [2] [bold #FF6E40]🛍️  SHOPEE[/bold #FF6E40]
   [3] [bold #00E5FF]🎵 TIKTOK[/bold #00E5FF] [bold #FF1744]SHOP[/bold #FF1744]
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
@@ -3743,13 +3743,11 @@ def print_main_menu():
 
 
 def print_submenu_website():
-    """Hiển thị Sub-Menu 1: Website Hải Nancy"""
+    """Hiển thị Sub-Menu 1: Tem & Kho (tác vụ website cũ đã ẩn)"""
     menu_text = """-------------------------------------------------------------------
-             [bold #FFD700]👠 SUB-MENU: WEBSITE HẢI NANCY[/bold #FFD700]
+             [bold #FFD700]🏷️ SUB-MENU: TEM & KHO[/bold #FFD700]
 -------------------------------------------------------------------
-  [1] 🌐 Xuất File Đăng Sản Phẩm Mới (Tab-delimited Product Import)
-  [2] 📦 Xuất File Tồn Kho (Website Stock Import - Tự động tách 15E / Y3C)
-  [3] 🖼️  Tự động Cào Link Ảnh Web (image_01 ➔ image_10)
+  [dim](Đã ẩn [1] đăng SP web cũ, [2] tồn web cũ, [3] cào ảnh web cũ — web mới đọc thẳng Sheet)[/dim]
   [4] 🖨️  In Tem Barcode & QR Code (Ghi đè file IN.csv)
   [5] 🔄 Đồng Bộ SKU Mới từ NHAP vào 2 Kho (KHO15E & KHOY3C)
   -----------------------------------------------------------------
@@ -3832,18 +3830,18 @@ def handle_submenu_website(loader):
         print_submenu_website()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold cyan]Mời chọn tác vụ Website [0-5][/bold cyan]", default="0")
+            sub_choice = Prompt.ask("[bold cyan]Mời chọn tác vụ [0/4/5][/bold cyan]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ Website [0-5]: ").strip()
+            sub_choice = input("Mời chọn tác vụ [0/4/5]: ").strip()
 
         if sub_choice == "0":
             break
-        elif sub_choice == "1":
-            process_export_task(1, loader)
-        elif sub_choice == "2":
-            process_export_task(5, loader)
-        elif sub_choice == "3":
-            process_export_task(11, loader)
+        elif sub_choice in ("1", "2", "3"):
+            # Website cũ (WEB_PRODUCTS / WEB_STOCK / cào ảnh): ẩn từ 15/10/2026, giữ code tới khi chuyển tên miền xong rồi xoá.
+            # Tác vụ gốc: process_export_task(1 | 5 | 11, loader).
+            msg = "ℹ️ Tác vụ website cũ đã ẩn — web mới giayhainancy.vn đọc thẳng Sheet."
+            if HAS_RICH: console.print(f"[bold yellow]{msg}[/bold yellow]")
+            else: print(msg)
         elif sub_choice == "4":
             process_export_task(10, loader)
         elif sub_choice == "5":
