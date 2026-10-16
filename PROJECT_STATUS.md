@@ -26,12 +26,13 @@
 | **14** | 💬 **Zalo** | 🤖 **Bot Zalo Quản Lý Bán Hàng & Kho** | Ghi trực tiếp `BAN`, `NHAP`, `XUAT`, `product_location` (KHO15E/KHOY3C) | ✅ **ĐÃ OK** | Google Apps Script gắn vào HNC_Control_Center (`zalo_bot/`), thay flow n8n cũ (11/10/2026). Kiểm hàng, Bán/Nhập/Xuất, Chuyển kho, Chuyển vị trí; YEN→Y3C, TBH→15E; chặn theo `ALLOWED_CHAT_IDS`, chống ghi trùng, dòng NHAP đánh dấu `Zalo_Update`. Bản 7 (15/10, triển khai bằng `commands/bot_deploy.command` / clasp): nhiều dòng, trả hàng `nhap … tra hang` (TRA-), cửa ghi bán `?sale_key`, cửa báo đơn web `?notify_key`, cửa đánh dấu đã xuất `?export_key`, báo web chép Sheet, lệnh `hoadon`. Bản 8 (16/10): cửa kho cho app `?stock_key` (nhap / tra_hang / xuat / chuyen_kho / chuyen_vi_tri / huy). Tab BAN: `channel` trống = bán tại cửa hàng theo KHO; chỉ ghi `web` / `shopee` / `tiktok` khi bán ngoài cửa hàng (lệnh `ban … shopee`). |
 | **15** | 🧾 **Hoá đơn NCC** | 📮 **Theo dõi hoá đơn nhà cung cấp** | Không ghi Sheet (Script Properties) | ✅ **ĐÃ OK** | Phiếu = ngày nhập + NCC + kho (2 kho = 2 hộ kinh doanh) gom từ `NHAP`; tự nhận hoá đơn từ Drive `Thue2026/Hoá đơn 2026/<hộ>/<NCC>/<yyyymmdd>/`; lệnh Zalo `hoadon`; nhắc 8:00 thứ Hai phiếu quá 7 ngày kèm câu nhắn soạn sẵn. |
 | **16** | 🌐 **Web mới** | 🔄 **Đồng bộ web giayhainancy.vn** | Tab `META`, `channel_links.csv` | ✅ **ĐÃ OK** | Bot (trigger onEdit/onChange + sau khi ghi) và `main.py` (sau mỗi tác vụ ghi Sheet) báo web chép lại (`SYNC_HINT_URL`/`SYNC_HINT_KEY`). Tab `META` (key/value/updated_at) giữ mốc cập nhật tồn sàn. |
+| **17** | 📄 **Nhập từ phiếu NCC** | 🤖 **Đọc phiếu → nháp → chia size trên app → ghi NHAP** | NHAP (Số chứng từ = mã phiếu `PN…`), Drive `Phiếu mua hàng` | ✅ **CODE XONG** | Gửi ảnh qua app (`?stock_key`, action `doc_phieu`) hoặc bot Zalo; Gemini 1 lượt / phiếu; nháp lưu `Phiếu mua hàng/Chưa chia/<NCC>/`, xác nhận xong chuyển `<hộ>/<NCC>/`; lệch SL bắt chọn lý do; dòng NHAP như nhập thường (in tem, MISA); hoá đơn NCC ghép theo phiếu × kho kèm số phiếu NCC. |
 
 ---
 
 ## 🛡️ 2. QUY CHUẨN ĐẶT TÊN FILE & ĐƯỜNG DẪN XUẤT
 
-- **Thư mục xuất chính**: `My Drive/Spark/HNC_Master/HNC_Exported_Files/` (ưu tiên; fallback `My Drive/HNC_Master/HNC_Exported_Files/`, cuối cùng là `./HNC_Exported_Files` local).
+- **Thư mục xuất chính**: `My Drive/HNC/He_thong/HNC_Exported_Files/` (khai 1 chỗ ở `hnc_paths.py`; chỗ cũ `My Drive/Spark/HNC_Master` dùng tạm trước khi kéo; không thấy cả 2 thì báo lỗi, không dùng local). Chứng từ thuế: `My Drive/HNC/Thue/<năm>/` (Hoá đơn, Phiếu mua hàng, Misa…).
 - **Quy chuẩn tên file ngắn gọn kèm timestamp**:
   - `WEB_PRODUCTS_YYYYMMDD_HHMMSS.csv`
   - `WEB_STOCK_15E_YYYYMMDD_HHMMSS.csv` & `WEB_STOCK_Y3C_YYYYMMDD_HHMMSS.csv`
