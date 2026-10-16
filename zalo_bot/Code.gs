@@ -44,7 +44,7 @@ const ACTIONS = {
 const HELP_TEXT = [
   '📖 HƯỚNG DẪN BOT KHO HNC',
   '🔎 Kiểm hàng: TH2040D 40  |  TH2040 (mọi màu)',
-  '🛒 Bán: ban TH2040D 40 YEN 800k  (bán sàn / web: thêm shopee | tiktok | web)',
+  '🛒 Bán: ban TH2040D 40 YEN 800k  (bán ngoài cửa hàng: thêm shopee | tiktok | web | lazada | zalo | fb)',
   '📥 Nhập: nhap TH2040D 38/2 39 TBH',
   '↩️ Khách trả hàng / huỷ đơn: nhap TH2040D 40 15E tra hang',
   '📤 Xuất: xuat TH2040D 41 15E',
@@ -67,7 +67,8 @@ let MEMO = {};
 let CTX = {};
 
 // Cửa "ghi bán" cho app bán hàng
-const SALE_CHANNELS = ['cua_hang', 'web', 'shopee', 'tiktok'];
+// Kênh nhận từ app; 'cua_hang' (bán tại quầy) ghi ô trống — quy ước: channel trống = bán tại cửa hàng theo KHO
+const SALE_CHANNELS = ['cua_hang', 'web', 'shopee', 'tiktok', 'lazada', 'zalo', 'facebook'];
 const SALE_MAX_LINES = 50;
 const SALE_TICKET_DAYS = 30; // giữ mã phiếu / mã đơn đã xử lý 30 ngày để chống trùng
 
@@ -277,7 +278,7 @@ function parseMessage_(textRaw, known) {
   if (action === ACTIONS.SELL) {
     toks.forEach((t, i) => {
       const tk = t.replace(/[^a-z]/g, '');
-      const ch = tk === 'shopee' ? 'shopee' : (tk === 'tiktok' || tk === 'tt') ? 'tiktok' : tk === 'web' ? 'web' : '';
+      const ch = { shopee: 'shopee', tiktok: 'tiktok', tt: 'tiktok', web: 'web', lazada: 'lazada', zalo: 'zalo', facebook: 'facebook', fb: 'facebook' }[tk] || '';
       if (ch && !p.channel) { p.channel = ch; used[i] = true; }
     });
   }
@@ -808,7 +809,7 @@ function handleSale_(body, dryRun) {
       let written = 0;
       try {
         plan.forEach(x => {
-          const op = appendBan_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel, seller);
+          const op = appendBan_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel === 'cua_hang' ? '' : channel, seller);
           x.r.row = op.row;
           written++;
         });
@@ -1848,7 +1849,7 @@ function testSale() {
     { ticket_id: 'TEST-003', seller: 'Kha', channel: 'shopee',
       lines: [{ code: 'KHONGCO1X', size: 40, qty: 1, warehouse: '15E' },
               { code: 'TH2040D', qty: 1, warehouse: 'Y3C' }] },
-    { ticket_id: 'TEST-004', seller: 'Kha', channel: 'facebook', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] },
+    { ticket_id: 'TEST-004', seller: 'Kha', channel: 'instagram', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] },
   ].forEach(t => console.log('▶ ' + t.ticket_id + '\n' + JSON.stringify(handleSale_(t, true), null, 1)));
 }
 

@@ -119,7 +119,7 @@ r = sale({ ticket_id: 'T3', channel: 'shopee', lines: [{ code: 'KHONGCO1X', size
 eq('dòng lỗi → không ghi', [r.ok, r.results.map(x => x.error)], [false, ['mã không có trong KHOY3C/KHO15E', 'thiếu size']]);
 r = sale({ ticket_id: 'T4', channel: 'web', lines: [{ code: 'AROMAX60T', qty: 3, warehouse: 'Y3C' }] });
 eq('hàng không size', [r.ok, r.results[0].size, r.results[0].qty], [true, '', 3]);
-eq('channel sai', sale({ ticket_id: 'T5', channel: 'facebook', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] }).ok, false);
+eq('channel sai', sale({ ticket_id: 'T5', channel: 'instagram', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] }).ok, false);
 eq('ticket sai', sale({ ticket_id: 'a b', channel: 'web', lines: [{}] }).ok, false);
 eq('qty sai', sale({ ticket_id: 'T6', channel: 'web', lines: [{ code: 'TH2040D', size: 40, qty: 0, warehouse: 'Y3C' }] }).ok, false);
 PROPS['sale_T7'] = JSON.stringify({ t: Date.now(), rows: 1 });
@@ -229,6 +229,7 @@ eq('lệnh hoadon nhận dạng', [ctx.parseMessage_('hoá đơn').action, ctx.p
 const chOf = t => ctx.parseMessage_(t, ctx.knownCodes_()).channel;
 eq('ban tại quầy → channel trống', chOf('ban TH2040D 40 YEN 800k'), '');
 eq('ban shopee / tiktok / web', [chOf('ban TH2040D 40 YEN shopee'), chOf('bán TH2040D 40 15E TikTok 800k'), chOf('ban TH2040D 40 yen web')], ['shopee', 'tiktok', 'web']);
+eq('ban lazada / zalo / fb', [chOf('ban TH2040D 40 YEN lazada'), chOf('ban TH2040D 40 YEN zalo'), chOf('ban TH2040D 40 YEN fb')], ['lazada', 'zalo', 'facebook']);
 eq('chữ kênh không lẫn vào mã', ctx.parseMessage_('ban TH2040D 40 YEN shopee', ctx.knownCodes_()).code, 'TH2040D');
 const realAB = ctx.appendByHeader_;
 let banOpt = null;
@@ -237,6 +238,13 @@ ctx.handleText_('ban TH2040D 40 YEN', false, 'chat1', 'Lan');
 eq('Zalo bán tại quầy ghi channel trống', [banOpt.channel, banOpt.seller], ['', 'Lan']);
 ctx.handleText_('ban TH2040D 40 YEN shopee', false, 'chat1', 'Lan');
 eq('Zalo bán shopee ghi channel=shopee', banOpt.channel, 'shopee');
+ctx.appendByHeader_ = realAB;
+
+ctx.appendByHeader_ = (sheet, values, fb, check, optional) => { if (sheet === 'BAN') banOpt = optional; return { type: 'row', sheet, row: 9, written: Object.keys(values), check: check || {} }; };
+banOpt = null; ctx.handleSale_({ ticket_id: 'CH1', channel: 'cua_hang', seller: 'nv', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] }, false);
+eq('app cua_hang → ghi channel trống', banOpt && banOpt.channel, '');
+banOpt = null; ctx.handleSale_({ ticket_id: 'CH2', channel: 'lazada', seller: 'nv', lines: [{ code: 'TH2040D', size: 40, warehouse: 'Y3C' }] }, false);
+eq('app lazada → channel lazada', banOpt && banOpt.channel, 'lazada');
 ctx.appendByHeader_ = realAB;
 
 // ---- Cửa kho cho app ----
