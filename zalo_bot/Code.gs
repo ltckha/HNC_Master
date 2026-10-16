@@ -1069,6 +1069,7 @@ const PN_UNSPLIT = 'Chưa chia';
 const OWNER_EMAILS_DEFAULT = ['ltckha@gmail.com', 'giayhainancy@gmail.com'];
 const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
+const GEMINI_SHARED_HASH = '8412f316'; // khoá Gemini chung cũ của các repo (checkConfig cảnh báo nếu bot còn dùng)
 const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
 // Mã "cần bổ sung" (anh Kha 16/10): SANPHAM trống Tên Ngành Hàng hoặc giá bán → xuất sàn / MISA / mark_exported bỏ qua, web ẩn.
 const PN_NEED_INFO_COLS = ['Tên Ngành Hàng', 'product_price'];
@@ -2639,6 +2640,13 @@ function checkConfig() {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
   });
+  // Khoá Gemini: in 8 ký tự đầu sha256 (không in khoá) để so với .env HNC — mỗi repo 1 khoá riêng (anh Kha 16/10)
+  const gk = props.getProperty('GEMINI_API_KEY');
+  if (gk) {
+    const h = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, gk, Utilities.Charset.UTF_8)
+      .map(b => ('0' + (b & 255).toString(16)).slice(-2)).join('').slice(0, 8);
+    console.log('GEMINI_API_KEY sha256 8 ký tự đầu: ' + h + (h === GEMINI_SHARED_HASH ? ' ❌ vẫn là khoá chung các repo' : ''));
+  }
   const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY', 'STOCK_KEY'].map(n => props.getProperty(n) || '');
   console.log('Các khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
   console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌') +
