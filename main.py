@@ -110,10 +110,50 @@ STATUS_COLUMNS = {
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
+# Mã tạo từ phiếu NCC (bot HNC, V2 16/10/2026): product_name = "CẦN BỔ SUNG - <tên tạm>", chưa có giá / thuộc tính.
+# Xuất MISA / Shopee / TikTok / web cũ tự BỎ QUA các mã này (giữ trạng thái trống để xuất sau khi bổ sung).
+PENDING_INFO_PREFIX = "CẦN BỔ SUNG"
+# Tác vụ bỏ qua mã chưa bổ sung: 1 web đăng mới, 2 Shopee đăng mới, 3 TikTok đăng mới, 4 MISA danh mục, 5 web tồn, 8 MISA phiếu nhập
+PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8}
+
 
 def clean_code(value):
     """Mã SP sạch: bỏ ký tự điều khiển ẩn (vd \\x08 khi dán) và khoảng trắng 2 đầu — tránh hỏng FSKU / tồn kho / feed web."""
     return _CONTROL_CHARS.sub('', str(value or '')).strip()
+
+
+def pending_info_codes(df_sp, col_map_sp, data_start_row=2):
+    """Tập mã SANPHAM (chữ hoa) có product_name bắt đầu "CẦN BỔ SUNG" — mã tạo từ phiếu NCC, chưa bổ sung thông tin."""
+    p_idx, n_idx = col_map_sp.get('product_code'), col_map_sp.get('product_name')
+    if p_idx is None or n_idx is None:
+        return set()
+    codes = set()
+    for r in range(data_start_row, len(df_sp)):
+        row = df_sp.iloc[r]
+        name = str(row[n_idx]).strip() if pd.notna(row[n_idx]) else ""
+        if name.upper().startswith(PENDING_INFO_PREFIX):
+            code = clean_code(row[p_idx]).upper() if pd.notna(row[p_idx]) else ""
+            if code:
+                codes.add(code)
+    return codes
+
+
+def drop_pending_info(records, row_indices, codes):
+    """Bỏ các dòng thuộc mã chưa bổ sung (giữ nguyên thứ tự, không đánh dấu trạng thái) và in 1 dòng báo."""
+    if not codes:
+        return records, row_indices
+    keep_rec, keep_idx, skipped = [], [], []
+    for rec, idx in zip(records, row_indices):
+        code = clean_code(rec.get('product_code', '')).upper()
+        if code in codes:
+            skipped.append(code)
+            continue
+        keep_rec.append(rec)
+        keep_idx.append(idx)
+    if skipped:
+        uniq = sorted(set(skipped))
+        print(f"⏭️ Bỏ qua {len(uniq)} mã chưa bổ sung (CẦN BỔ SUNG): {', '.join(uniq[:10])}{' …' if len(uniq) > 10 else ''}")
+    return keep_rec, keep_idx
 
 
 def safe_write_cell(ws, row, col, value):
@@ -1028,6 +1068,7 @@ def process_export_task(choice, loader):
 
         df_sp, _ = loader.load_sheet('SANPHAM')
         _, col_map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
+        skip_codes = pending_info_codes(df_sp, col_map_sp)
 
         price_map = {}
         for r in range(2, len(df_sp)):
@@ -1050,6 +1091,7 @@ def process_export_task(choice, loader):
             ]
 
             total_exported_sku = 0
+            skipped_full = set()
             for kho_code, sheet_k in kho_configs:
                 df_k, _ = loader.load_sheet(sheet_k)
                 _, col_map_k = DynamicHeaderScanner.scan_data_headers(df_k)
@@ -1066,6 +1108,9 @@ def process_export_task(choice, loader):
                     if sz.endswith('.0'): sz = sz[:-2]
 
                     if not pcode:
+                        continue
+                    if pcode.upper() in skip_codes:
+                        skipped_full.add(pcode.upper())
                         continue
 
                     try:
@@ -1091,6 +1136,8 @@ def process_export_task(choice, loader):
                 exported_files.append(out_file)
                 total_exported_sku += len(out_rows)
 
+            if skipped_full:
+                print(f"⏭️ Bỏ qua {len(skipped_full)} mã chưa bổ sung (CẦN BỔ SUNG): {', '.join(sorted(skipped_full)[:10])}{' …' if len(skipped_full) > 10 else ''}")
             exported_filepath = "\n📁 ".join(exported_files)
             success_msg = f"\n✅ Đã xuất FULL toàn bộ {total_exported_sku} SKU tồn kho Website thành công!\n📁 {exported_filepath}\n"
             if HAS_RICH:
@@ -1122,6 +1169,7 @@ def process_export_task(choice, loader):
                     rec[k] = row_data[idx] if idx < len(row_data) else ""
                 pending_records.append(rec)
 
+        pending_records, pending_row_indices = drop_pending_info(pending_records, pending_row_indices, skip_codes)
         if not pending_records:
             msg = "ℹ️ Không có dòng nào mới cần xuất Website Stock (Tất cả đã 'Done')."
             if HAS_RICH: console.print(Panel(msg, border_style="yellow"))
@@ -1602,6 +1650,15 @@ def process_export_task(choice, loader):
             for var_name, c_idx in col_map.items():
                 rec[var_name] = row[c_idx] if pd.notna(row[c_idx]) else ""
             pending_records.append(rec)
+
+    if choice in PENDING_INFO_SKIP_TASKS:
+        if sheet_name == 'SANPHAM':
+            skip_codes = pending_info_codes(df_raw, col_map, data_start_row)
+        else:
+            df_sp_chk, _ = loader.load_sheet('SANPHAM')
+            sp_hdr_idx, col_map_sp_chk = DynamicHeaderScanner.scan_data_headers(df_sp_chk)
+            skip_codes = pending_info_codes(df_sp_chk, col_map_sp_chk, (sp_hdr_idx + 1) if sp_hdr_idx is not None else 2)
+        pending_records, pending_row_indices = drop_pending_info(pending_records, pending_row_indices, skip_codes)
 
     if not pending_records:
         msg = f"✨ Tất cả các bản ghi trong tab {sheet_name} đều đã hoàn thành (Done) cho tác vụ [{choice}]!"

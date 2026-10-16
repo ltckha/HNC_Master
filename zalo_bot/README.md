@@ -141,6 +141,7 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
     - KHO: thêm dòng tồn đầu 0 cho **cả 2 kho × day_size** (công thức FSKU + tồn hiện tại dựng theo tên cột NHAP / XUAT / BAN, giống menu HNC "Đồng bộ SKU").
     - Mã cũ nhập size / kho chưa có dòng KHO: thêm dòng KHO đó luôn (lấy vị trí kệ của dòng cùng mã).
     - Ghi xong gửi sync-hint `SANPHAM`, `KHO15E`, `KHOY3C`, `NHAP` (gom 60 giây như mọi lần ghi).
+    - Mã còn "CẦN BỔ SUNG" tự bị **bỏ qua** khi menu HNC xuất web cũ / Shopee / TikTok / MISA (danh mục + phiếu nhập; in 1 dòng "Bỏ qua n mã chưa bổ sung", trạng thái để trống để xuất sau) và khi cổng `mark_exported` đánh dấu (trả `chua_bo_sung`). In tem, đồng bộ kho vẫn chạy. Bổ sung xong: sửa `product_name` (bỏ chữ "CẦN BỔ SUNG"), điền giá / thuộc tính.
   - Tồn hiện tại và các màu của mã gốc: web tự lấy từ D1, không có API tra.
   - Kiểm hết trước: có dòng lỗi (`loi_dong` hoặc `results[].error`) thì không ghi dòng nào.
 - **Dòng NHAP:**
