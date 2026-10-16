@@ -44,7 +44,7 @@ const ACTIONS = {
 const HELP_TEXT = [
   '📖 HƯỚNG DẪN BOT KHO HNC',
   '🔎 Kiểm hàng: TH2040D 40  |  TH2040 (mọi màu)',
-  '🛒 Bán: ban TH2040D 40 YEN 800k',
+  '🛒 Bán: ban TH2040D 40 YEN 800k  (bán sàn / web: thêm shopee | tiktok | web)',
   '📥 Nhập: nhap TH2040D 38/2 39 TBH',
   '↩️ Khách trả hàng / huỷ đơn: nhap TH2040D 40 15E tra hang',
   '📤 Xuất: xuat TH2040D 41 15E',
@@ -264,7 +264,7 @@ function parseMessage_(textRaw, known) {
 
   const p = {
     action, kho: '', khoFrom: '', khoTo: '', location: '', color: '', price: '',
-    code: '', baseCode: '', sizes: [], qty: 0, sizeErrors: [], reportDate: null, text,
+    code: '', baseCode: '', sizes: [], qty: 0, sizeErrors: [], reportDate: null, channel: '', text,
   };
   if (action === ACTIONS.HELP || action === ACTIONS.UNDO || action === ACTIONS.INVOICE) return p;
   // Trả hàng / huỷ đơn: "tra hang", "trả hàng", "tra lai", "khach tra", "hang tra" (chỉ có tác dụng với lệnh nhập)
@@ -272,6 +272,15 @@ function parseMessage_(textRaw, known) {
   if (action === ACTIONS.REPORT) { p.reportDate = parseReportDate_(n); return p; }
 
   const used = {}; // chỉ số token đã dùng cho kho / vị trí / giá / mã
+
+  // ---- Kênh bán (chỉ khi bán ngoài cửa hàng): shopee / tiktok / web. Trống = bán tại cửa hàng theo KHO ----
+  if (action === ACTIONS.SELL) {
+    toks.forEach((t, i) => {
+      const tk = t.replace(/[^a-z]/g, '');
+      const ch = tk === 'shopee' ? 'shopee' : (tk === 'tiktok' || tk === 'tt') ? 'tiktok' : tk === 'web' ? 'web' : '';
+      if (ch && !p.channel) { p.channel = ch; used[i] = true; }
+    });
+  }
 
   // ---- Kho ----
   const khoRe = '(yen|y3c|3c|tbh|15e)';
@@ -536,7 +545,8 @@ function doMovement_(p, action, kho, dryRun) {
       }
     }
     if (!dryRun) {
-      if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho, 'cua_hang', CTX.seller));
+      // channel trống = bán tại cửa hàng theo KHO (quy ước 16/10); chỉ ghi khi bán ngoài cửa hàng
+      if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller));
       else if (action === ACTIONS.OUT) ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
       else ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, action === ACTIONS.IN && p.returnGoods));
     }
@@ -552,6 +562,7 @@ function doMovement_(p, action, kho, dryRun) {
   return {
     ok: true, ops, label, warnings,
     text: (action === ACTIONS.IN && p.returnGoods ? '↩️ TRẢ HÀNG: nhập lại ' + p.code : '✅ ' + action + ' ' + p.code) +
+      (action === ACTIONS.SELL && p.channel ? ' (' + p.channel + ')' : '') +
       (color ? ' màu ' + color : '') + ' kho ' + kho +
       (action === ACTIONS.SELL && p.price ? ' giá ' + money_(p.price) : '') +
       '\n  ' + written.join('\n  ') + '\n→ tab ' + tab +

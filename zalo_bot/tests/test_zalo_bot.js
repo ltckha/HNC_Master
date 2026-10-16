@@ -225,6 +225,20 @@ eq('hết phiếu chưa có', /Không còn phiếu nào/.test(ctx.doInvoice_('ho
 eq('mã phiếu sai', /Không có phiếu nào/.test(ctx.doInvoice_('hoadon 999999', true).text), true);
 eq('lệnh hoadon nhận dạng', [ctx.parseMessage_('hoá đơn').action, ctx.parseMessage_('Hoadon 260920 da').action], ['HOÁ ĐƠN NCC', 'HOÁ ĐƠN NCC']);
 
+// ---- Kênh bán trong lệnh ban ----
+const chOf = t => ctx.parseMessage_(t, ctx.knownCodes_()).channel;
+eq('ban tại quầy → channel trống', chOf('ban TH2040D 40 YEN 800k'), '');
+eq('ban shopee / tiktok / web', [chOf('ban TH2040D 40 YEN shopee'), chOf('bán TH2040D 40 15E TikTok 800k'), chOf('ban TH2040D 40 yen web')], ['shopee', 'tiktok', 'web']);
+eq('chữ kênh không lẫn vào mã', ctx.parseMessage_('ban TH2040D 40 YEN shopee', ctx.knownCodes_()).code, 'TH2040D');
+const realAB = ctx.appendByHeader_;
+let banOpt = null;
+ctx.appendByHeader_ = (sheet, values, fb, check, optional) => { if (sheet === 'BAN') banOpt = optional; return { type: 'row', sheet, row: 9, written: Object.keys(values), check: check || {} }; };
+ctx.handleText_('ban TH2040D 40 YEN', false, 'chat1', 'Lan');
+eq('Zalo bán tại quầy ghi channel trống', [banOpt.channel, banOpt.seller], ['', 'Lan']);
+ctx.handleText_('ban TH2040D 40 YEN shopee', false, 'chat1', 'Lan');
+eq('Zalo bán shopee ghi channel=shopee', banOpt.channel, 'shopee');
+ctx.appendByHeader_ = realAB;
+
 // ---- Cửa kho cho app ----
 DATA.XUAT = [['Ngày', 'product_code', 'product_color', 'KHO', 'item_size', 'item_quantity', 'FSKU']];
 const stk = (b, dry) => ctx.handleStock_(Object.assign({ seller: 'nv@hn.vn' }, b), !!dry);
