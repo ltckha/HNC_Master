@@ -112,6 +112,39 @@ Trả về:
   - Với `huy`: `không có thao tác để huỷ…`, `chỉ huỷ được thao tác của chính mình`, `Không huỷ được vì dữ liệu đã thay đổi…`.
 - Ghi xong (kể cả huỷ), bot tự báo web chép lại đúng tab (NHAP / XUAT / KHO… kèm KHO15E, KHOY3C).
 
+## Nhập từ phiếu nhà cung cấp (API cho app + ảnh qua Zalo)
+
+Luồng: chụp phiếu → Gemini đọc (1 lượt / phiếu) → **phiếu nháp** → app chia size khi đếm hàng thật → xác nhận → ghi NHAP bằng đúng hàm `nhap`.
+
+- **Khoá:** dùng chung `STOCK_KEY` (cùng màn Kho của app, cùng quyền nhập kho). Gọi `POST {WEBAPP_URL}?stock_key=<STOCK_KEY>` với `action` dưới đây. Cần thêm Script Properties `GEMINI_API_KEY`.
+- **Lưu phiếu:** Drive riêng tư `Phiếu mua hàng` (theo ID `PN_FOLDER_ID`, mặc định thư mục có sẵn).
+  - Chưa chia kho: `Chưa chia/<NCC>/<mã>.jpg + <mã>.json`.
+  - Xác nhận xong: chuyển sang `<hộ>/<NCC>/` (Hải Nancy = 15E, Yen Leather = Y3C; chia cả 2 kho thì hộ thứ 2 có bản sao ảnh).
+  - Chỉ mục ở Script Properties `pnx_<mã>`.
+- **Giá / NCC chỉ HNC giữ:** mọi trả về cho web KHÔNG có đơn giá. Riêng `xem_nhap` có `kem_gia: true` thì trả giá (chỉ dùng cho HNC).
+
+| action | Gửi | Trả |
+|---|---|---|
+| `doc_phieu` | `anh_base64` (≤ 8 MB, nên nén ~2 MB), `mime`, `nguon` ("app"), `nguoi` (email) | `{ok, id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai:"cho_chia"}` |
+| `ds_nhap` | `limit?` (50), `tat_ca?` (hiện cả phiếu đã bỏ) | `{ok, phieu:[{id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai}]}`, mới nhất trước. `trang_thai`: `cho_chia` / `da_ghi` / `huy` |
+| `xem_nhap` | `id`, `kem_anh?` | `{…đầu phiếu, dong:[{dong, ma_ncc, mo_ta, sl_phieu, goi_y_ma_hnc?}], da_ghi?, anh_mime?, anh_base64?}` |
+| `xac_nhan` | `id`, `ticket_id`, `nguoi`, `dry_run?`, `dong:[{dong, ma_hnc, kho, sizes:{"39":2,"40":1}, sl?, ly_do?, ghi_chu?}]` | Giống cửa kho: `{ok, results:[…, dong_phieu], canh_bao:[…], undo_until}` |
+| `huy_nhap` | `ticket_id` (của `xac_nhan`), `nguoi` | `{ok, id}`. Chỉ của chính `nguoi`, ≤ 10 phút; phiếu về `cho_chia` |
+| `bo_nhap` | `id`, `nguoi` | `{ok, trang_thai:"huy"}`. Chỉ phiếu `cho_chia` (quyền "Chủ" do app kiểm) |
+
+- **`xac_nhan`:**
+  - Mỗi dòng phiếu: tổng `sizes` (hàng không size dùng `sl` hoặc khoá `""`) phải bằng `sl_phieu`. Lệch thì bắt buộc `ly_do`: `thieu` / `du` / `loi_tra_lai` / `khac`, ghi vào `canh_bao` và lưu kèm phiếu. Không nhận dòng nào thì gửi `sizes` rỗng + `ly_do`.
+  - Mã HNC phải có trong SANPHAM / KHO. Mẫu mới bị chặn: tạo SANPHAM trước.
+  - Kiểm hết trước: có dòng lỗi (`loi_dong` hoặc `results[].error`) thì không ghi dòng nào.
+- **Dòng NHAP:**
+  - Như nhập thường (anh Kha 16/10): không đánh dấu `Zalo_Update`, nên menu HNC in tem, đồng bộ kho, xuất phiếu nhập MISA.
+  - `Số chứng từ (*)` = mã phiếu (`PN<yyMMdd>-XXXX`); `Ngày chứng từ` = ngày xác nhận.
+  - Bot học bảng ghép (mã NCC / mô tả → mã HNC) để gợi ý lần sau.
+- **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` = mã phiếu thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
+- **Ảnh qua bot Zalo:**
+  - Gửi ảnh phiếu vào bot. Sự kiện `message.image.received` (`message.photo_url`, theo tài liệu bên thứ ba, cần kiểm bằng tin thật) → đọc → bot trả "📄 Đã đọc phiếu … → mở app chia size: <web>/app#phieu-<mã>".
+  - Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/app`. Sự kiện Zalo chưa xử lý được ghi vào Nhật ký để kiểm.
+
 ## Cửa "báo đơn web" (API)
 
 Web gửi tin báo đơn mới tới **chat Zalo của anh** qua bot. Cửa này **chỉ nhắn tin**: không đọc lệnh, không ghi Sheet.
@@ -141,7 +174,7 @@ Không thêm tab hay cột nào vào Sheet; bot tự tính từ dữ liệu sẵ
   - **2 kho = 2 hộ kinh doanh**, mỗi hộ 1 hoá đơn riêng. Mã phiếu dạng `260925-TP-15E` (ngày yyMMdd, mã NCC bỏ chữ "NCC", kho).
   - Dòng NHAP chưa có KHO (chưa chia hàng) thì chưa đòi hoá đơn. Bỏ dòng trả hàng (`TRA-`) và dòng SL 0.
   - Tiền = SL × `invoice_price` (đơn giá hoá đơn trong SANPHAM).
-- **Hoá đơn đã về:** bot tự đọc thư mục Drive `My Drive/Thue2026/Hoá đơn 2026/<hộ>/<nhà cung cấp>/<yyyymmdd>/` (thư mục ngày có file).
+- **Hoá đơn đã về:** bot tự đọc thư mục Drive `Hoá đơn 2026/<hộ>/<nhà cung cấp>/<yyyymmdd>/` (tìm theo ID; trước ở `Thue2026`, nay `HNC/Thue/2026`) (thư mục ngày có file).
   - Hộ "Hải Nancy" = kho **15E**, "Yen Leather" = kho **Y3C**.
   - Mỗi thư mục ngày được ghép với **phiếu gần nhất chưa ghép** có ngày nhập ≤ ngày hoá đơn.
   - Đổi thư mục (vd năm 2027): đặt `INVOICE_FOLDER_ID`.
