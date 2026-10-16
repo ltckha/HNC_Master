@@ -172,6 +172,50 @@ def safe_write_cell(ws, row, col, value):
         pass
 
 
+# Ảnh file đăng sàn (Shopee / TikTok) lấy từ web mới: <WEB_IMG_BASE>/img/<mã>/<n>.jpg (JPG ≤1600, công khai, đúng thứ tự ảnh trên web).
+# Đổi gốc 1 chỗ: ngày chuyển tên miền đặt WEB_IMG_BASE=https://giayhainancy.vn trong .env (hoặc sửa mặc định dưới).
+WEB_IMG_BASE = (os.getenv("WEB_IMG_BASE") or "https://giayhainancy-web.giayhainancy-web.workers.dev").rstrip("/")
+SALE_MAX_IMAGES = 9  # Shopee / TikTok nhận tối đa 9 ảnh
+_web_img_cache = {}
+_web_img_state = {"down": False}
+
+
+def web_image_urls(code, max_n=SALE_MAX_IMAGES):
+    """Danh sách link ảnh của mã trên web mới (dò 1.jpg, 2.jpg… tới ảnh đầu tiên không có). None = không gọi được web."""
+    code = clean_code(code).upper()
+    if not code or _web_img_state["down"]:
+        return None
+    if code in _web_img_cache:
+        return _web_img_cache[code]
+    urls = []
+    try:
+        for n in range(1, max_n + 1):
+            u = f"{WEB_IMG_BASE}/img/{requests.utils.quote(code)}/{n}.jpg"
+            r = requests.head(u, timeout=10, allow_redirects=True)
+            if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
+                break
+            urls.append(u)
+    except requests.RequestException as e:
+        _web_img_state["down"] = True
+        print(f"⚠️ Không gọi được web mới để lấy ảnh ({e.__class__.__name__}) → dùng ảnh cũ trong Sheet cho cả lượt xuất này.")
+        return None
+    _web_img_cache[code] = urls
+    return urls
+
+
+def sale_images(code, sheet_pics):
+    """9 link ảnh cho file sàn: ảnh web mới nếu có; web chưa có ảnh / không gọi được thì dùng image_01..09 cũ trong Sheet."""
+    old = ["" if x is None or (isinstance(x, float) and x != x) else str(x).strip() for x in sheet_pics]  # bỏ ô trống / NaN
+    urls = web_image_urls(code)
+    if urls:
+        picks = urls
+    else:
+        picks = old
+        if urls is not None and any(old):
+            print(f"⚠️ {code}: web mới chưa có ảnh → dùng ảnh web cũ trong Sheet")
+    return (list(picks) + [""] * SALE_MAX_IMAGES)[:SALE_MAX_IMAGES]
+
+
 def fetch_web_images(url, product_code=""):
     """Cào tự động tối đa 10 ảnh sản phẩm chất lượng cao chuẩn theo product_code từ link web, loại bỏ hoàn toàn logo và ảnh rác."""
     if not url or not str(url).startswith('http'):
@@ -1412,16 +1456,10 @@ def process_export_task(choice, loader):
             height = sub_info.get('Chiều cao', 12)
             attrs = map_tiktok_attributes(sub_info)
 
-            pic1 = str(row[col_map_sp.get('image_01')] if col_map_sp.get('image_01') is not None else row[col_map_sp.get('Pic 1', 0)] or '').strip()
-            pic2 = str(row[col_map_sp.get('image_02', 0)] or '').strip()
-            pic3 = str(row[col_map_sp.get('image_03', 0)] or '').strip()
-            pic4 = str(row[col_map_sp.get('image_04', 0)] or '').strip()
-            pic5 = str(row[col_map_sp.get('image_05', 0)] or '').strip()
-            pic6 = str(row[col_map_sp.get('image_06', 0)] or '').strip()
-            pic7 = str(row[col_map_sp.get('image_07', 0)] or '').strip()
-            pic8 = str(row[col_map_sp.get('image_08', 0)] or '').strip()
-            pic9 = str(row[col_map_sp.get('image_09', 0)] or '').strip()
-
+            sheet_pics = [row[col_map_sp['image_0' + str(n)]] if col_map_sp.get('image_0' + str(n)) is not None else '' for n in range(1, 10)]
+            if col_map_sp.get('image_01') is None and col_map_sp.get('Pic 1') is not None:
+                sheet_pics[0] = row[col_map_sp['Pic 1']]
+            # Ảnh lấy lúc ghi (chỉ mã có trong file mẫu, chế độ 3) — không dò web cho mọi dòng SANPHAM
             data_obj = {
                 'pcode': pcode,
                 'pname': pname,
@@ -1434,15 +1472,7 @@ def process_export_task(choice, loader):
                 'length': length,
                 'width': width,
                 'height': height,
-                'pic1': pic1,
-                'pic2': pic2,
-                'pic3': pic3,
-                'pic4': pic4,
-                'pic5': pic5,
-                'pic6': pic6,
-                'pic7': pic7,
-                'pic8': pic8,
-                'pic9': pic9,
+                'sheet_pics': sheet_pics,
                 'attrs': attrs
             }
             prod_full_map[pcode.lower()] = data_obj
@@ -1550,15 +1580,10 @@ def process_export_task(choice, loader):
                 if wid_col: safe_write_cell(ws_tpl, r, wid_col, pdata['width'])
                 if hei_col: safe_write_cell(ws_tpl, r, hei_col, pdata['height'])
                 if cod_col: safe_write_cell(ws_tpl, r, cod_col, "Y")
-                if pic1_col and pdata['pic1']: safe_write_cell(ws_tpl, r, pic1_col, pdata['pic1'])
-                if pic2_col and pdata['pic2']: safe_write_cell(ws_tpl, r, pic2_col, pdata['pic2'])
-                if pic3_col and pdata['pic3']: safe_write_cell(ws_tpl, r, pic3_col, pdata['pic3'])
-                if pic4_col and pdata['pic4']: safe_write_cell(ws_tpl, r, pic4_col, pdata['pic4'])
-                if pic5_col and pdata['pic5']: safe_write_cell(ws_tpl, r, pic5_col, pdata['pic5'])
-                if pic6_col and pdata['pic6']: safe_write_cell(ws_tpl, r, pic6_col, pdata['pic6'])
-                if pic7_col and pdata['pic7']: safe_write_cell(ws_tpl, r, pic7_col, pdata['pic7'])
-                if pic8_col and pdata['pic8']: safe_write_cell(ws_tpl, r, pic8_col, pdata['pic8'])
-                if pic9_col and pdata['pic9']: safe_write_cell(ws_tpl, r, pic9_col, pdata['pic9'])
+                if 'pics' not in pdata:
+                    pdata['pics'] = sale_images(pdata['pcode'], pdata['sheet_pics'])  # ảnh web mới, thiếu thì ảnh cũ trong Sheet
+                for p_col, p_url in zip([pic1_col, pic2_col, pic3_col, pic4_col, pic5_col, pic6_col, pic7_col, pic8_col, pic9_col], pdata['pics']):
+                    if p_col and p_url: safe_write_cell(ws_tpl, r, p_col, p_url)
                 if size_chart_col and pdata['tiktok_size_url']: safe_write_cell(ws_tpl, r, size_chart_col, pdata['tiktok_size_url'])
 
             # Điền đầy đủ thuộc tính cho chế độ 2 & 3
@@ -1742,15 +1767,8 @@ def process_export_task(choice, loader):
             width = sub_info.get('Chiều rộng', 20)
             height = sub_info.get('Chiều cao', 12)
 
-            pic1 = str(rec.get('image_01') or rec.get('Pic 1', '')).strip()
-            pic2 = str(rec.get('image_02', '')).strip()
-            pic3 = str(rec.get('image_03', '')).strip()
-            pic4 = str(rec.get('image_04', '')).strip()
-            pic5 = str(rec.get('image_05', '')).strip()
-            pic6 = str(rec.get('image_06', '')).strip()
-            pic7 = str(rec.get('image_07', '')).strip()
-            pic8 = str(rec.get('image_08', '')).strip()
-            pic9 = str(rec.get('image_09', '')).strip()
+            pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9 = sale_images(pcode, [rec.get('image_01') or rec.get('Pic 1', '')] +
+                [rec.get(f'image_0{n}', '') for n in range(2, 10)])  # ảnh web mới, thiếu thì ảnh cũ trong Sheet
 
             # Lấy dải Size chuẩn từ cột Size (đã bao gồm đầy đủ dải size và size plus)
             all_sizes = unroll_sizes(rec.get('Size', ''))
@@ -1934,15 +1952,8 @@ def process_export_task(choice, loader):
             width = sub_info.get('Chiều rộng', 20)
             height = sub_info.get('Chiều cao', 12)
 
-            pic1 = str(rec.get('image_01') or rec.get('Pic 1', '')).strip()
-            pic2 = str(rec.get('image_02', '')).strip()
-            pic3 = str(rec.get('image_03', '')).strip()
-            pic4 = str(rec.get('image_04', '')).strip()
-            pic5 = str(rec.get('image_05', '')).strip()
-            pic6 = str(rec.get('image_06', '')).strip()
-            pic7 = str(rec.get('image_07', '')).strip()
-            pic8 = str(rec.get('image_08', '')).strip()
-            pic9 = str(rec.get('image_09', '')).strip()
+            pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9 = sale_images(pcode, [rec.get('image_01') or rec.get('Pic 1', '')] +
+                [rec.get(f'image_0{n}', '') for n in range(2, 10)])  # ảnh web mới, thiếu thì ảnh cũ trong Sheet
 
             # Lấy dải Size chuẩn từ cột Size
             all_sizes = unroll_sizes(rec.get('Size', ''))
