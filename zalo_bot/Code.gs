@@ -2625,6 +2625,18 @@ function testSale() {
 }
 
 /** Kiểm cấu hình Script Properties: chỉ in tên, độ dài, các khoá có khác nhau không — KHÔNG in giá trị. */
+/**
+ * Chạy 1 lần trong trình soạn thảo (anh Kha 16/10): huỷ phiếu thử PN261016-TO6N bằng đúng logic huy_nhap (quyền Chủ, quá 10 phút).
+ * Kiểm trước mã chưa có giao dịch khác; xong gửi sync-hint. Xoá hàm này sau khi chạy.
+ */
+function huyPhieuThu() {
+  MEMO = {};
+  const r = receiptUndo_({ ticket_id: 'PN-9950c8c1-e2e', id: 'PN261016-TO6N', chu: true }, 'ltckha@gmail.com', false);
+  if (r._sync && r._sync.length) queueSyncHint_(r._sync);
+  delete r._sync;
+  console.log(JSON.stringify(r));
+}
+
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
