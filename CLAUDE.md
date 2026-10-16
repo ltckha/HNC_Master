@@ -67,7 +67,7 @@ source venv/bin/activate
   python main.py
   # hoặc nhấp đúp: run.command
   ```
-- **File xuất ra:** Nằm tại `My Drive/Spark/HNC_Master/HNC_Exported_Files/` (thứ tự fallback: `My Drive/Spark/HNC_Master` → `My Drive/HNC_Master` → `./HNC_Exported_Files` local).
+- **File xuất ra:** `My Drive/HNC/He_thong/HNC_Exported_Files/` (đường dẫn khai 1 chỗ ở `hnc_paths.py`: `My Drive/HNC/He_thong` → chỗ cũ `My Drive/Spark/HNC_Master`; không thấy thì báo lỗi, không dùng thư mục local). Chứng từ thuế: `My Drive/HNC/Thue/<năm>/` (bot tìm theo ID thư mục).
 
 ### 3. Cấu hình & Biến môi trường:
 - File cấu hình: `.env` (chứa `GEMINI_API_KEY`).
