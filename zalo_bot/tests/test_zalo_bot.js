@@ -18,7 +18,7 @@ DATA.SANPHAM = [['Mã hàng hóa cha', '', '', '', '', '', ''], ['parent_product
   ['CXE', 'CXED', '', 'Thiếu ảnh', 'Chú Dũng', '300000', 'Giày CXED']];
 DATA.SUB = [['Tên Ngành Hàng', 'Mã đối tượng', 'Tên đối tượng', 'Số điện thoại', 'supplier', 'Thuế suất'],
   ['Giày tây nam', 'NCCTP', 'CÔNG TY TP', '0901', 'Tuấn Phong', '8%'], ['Giày mọi nam', 'NCCQT', 'HKD QT', '0902', 'Chú Dũng', '0']];
-DATA.NHAP = [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'product_color', 'KHO', 'item_size', 'Số lượng (*)'],
+DATA.NHAP = [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'product_color', 'KHO', 'item_size', 'Số lượng (*)', 'FSKU', 'web_stock', 'web_label', 'misa_stock', 'kho_sync'],
   ['', '', 'product_code', 'product_color', 'KHO', 'item_size', 'item_quantity'],
   ['10/09/2026', '', 'TH2040D', 'Đen', '15E', '40', '2'], ['10/09/2026', '', 'TH2040N', 'Nâu', '15E', '41', '1'],
   ['10/09/2026', '', 'TH2040D', 'Đen', 'Y3C', '42', '1'], ['20/09/2026', '', 'TH2040D', 'Đen', '15E', '39', '3'],
@@ -35,10 +35,18 @@ function mockSheet(n) {
   return {
     getDataRange: () => ({ getValues: () => d }),
     getLastColumn: () => Math.max.apply(null, d.map(r => r.length)),
-    getRange: (r, c, nr, nc) => ({
-      getValues: () => d.slice(r - 1, r - 1 + (nr || 1)).map(row => row.slice(c - 1, c - 1 + (nc || 1))),
-      setValue: v => WRITES.push({ sheet: n, cell: [r, c], v }),
-    }),
+    getMaxRows: () => d.length + 50,
+    insertRowsAfter: () => {},
+    getRange: (r, c, nr, nc) => {
+      const put = v => { while (d.length < r) d.push([]); while (d[r - 1].length < c) d[r - 1].push(''); d[r - 1][c - 1] = v; };
+      return {
+        getValues: () => Array.from({ length: nr || 1 }, (_, k) => Array.from({ length: nc || 1 }, (_, j) => ((d[r - 1 + k] || [])[c - 1 + j] ?? ''))),
+        getValue: () => ((d[r - 1] || [])[c - 1] ?? ''),
+        setValue: v => { WRITES.push({ sheet: n, cell: [r, c], v }); if (n !== 'SANPHAM' && n !== 'META') put(v); },
+        setFormula: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
+        clearContent: () => put(''),
+      };
+    },
     getRangeList: list => ({ setValue: v => WRITES.push({ sheet: n, cells: list, v }) }),
   };
 }
@@ -65,7 +73,7 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -216,6 +224,38 @@ ctx.doInvoice_('hoadon 260910-TP-Y3C khong', false);
 eq('hết phiếu chưa có', /Không còn phiếu nào/.test(ctx.doInvoice_('hoadon', true).text), true);
 eq('mã phiếu sai', /Không có phiếu nào/.test(ctx.doInvoice_('hoadon 999999', true).text), true);
 eq('lệnh hoadon nhận dạng', [ctx.parseMessage_('hoá đơn').action, ctx.parseMessage_('Hoadon 260920 da').action], ['HOÁ ĐƠN NCC', 'HOÁ ĐƠN NCC']);
+
+// ---- Cửa kho cho app ----
+DATA.XUAT = [['Ngày', 'product_code', 'product_color', 'KHO', 'item_size', 'item_quantity', 'FSKU']];
+const stk = (b, dry) => ctx.handleStock_(Object.assign({ seller: 'nv@hn.vn' }, b), !!dry);
+let sr = stk({ action: 'xuat', ticket_id: 'S1', lines: [{ code: 'TH2040D', size: 41, qty: 3, warehouse: 'Y3C' }] }, true);
+eq('xuất dry-run cảnh báo tồn âm', [sr.ok, sr.dry_run, sr.results[0].warehouse, /tồn 2, xuất 3/.test(sr.results[0].warnings[0])], [true, true, 'Y3C', true]);
+sr = stk({ action: 'nhap', ticket_id: 'S2', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }, { code: 'KHONGCO9X', size: 40, warehouse: '15E' }] }, true);
+eq('dòng lỗi → không ghi dòng nào', [sr.ok, sr.results.map(x => x.ok), /không có trong SANPHAM/.test(sr.results[1].error)], [false, [true, false], true]);
+eq('thiếu seller', /thiếu seller/.test(ctx.handleStock_({ action: 'nhap', ticket_id: 'S3', lines: [{}] }, true).error), true);
+eq('action sai', ctx.handleStock_({ action: 'ban', ticket_id: 'S3', seller: 'a' }, true).ok, false);
+sr = stk({ action: 'chuyen_kho', ticket_id: 'S4', from: 'YEN', to: 'TBH', lines: [{ code: 'TH2040D', size: 40, qty: 1 }] }, true);
+eq('chuyển kho dry-run', [sr.ok, sr.results[0].from, sr.results[0].to], [true, 'Y3C', '15E']);
+eq('chuyển kho cùng kho → lỗi', stk({ action: 'chuyen_kho', ticket_id: 'S5', from: '15E', to: 'TBH', lines: [{ code: 'TH2040D', size: 40 }] }, true).ok, false);
+sr = stk({ action: 'chuyen_vi_tri', ticket_id: 'S6', warehouse: 'Y3C', location: 'th2', lines: [{ code: 'TH2040D' }] }, true);
+eq('chuyển vị trí TH2 (thùng)', [sr.ok, sr.results[0].location], [true, 'TH2']);
+eq('vị trí sai dạng', /vị trí phải dạng/.test(stk({ action: 'chuyen_vi_tri', ticket_id: 'S7', warehouse: 'Y3C', location: 'X9', lines: [{ code: 'TH2040D' }] }, true).results[0].error), true);
+// Ghi thật xuất + chống trùng + huỷ
+const xuatLen = DATA.XUAT.length;
+sr = stk({ action: 'xuat', ticket_id: 'S8', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] });
+eq('xuất ghi thật 1 dòng XUAT', [sr.ok, sr.dry_run, sr.results[0].rows, DATA.XUAT.length, !!sr.undo_until], [true, false, ['XUAT!2'], xuatLen + 1, true]);
+eq('gửi lại cùng ticket → duplicate', stk({ action: 'xuat', ticket_id: 'S8', lines: [{ code: 'TH2040D', size: 41, warehouse: 'Y3C' }] }).duplicate, true);
+eq('người khác không huỷ được', /chính mình/.test(ctx.handleStock_({ action: 'huy', ticket_id: 'U0', seller: 'khac@hn.vn', undo_ticket_id: 'S8' }, false).error), true);
+sr = stk({ action: 'huy', ticket_id: 'U1', undo_ticket_id: 'S8' });
+eq('huỷ của chính mình → xoá ô đã ghi', [sr.ok, DATA.XUAT[1][1]], [true, '']);
+sr = stk({ action: 'huy', ticket_id: 'U2', undo_ticket_id: 'S8' });
+eq('huỷ lần 2 → không còn gì', [sr.ok, /không có thao tác/.test(sr.error)], [false, true]);
+// Trả hàng ghi NHAP TRA-
+const nhapLen = DATA.NHAP.length;
+sr = stk({ action: 'tra_hang', ticket_id: 'S9', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] });
+if (!sr.ok) console.log(JSON.stringify(sr));
+const newRow = DATA.NHAP[nhapLen] || [];
+eq('trả hàng ghi NHAP TRA-', [sr.ok, /^TRA-\d{6}$/.test(newRow[1]), newRow[2], newRow[4]], [true, true, 'TH2040D', '15E']);
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

@@ -71,6 +71,47 @@ Content-Type: application/json   (hoặc text/plain)
 
 **Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
 
+## Cửa "kho" cho app điện thoại (API)
+
+Các thao tác kho từ app đi qua bot, dùng lại đúng hàm của lệnh Zalo: cùng kiểm tra, cùng cảnh báo tồn âm, cùng cách ghi Sheet theo tên cột.
+
+**Khoá:** `STOCK_KEY` trong Script Properties, ≥ 16 ký tự, khác các khoá khác. Không dùng chung `SALE_KEY`, vì thao tác kho (xuất, chuyển kho, huỷ) quyền mạnh hơn ghi bán, nên cần khoá / đổi được độc lập. Web giữ cùng giá trị bằng `wrangler secret put STOCK_KEY`.
+
+**Gọi:** `POST {WEBAPP_URL}?stock_key=<STOCK_KEY>`, body JSON. Mọi thao tác đều có `action`, `ticket_id` (1-64 ký tự chữ / số / `_ . : -`, chống ghi trùng 30 ngày), `seller` (email người dùng app), `dry_run` (tuỳ chọn).
+
+| action | Trường thêm | Ghi vào |
+|---|---|---|
+| `nhap` | `lines: [{code, size, qty, warehouse}]` | NHAP (dấu `Zalo_Update`, giống lệnh `nhap`) |
+| `tra_hang` | như `nhap` | NHAP, Số chứng từ `TRA-<ddMMyy>`, dấu `Tra_hang` (không xuất phiếu nhập MISA) |
+| `xuat` | `lines: [{code, size, qty, warehouse}]` | XUAT |
+| `chuyen_kho` | `from`, `to` + `lines: [{code, size, qty}]` | XUAT ở kho nguồn + NHAP ở kho đích |
+| `chuyen_vi_tri` | `warehouse`, `location` + `lines: [{code, size?}]` | `product_location` tab KHO. Vị trí dạng `K12` / `B2` / `T4` / `S1` / `TH2` (K kệ, B bàn, T tủ, S sọc, TH thùng). Bỏ `size` = mọi size của mã |
+| `huy` | `undo_ticket_id` | Huỷ thao tác có `ticket_id` đó, **chỉ của chính `seller`**, trong ≤ 10 phút. Kiểm lại từng dòng như lệnh `huy`; dòng đã bị sửa / NHAP đã đồng bộ kho thì từ chối |
+
+- `warehouse` / `from` / `to`: `15E` / `Y3C` (nhận cả `TBH`, `YEN`, `3C`). `size` bỏ trống với hàng không size. `qty` 1-99, mặc định 1. Tối đa 50 dòng.
+- Mã phải có trong SANPHAM hoặc tab KHO.
+- Kiểm hết các dòng trước (chạy thử); có dòng lỗi thì **không ghi dòng nào**.
+
+**Ví dụ:**
+```json
+{ "action": "xuat", "ticket_id": "APP-K-20261016-0001", "seller": "nv@giayhainancy.vn",
+  "lines": [{ "code": "TH2040D", "size": 41, "qty": 1, "warehouse": "Y3C" }], "dry_run": true }
+```
+Trả về:
+```json
+{ "ok": true, "action": "xuat", "ticket_id": "APP-K-20261016-0001", "dry_run": false,
+  "results": [{ "line": 1, "code": "TH2040D", "size": "41", "qty": 1, "warehouse": "Y3C", "ok": true,
+                "warnings": ["size 41 kho Y3C: tồn 0, xuất 1 → tồn sẽ âm. Kiểm tra lại kho."], "rows": ["XUAT!2560"] }],
+  "undo_until": "2026-10-16T03:15:00.000Z" }
+```
+- **Lỗi** (`ok: false`):
+  - `unauthorized` / `chưa cấu hình STOCK_KEY…`.
+  - `action phải là…`, `ticket_id không hợp lệ`, `thiếu seller`.
+  - `Có dòng lỗi, chưa ghi dòng nào` kèm `results[].error`: `mã không hợp lệ`, `mã không có trong SANPHAM / KHO`, `size không hợp lệ`, `qty…`, `warehouse…`, `from / to…`, `vị trí phải dạng…`, `Thiếu size…`.
+  - `duplicate: true` (gửi lại cùng `ticket_id`, không ghi thêm); `partial: true` (ghi dở, **không gửi lại**).
+  - Với `huy`: `không có thao tác để huỷ…`, `chỉ huỷ được thao tác của chính mình`, `Không huỷ được vì dữ liệu đã thay đổi…`.
+- Ghi xong (kể cả huỷ), bot tự báo web chép lại đúng tab (NHAP / XUAT / KHO… kèm KHO15E, KHOY3C).
+
 ## Cửa "báo đơn web" (API)
 
 Web gửi tin báo đơn mới tới **chat Zalo của anh** qua bot. Cửa này **chỉ nhắn tin**: không đọc lệnh, không ghi Sheet.

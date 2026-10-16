@@ -86,6 +86,7 @@ function doPost(e) {
   if (e && e.parameter && e.parameter.sale_key !== undefined) return handleSaleRequest_(e);
   if (e && e.parameter && e.parameter.notify_key !== undefined) return handleNotifyRequest_(e);
   if (e && e.parameter && e.parameter.export_key !== undefined) return handleExportRequest_(e);
+  if (e && e.parameter && e.parameter.stock_key !== undefined) return handleStockRequest_(e);
   try {
     const props = PropertiesService.getScriptProperties();
     const key = props.getProperty('WEBHOOK_KEY');
@@ -549,7 +550,7 @@ function doMovement_(p, action, kho, dryRun) {
   const tab = action === ACTIONS.SELL ? 'BAN' : action === ACTIONS.OUT ? 'XUAT' : 'NHAP';
   const label = action + ' ' + p.code + ' (' + written.join(', ') + ') kho ' + kho;
   return {
-    ok: true, ops, label,
+    ok: true, ops, label, warnings,
     text: (action === ACTIONS.IN && p.returnGoods ? '↩️ TRẢ HÀNG: nhập lại ' + p.code : '✅ ' + action + ' ' + p.code) +
       (color ? ' màu ' + color : '') + ' kho ' + kho +
       (action === ACTIONS.SELL && p.price ? ' giá ' + money_(p.price) : '') +
@@ -614,8 +615,13 @@ function doUndo_(chatId, dryRun) {
   const raw = chatId ? cache.get('last_' + chatId) : null;
   if (!raw) return { text: 'ℹ️ Không có thao tác nào của bạn trong 10 phút qua để huỷ.' };
   const last = JSON.parse(raw);
+  const r = undoRecord_(last, dryRun);
+  if (r.ok && !dryRun) cache.remove('last_' + chatId);
+  return r;
+}
 
-  // Kiểm tra toàn bộ trước, chỉ huỷ khi mọi dòng còn nguyên như lúc bot ghi
+/** Huỷ 1 bản ghi thao tác ({label, ops}): kiểm tra toàn bộ trước, chỉ huỷ khi mọi dòng còn nguyên như lúc bot ghi. */
+function undoRecord_(last, dryRun) {
   const problems = [];
   last.ops.forEach(op => {
     const sheet = getSheet_(op.sheet);
@@ -638,7 +644,8 @@ function doUndo_(chatId, dryRun) {
     }
   });
   if (problems.length) {
-    return { text: '⛔ Không huỷ được vì dữ liệu đã thay đổi:\n  ' + uniq_(problems).join('\n  ') + '\nVui lòng sửa tay trong Sheet.' };
+    return { ok: false, problems: uniq_(problems),
+      text: '⛔ Không huỷ được vì dữ liệu đã thay đổi:\n  ' + uniq_(problems).join('\n  ') + '\nVui lòng sửa tay trong Sheet.' };
   }
 
   if (!dryRun) {
@@ -652,9 +659,8 @@ function doUndo_(chatId, dryRun) {
         op.written.forEach(name => sheet.getRange(op.row, col[name] + 1).clearContent());
       }
     });
-    cache.remove('last_' + chatId);
   }
-  return { text: '↩️ Đã huỷ: ' + last.label, touched: dryRun ? [] : uniq_(last.ops.map(o => o.sheet)) };
+  return { ok: true, text: '↩️ Đã huỷ: ' + last.label, touched: dryRun ? [] : uniq_(last.ops.map(o => o.sheet)) };
 }
 
 /** Báo cáo bán trong 1 ngày theo kho, từ tab BAN. Doanh thu = Giá × số lượng. */
@@ -818,6 +824,187 @@ function pruneTickets_(props, prefix) {
     if (k.indexOf(prefix) !== 0) return;
     try { if (JSON.parse(all[k]).t < cutoff) props.deleteProperty(k); } catch (e) { /* bỏ qua */ }
   });
+}
+
+// =====================================================================
+// CỬA "KHO" CHO APP ĐIỆN THOẠI — dùng lại đúng hàm của lệnh Zalo (cùng kiểm tra, cảnh báo tồn âm)
+// POST {WEBAPP_URL}?stock_key=<STOCK_KEY>
+// Body: { action, ticket_id, seller (email người dùng app), dry_run?, lines:[…], from?, to?, warehouse?, location?, undo_ticket_id? }
+//   nhap / tra_hang / xuat : lines [{code, size, qty, warehouse}]
+//   chuyen_kho            : from, to + lines [{code, size, qty}]
+//   chuyen_vi_tri         : warehouse, location (K12 / B2 / T4 / S1 / TH2) + lines [{code, size?}] (bỏ size = mọi size)
+//   huy                   : undo_ticket_id = ticket_id của thao tác cần huỷ (chỉ của chính seller, ≤ 10 phút)
+// Khoá riêng STOCK_KEY (không dùng chung SALE_KEY): thao tác kho quyền mạnh hơn ghi bán → khoá / đổi độc lập được.
+// =====================================================================
+
+const STOCK_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'huy'];
+const LOCATION_RE = /^(TH|K|B|T|S)\d{1,3}[A-Z]?$/; // TH (thùng) phải khớp trước T (tủ)
+
+function handleStockRequest_(e) {
+  let out;
+  let syncTabs = [];
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = props.getProperty('STOCK_KEY') || '';
+    const others = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'SYNC_HINT_KEY', 'EXPORT_KEY'].map(n => props.getProperty(n)).filter(Boolean);
+    if (key.length < 16 || others.indexOf(key) !== -1) {
+      out = { ok: false, error: 'chưa cấu hình STOCK_KEY (≥16 ký tự, khác các khoá khác) trong Script Properties' };
+    } else if (e.parameter.stock_key !== key) {
+      out = { ok: false, error: 'unauthorized' };
+    } else {
+      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
+      out = handleStock_(body, dryRun);
+      syncTabs = out._sync || [];
+      delete out._sync;
+    }
+  } catch (err) {
+    console.error(err && err.stack ? err.stack : err);
+    out = { ok: false, error: 'bad_request: ' + (err && err.message ? err.message : err) };
+  }
+  if (syncTabs.length) {
+    try { queueSyncHint_(syncTabs); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleStock_(body, dryRun) {
+  MEMO = {};
+  CTX = { seller: '', pending: {} };
+  const action = String(body.action || '').trim().toLowerCase();
+  const ticket = String(body.ticket_id || '').trim();
+  const seller = String(body.seller || '').trim().toLowerCase().slice(0, 80);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.join(', ') };
+  if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
+  if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ticketKey = 'stk_' + ticket;
+    const prev = props.getProperty(ticketKey);
+    if (prev) {
+      const pv = JSON.parse(prev);
+      return { ok: !pv.partial, duplicate: true, partial: !!pv.partial, action, ticket_id: ticket,
+        error: pv.partial ? 'Thao tác này lần trước ghi dở — kiểm tra Sheet, KHÔNG gửi lại' : undefined };
+    }
+    if (action === 'huy') return stockUndo_(body, seller, ticket, dryRun, props);
+
+    const lines = Array.isArray(body.lines) ? body.lines : [];
+    if (!lines.length || lines.length > SALE_MAX_LINES) return { ok: false, action, ticket_id: ticket, error: 'lines phải có 1-' + SALE_MAX_LINES + ' dòng' };
+
+    // Lượt 1: chạy thử mọi dòng — có dòng lỗi thì không ghi dòng nào
+    const checked = lines.map((ln, i) => stockLine_(action, body, ln || {}, i, true));
+    if (checked.some(r => !r.ok)) {
+      return { ok: false, action, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', results: checked.map(r => r.result) };
+    }
+    if (dryRun) return { ok: true, action, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result) };
+
+    // Lượt 2: ghi thật
+    MEMO = {};
+    CTX = { seller: '', pending: {} };
+    const ops = [];
+    const results = [];
+    try {
+      lines.forEach((ln, i) => {
+        const r = stockLine_(action, body, ln || {}, i, false);
+        results.push(r.result);
+        r.ops.forEach(o => ops.push(o));
+      });
+    } catch (err) {
+      props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), partial: true }));
+      return { ok: false, partial: true, action, ticket_id: ticket, results, _sync: uniq_(ops.map(o => o.sheet)),
+        error: 'Ghi dở (' + (err && err.message ? err.message : err) + ') — KHÔNG gửi lại, kiểm tra Sheet' };
+    }
+    props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: ops.length }));
+    pruneTickets_(props, 'stk_');
+    CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller, label: action + ' ' + ticket, ops }), UNDO_SECONDS);
+    return { ok: true, action, ticket_id: ticket, dry_run: false, results,
+      undo_until: new Date(Date.now() + UNDO_SECONDS * 1000).toISOString(), _sync: uniq_(ops.map(o => o.sheet)) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Mã có trong SANPHAM (tên cột hàng 1 hoặc 2) hoặc trong tab KHO. */
+function knownProductCode_(code) {
+  if (!MEMO.__spCodes) {
+    const sp = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+    const ci = headerMap_(sp[hr]).product_code;
+    MEMO.__spCodes = new Set(sp.slice(hr + 1).map(r => String(r[ci] || '').trim().toUpperCase()).filter(Boolean));
+  }
+  return MEMO.__spCodes.has(code) || codeExists_(code);
+}
+
+/** 1 dòng thao tác kho → { ok, ops, result } (result trả cho app). */
+function stockLine_(action, body, ln, i, dry) {
+  const code = String(ln.code || '').trim().toUpperCase();
+  const size = normSize_(ln.size === undefined || ln.size === null ? '' : ln.size);
+  const qty = ln.qty === undefined || ln.qty === null || ln.qty === '' ? 1 : Number(ln.qty);
+  const res = { line: i + 1, code, size, qty };
+  const fail = msg => ({ ok: false, ops: [], result: Object.assign(res, { ok: false, error: msg }) });
+  const clean = t => String(t || '').split('\n')[0].replace(/^[^\wÀ-ỹ]+/, '').trim();
+
+  if (!/^[A-Z0-9]{2,20}$/.test(code)) return fail('mã không hợp lệ');
+  if (!knownProductCode_(code)) return fail('mã không có trong SANPHAM / KHO');
+  if (size && !/^\d{2}$/.test(size)) return fail('size không hợp lệ');
+  if (action !== 'chuyen_vi_tri' && (!Number.isInteger(qty) || qty < 1 || qty > 99)) return fail('qty phải là số nguyên 1-99');
+  const p = { code, sizes: size ? [{ size, qty }] : [], qty: size ? 0 : qty, color: '', price: '', sizeErrors: [],
+    returnGoods: action === 'tra_hang', kho: '', location: '' };
+  const done = r => (r.ok
+    ? { ok: true, ops: r.ops || [], result: Object.assign(res, { ok: true, warnings: (r.warnings || []).map(clean), rows: (r.ops || []).map(o => o.sheet + '!' + o.row) }) }
+    : fail(clean(r.text)));
+
+  if (action === 'nhap' || action === 'tra_hang' || action === 'xuat') {
+    const kho = KHO_ALIASES[String(ln.warehouse || body.warehouse || '').trim().toUpperCase()];
+    if (!kho) return fail('warehouse phải là 15E hoặc Y3C');
+    res.warehouse = kho;
+    return done(doMovement_(p, action === 'xuat' ? ACTIONS.OUT : ACTIONS.IN, kho, dry));
+  }
+  if (action === 'chuyen_kho') {
+    const from = KHO_ALIASES[String(ln.from || body.from || '').trim().toUpperCase()];
+    const to = KHO_ALIASES[String(ln.to || body.to || '').trim().toUpperCase()];
+    if (!from || !to || from === to) return fail('from / to phải là 2 kho khác nhau (15E, Y3C)');
+    res.from = from;
+    res.to = to;
+    const out = doMovement_(p, ACTIONS.OUT, from, dry);
+    if (!out.ok) return fail(clean(out.text));
+    const inn = doMovement_(p, ACTIONS.IN, to, dry);
+    if (!inn.ok) return fail(clean(inn.text));
+    return done({ ok: true, ops: (out.ops || []).concat(inn.ops || []), warnings: (out.warnings || []).concat(inn.warnings || []) });
+  }
+  // chuyen_vi_tri
+  const kho = KHO_ALIASES[String(ln.warehouse || body.warehouse || '').trim().toUpperCase()];
+  const location = String(ln.location || body.location || '').trim().toUpperCase();
+  if (!kho) return fail('warehouse phải là 15E hoặc Y3C');
+  if (!LOCATION_RE.test(location)) return fail('vị trí phải dạng K12, B2, T4, S1, TH2 (K kệ, B bàn, T tủ, S sọc, TH thùng)');
+  res.warehouse = kho;
+  res.location = location;
+  p.kho = kho;
+  p.location = location;
+  p.sizes = size ? [{ size, qty: 1 }] : [];
+  return done(doMoveLocation_(p, dry));
+}
+
+/** Huỷ thao tác app của chính seller trong ≤ 10 phút (kiểm lại từng dòng như lệnh "huy"). */
+function stockUndo_(body, seller, ticket, dryRun, props) {
+  const target = String(body.undo_ticket_id || '').trim();
+  if (!target) return { ok: false, action: 'huy', ticket_id: ticket, error: 'thiếu undo_ticket_id' };
+  const cache = CacheService.getScriptCache();
+  const raw = cache.get('stkops_' + target);
+  if (!raw) return { ok: false, action: 'huy', ticket_id: ticket, undo_ticket_id: target, error: 'không có thao tác để huỷ (quá 10 phút, đã huỷ, hoặc sai mã)' };
+  const rec = JSON.parse(raw);
+  if (rec.seller !== seller) return { ok: false, action: 'huy', ticket_id: ticket, undo_ticket_id: target, error: 'chỉ huỷ được thao tác của chính mình' };
+  const r = undoRecord_(rec, dryRun);
+  if (r.ok && !dryRun) {
+    cache.remove('stkops_' + target);
+    props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), undo: target }));
+  }
+  return { ok: r.ok, action: 'huy', ticket_id: ticket, undo_ticket_id: target, dry_run: dryRun,
+    error: r.ok ? undefined : 'Không huỷ được vì dữ liệu đã thay đổi: ' + (r.problems || []).join('; '), _sync: r.touched || [] };
 }
 
 // =====================================================================
@@ -1658,15 +1845,15 @@ function testSale() {
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
-    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY'];
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
   });
-  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY'].map(n => props.getProperty(n) || '');
+  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY', 'STOCK_KEY'].map(n => props.getProperty(n) || '');
   console.log('Các khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
   console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌') +
-    ' | EXPORT_KEY ≥16: ' + (keys[3].length >= 16 ? '✅' : '❌'));
+    ' | EXPORT_KEY ≥16: ' + (keys[3].length >= 16 ? '✅' : '❌') + ' | STOCK_KEY ≥16: ' + (keys[5].length >= 16 ? '✅' : '❌'));
   const meta = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('META');
   if (!meta) { console.log('Tab META: ❌ chưa có'); } else {
     const md = meta.getDataRange().getValues();
