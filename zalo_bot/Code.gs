@@ -96,8 +96,7 @@ function doPost(e) {
     const body = JSON.parse((e.postData && e.postData.contents) || '{}');
     const msg = body.message;
     if (!msg || !msg.chat) return ok_();
-    const isImage = body.event_name === 'message.image.received' || !!msg.photo_url;
-    if (!msg.text && !isImage) {
+    if (!msg.text) {
       console.log('Zalo sự kiện chưa xử lý: ' + body.event_name + ' | khoá message: ' + Object.keys(msg).join(','));
       return ok_();
     }
@@ -119,10 +118,6 @@ function doPost(e) {
 
     const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true';
     const sellerName = msg.from && msg.from.display_name ? String(msg.from.display_name).slice(0, 50) : '';
-    if (isImage) {
-      sendMessage_(chatId, handleReceiptPhoto_(msg, sellerName, dryRun));
-      return ok_();
-    }
     sendMessage_(chatId, handleText_(msg.text, dryRun, chatId, sellerName));
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
@@ -644,15 +639,19 @@ function doUndo_(chatId, dryRun) {
 /** Huỷ 1 bản ghi thao tác ({label, ops}): kiểm tra toàn bộ trước, chỉ huỷ khi mọi dòng còn nguyên như lúc bot ghi. */
 function undoRecord_(last, dryRun) {
   const problems = [];
+  const ownRows = {};
+  const tabCache = {};
+  last.ops.forEach(op => { (ownRows[op.sheet] = ownRows[op.sheet] || {})[op.row] = true; });
   last.ops.forEach(op => {
     const sheet = getSheet_(op.sheet);
+    if (op.guard) receiptUndoGuard_(op.guard, ownRows, tabCache).forEach(x => problems.push(x));
     if (op.type === 'loc') {
       const col = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
       const cur = String(sheet.getRange(op.row, col.product_location + 1).getValue());
       if (cur !== op.newLoc) problems.push(op.sheet + ' dòng ' + op.row + ' đã bị đổi vị trí thành "' + cur + '"');
       return;
     }
-    const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const header = sheet.getRange(op.hr || 1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const col = headerMap_(header);
     const rowVals = sheet.getRange(op.row, 1, 1, header.length).getValues()[0];
     Object.keys(op.check).forEach(name => {
@@ -672,9 +671,11 @@ function undoRecord_(last, dryRun) {
   if (!dryRun) {
     last.ops.forEach(op => {
       const sheet = getSheet_(op.sheet);
-      const col = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
+      const col = headerMap_(sheet.getRange(op.hr || 1, 1, 1, sheet.getLastColumn()).getValues()[0]);
       if (op.type === 'loc') {
         sheet.getRange(op.row, col.product_location + 1).setValue(op.oldLoc);
+      } else if (op.cols) {
+        op.cols.forEach(c => sheet.getRange(op.row, c).clearContent()); // dòng SANPHAM tạo từ phiếu: xoá cả ô công thức đã chép
       } else {
         // Chỉ xoá các ô bot đã ghi (không đụng cột công thức khác, không xoá dòng)
         op.written.forEach(name => sheet.getRange(op.row, col[name] + 1).clearContent());
@@ -682,6 +683,28 @@ function undoRecord_(last, dryRun) {
     });
   }
   return { ok: true, text: '↩️ Đã huỷ: ' + last.label, touched: dryRun ? [] : uniq_(last.ops.map(o => o.sheet)) };
+}
+
+/**
+ * Dòng SANPHAM / KHO tạo từ phiếu chỉ huỷ được khi mã (kho × size) chưa có giao dịch nào khác ngoài lần nhập đang huỷ:
+ * còn dòng NHAP khác, hoặc đã bán / xuất → không huỷ, sửa tay.
+ */
+function receiptUndoGuard_(g, ownRows, tabCache) {
+  const problems = [];
+  [['NHAP'], ['BAN'], ['XUAT']].forEach(t => {
+    const data = tabCache[t[0]] || (tabCache[t[0]] = getSheet_(t[0]).getDataRange().getValues()); // đọc mỗi tab 1 lần / lần huỷ
+    const col = headerMap_(data[0]);
+    if (col.product_code === undefined) return;
+    for (let r = 1; r < data.length; r++) {
+      if (String(data[r][col.product_code]).trim().toUpperCase() !== g.code) continue;
+      if (g.size !== undefined && col.item_size !== undefined && normSize_(data[r][col.item_size]) !== g.size) continue;
+      if (g.kho && col.KHO !== undefined && KHO_ALIASES[String(data[r][col.KHO]).trim().toUpperCase()] !== g.kho) continue;
+      if ((ownRows[t[0]] || {})[r + 1]) continue;
+      problems.push(g.code + (g.size ? ' size ' + g.size : '') + (g.kho ? ' kho ' + g.kho : '') + ' đã có giao dịch khác (' + t[0] + ' dòng ' + (r + 1) + ')');
+      break;
+    }
+  });
+  return problems;
 }
 
 /** Báo cáo bán trong 1 ngày theo kho, từ tab BAN. Doanh thu = Giá × số lượng. */
@@ -958,7 +981,7 @@ function knownProductCode_(code) {
     const ci = headerMap_(sp[hr]).product_code;
     MEMO.__spCodes = new Set(sp.slice(hr + 1).map(r => String(r[ci] || '').trim().toUpperCase()).filter(Boolean));
   }
-  return MEMO.__spCodes.has(code) || codeExists_(code);
+  return MEMO.__spCodes.has(code) || codeExists_(code) || !!(CTX.newCodes && CTX.newCodes.has(code));
 }
 
 /** 1 dòng thao tác kho → { ok, ops, result } (result trả cho app). */
@@ -1031,7 +1054,8 @@ function stockUndo_(body, seller, ticket, dryRun, props) {
 
 // =====================================================================
 // NHẬP TỪ PHIẾU NHÀ CUNG CẤP — đọc phiếu → nháp → (app chia size) → ghi NHAP
-// Gửi ảnh: app (cửa kho, action doc_phieu) hoặc bot Zalo (ảnh). Gemini 1 lượt / phiếu.
+// Gửi ảnh: web /admin + app (cửa kho, action doc_phieu); KHÔNG nhận ảnh qua Zalo (anh Kha 16/10), Zalo chỉ báo "có phiếu chờ chia".
+// Gemini 1 lượt / phiếu. Mã mới (chưa có SANPHAM): xác nhận kèm ma_moi → tạo dòng SANPHAM tối thiểu + dòng 2 kho rồi ghi NHAP (V2 16/10).
 // Phiếu lưu Drive riêng tư "Phiếu mua hàng" (theo ID, kéo thư mục vẫn chạy): chưa chia kho → "Chưa chia/<NCC>/";
 // xác nhận xong → "<hộ>/<NCC>/" (Hải Nancy = 15E, Yen Leather = Y3C; chia cả 2 kho thì mỗi hộ 1 bản). Chỉ mục: Script Properties pnx_<mã>.
 // Giá nhập / NCC chỉ HNC giữ: API trả cho web KHÔNG có đơn giá (trừ khi kem_gia: true, dùng cho HNC).
@@ -1042,6 +1066,8 @@ const PN_FOLDER_DEFAULT = '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD'; // "Phiếu mua h
 const PN_UNSPLIT = 'Chưa chia';
 const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
+const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
+const PN_NEW_FLAG = 'CẦN BỔ SUNG - '; // đầu product_name của dòng SANPHAM tạo từ phiếu (tên tạm = mô tả phiếu)
 
 function handleReceipt_(action, body, dryRun) {
   MEMO = {};
@@ -1055,30 +1081,15 @@ function handleReceipt_(action, body, dryRun) {
     const bytes = Utilities.base64Decode(b64);
     if (bytes.length > 8 * 1024 * 1024) return { ok: false, action, error: 'ảnh quá lớn (> 8 MB), hãy nén trước' };
     if (dryRun) return { ok: true, action, dry_run: true, note: 'chạy thử: đã nhận ảnh ' + bytes.length + ' byte, chưa đọc phiếu' };
-    return Object.assign({ action }, receiptCreate_(bytes, String(body.mime || 'image/jpeg'), String(body.nguon || 'app'), nguoi));
+    let r;
+    try { r = receiptCreate_(bytes, String(body.mime || 'image/jpeg'), String(body.nguon || 'app'), nguoi); }
+    catch (err) { return { ok: false, action, error: err && err.message ? err.message : String(err) }; }
+    receiptNotify_(r);
+    return Object.assign({ action }, r);
   }
   if (action === 'bo_nhap') return receiptDiscard_(body, nguoi);
   if (action === 'huy_nhap') return receiptUndo_(body, nguoi, dryRun);
   return receiptConfirm_(body, nguoi, dryRun);
-}
-
-/** Ảnh phiếu gửi vào bot Zalo → đọc → trả 1 tin ngắn + link mở app chia size. */
-function handleReceiptPhoto_(msg, sellerName, dryRun) {
-  try {
-    if (!msg.photo_url) return '⚠️ Không lấy được ảnh từ Zalo. Hãy gửi ảnh phiếu qua app (Kho → Nhập từ phiếu).';
-    const resp = UrlFetchApp.fetch(String(msg.photo_url), { muteHttpExceptions: true });
-    if (resp.getResponseCode() !== 200) return '⚠️ Không tải được ảnh từ Zalo (HTTP ' + resp.getResponseCode() + ').';
-    if (dryRun) return '🧪 CHẠY THỬ — đã nhận ảnh, chưa đọc phiếu (DRY_RUN).';
-    MEMO = {};
-    const blob = resp.getBlob();
-    const r = receiptCreate_(blob.getBytes(), blob.getContentType() || 'image/jpeg', 'zalo', sellerName || 'zalo');
-    if (!r.ok) return '⚠️ Chưa đọc được phiếu: ' + r.error;
-    return '📄 Đã đọc phiếu ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ': ' + r.so_dong + ' dòng, ' + r.so_doi +
-      ' đôi → mở app chia size: ' + receiptAppLink_(r.id);
-  } catch (err) {
-    console.error(err && err.stack ? err.stack : err);
-    return '⚠️ Lỗi đọc phiếu: ' + (err && err.message ? err.message : err);
-  }
 }
 
 function receiptAppLink_(id) {
@@ -1109,10 +1120,13 @@ function receiptGemini_(bytes, mime) {
   if (!key) throw new Error('chưa cấu hình GEMINI_API_KEY trong Script Properties');
   const payload = { contents: [{ parts: [{ inline_data: { mime_type: mime, data: Utilities.base64Encode(bytes) } },
     { text: receiptPrompt_(Object.keys(supplierInfo_())) }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } };
+  // Khoá miễn phí: 2.5 Flash nhiều lượt nhất → thử trước; lỗi / hết lượt thì lùi sang bản mới hơn (anh Kha 16/10)
   let last = '';
-  for (const model of ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash']) {
+  let quota = 0;
+  for (const model of RECEIPT_MODELS) {
     const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
       { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    if (res.getResponseCode() === 429) { quota++; last = model + ' hết lượt'; continue; }
     if (res.getResponseCode() !== 200) { last = model + ' HTTP ' + res.getResponseCode(); continue; }
     try {
       const txt = JSON.parse(res.getContentText()).candidates[0].content.parts[0].text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
@@ -1121,6 +1135,7 @@ function receiptGemini_(bytes, mime) {
       return { model, data: ans };
     } catch (e) { last = model + ': ' + e.message; }
   }
+  if (quota === RECEIPT_MODELS.length) throw new Error('Gemini hết lượt miễn phí (mọi model báo 429) — thử lại sau ít phút, hoặc ngày mai nếu hết lượt trong ngày');
   throw new Error('Gemini không đọc được phiếu (' + last + ')');
 }
 
@@ -1204,7 +1219,17 @@ function receiptCreate_(bytes, mime, nguon, nguoi) {
   PropertiesService.getScriptProperties().setProperty('pnx_' + id, JSON.stringify(ix));
   if (!MEMO.__pnx) MEMO.__pnx = {};
   MEMO.__pnx[id] = ix;
-  return { ok: true, id, ncc_ten: ncc || d.ncc_doc_duoc, so_phieu: d.so_phieu, ngay, so_dong: dong.length, so_doi: d.tong_sl, trang_thai: 'cho_chia' };
+  return { ok: true, id, ncc_ten: ncc || d.ncc_doc_duoc, so_phieu: d.so_phieu, ngay, so_dong: dong.length, so_doi: d.tong_sl, trang_thai: 'cho_chia', model: r.model };
+}
+
+/** Zalo chỉ báo tin: nhắn anh "có phiếu chờ chia" + link mở app (không nhận ảnh qua Zalo). */
+function receiptNotify_(r) {
+  const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
+  if (!owner || !r || !r.ok) return;
+  try {
+    sendMessage_(owner, '📄 Có phiếu chờ chia: ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ' · ' + r.so_dong + ' dòng · ' +
+      r.so_doi + ' đôi → ' + receiptAppLink_(r.id));
+  } catch (err) { console.error('Không báo được phiếu mới: ' + (err && err.message ? err.message : err)); }
 }
 
 function receiptList_(body) {
@@ -1254,7 +1279,12 @@ function receiptDiscard_(body, nguoi) {
   return { ok: true, action: 'bo_nhap', id: d.id, trang_thai: 'huy' };
 }
 
-/** Xác nhận phiếu: dong [{dong, ma_hnc, kho, sizes:{"39":2}, sl?, ly_do?, ghi_chu?}] → ghi NHAP bằng đúng hàm nhập sẵn có. */
+/**
+ * Xác nhận phiếu → ghi NHAP bằng đúng hàm nhập sẵn có.
+ *   dong   [{dong, ma_hnc, kho, sizes:{"39":2}, sl?, ly_do?, ghi_chu?}] — 1 dòng phiếu được nhiều phần tử (tách màu × kho)
+ *   ma_moi [{ma_hnc, ma_goc?, mau, day_size?:["38",…], ten_tam?, nganh?}] — mã chưa có SANPHAM: tạo dòng SANPHAM tối thiểu
+ *          + dòng KHO 2 kho cho dãy size, rồi mới ghi NHAP. Mã có rồi mà thiếu dòng KHO (kho × size) cũng tạo dòng KHO.
+ */
 function receiptConfirm_(body, nguoi, dryRun) {
   const id = String(body.id || '').trim();
   const ticket = String(body.ticket_id || '').trim();
@@ -1270,7 +1300,7 @@ function receiptConfirm_(body, nguoi, dryRun) {
     const input = Array.isArray(body.dong) ? body.dong : [];
     if (!input.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'thiếu dong' };
 
-    // Kiểm từng dòng phiếu: tổng chia khớp SL phiếu; lệch thì bắt buộc lý do
+    // Kiểm từng dòng phiếu: tổng chia (mọi mã, mọi kho, mọi size) khớp SL phiếu; lệch thì bắt buộc lý do
     const byLine = {};
     input.forEach(x => { const k = Number(x.dong) || 0; (byLine[k] = byLine[k] || []).push(x); });
     const lineErrors = [];
@@ -1297,22 +1327,31 @@ function receiptConfirm_(body, nguoi, dryRun) {
       }
     });
     Object.keys(byLine).forEach(k => { if (!d.dong.some(pl => pl.dong === Number(k))) lineErrors.push({ dong: Number(k), error: 'phiếu không có dòng này' }); });
+
+    // Mã mới: kiểm trước, chưa ghi gì
+    const plan = receiptNewCodesPlan_(body.ma_moi, lines, d, canhBao);
+    plan.errors.forEach(e => lineErrors.push(e));
     if (lineErrors.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', loi_dong: lineErrors };
     if (!lines.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'không có dòng nào để ghi', canh_bao: canhBao };
+    const khoRows = receiptKhoRowsPlan_(plan, lines);
+    const taoMoi = { sanpham: plan.list.map(m => m.code), kho: khoRows.map(k => k.kho + ' ' + k.code + (k.size ? ' ' + k.size : '')) };
 
-    // Lượt 1: chạy thử bằng đúng hàm "nhap"
-    CTX = { seller: '', pending: {}, receiptId: d.id };
+    // Lượt 1: chạy thử bằng đúng hàm "nhap" (mã mới coi như đã có)
+    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes };
     const checked = lines.map((ln, i) => stockLine_('nhap', {}, ln, i, true));
     checked.forEach((r, i) => { r.result.dong_phieu = lines[i].src; });
     if (checked.some(r => !r.ok)) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', results: checked.map(r => r.result), canh_bao: canhBao };
-    if (dryRun) return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result), canh_bao: canhBao };
+    if (dryRun) return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result), canh_bao: canhBao, tao_moi: taoMoi };
 
-    // Lượt 2: ghi thật
+    // Lượt 2: ghi thật — SANPHAM mới → dòng KHO → NHAP
     MEMO = { __pnx: MEMO.__pnx };
-    CTX = { seller: '', pending: {}, receiptId: d.id };
+    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes };
     const ops = [];
     const out = [];
     try {
+      plan.list.forEach(m => ops.push(appendSanphamMin_(m)));
+      khoRows.forEach(k => ops.push(appendKhoRow_(k)));
+      if (ops.length) MEMO = { __pnx: MEMO.__pnx }; // đọc lại SANPHAM / KHO sau khi thêm dòng
       lines.forEach((ln, i) => {
         const r = stockLine_('nhap', {}, ln, i, false);
         r.result.dong_phieu = ln.src;
@@ -1325,17 +1364,21 @@ function receiptConfirm_(body, nguoi, dryRun) {
         error: 'Ghi dở (' + (err && err.message ? err.message : err) + ') — KHÔNG gửi lại, kiểm tra Sheet' };
     } finally {
       CTX.receiptId = '';
+      CTX.newCodes = null;
     }
     d.trang_thai = 'da_ghi';
-    d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, canh_bao: canhBao, rows: ops.map(o => o.sheet + '!' + o.row) };
+    d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, ma_moi: plan.list, canh_bao: canhBao,
+      rows: ops.map(o => o.sheet + '!' + o.row) };
     receiptSave_(d);
     try { receiptFileByHousehold_(d, lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()])); }
     catch (err) { console.error('Không chuyển được ảnh phiếu sang thư mục hộ: ' + (err && err.message ? err.message : err)); }
-    if (d.ncc) { // học bảng ghép mã NCC / mô tả → mã HNC cho lần sau
+    if (d.ncc) { // học bảng ghép mã NCC / mô tả → mã HNC (tách nhiều màu thì nhớ mã gốc)
       const map = receiptMap_(d.ncc);
-      input.forEach(x => {
-        const pl = d.dong.find(y => y.dong === Number(x.dong));
-        if (pl && x.ma_hnc && receiptMapKey_(pl)) map[receiptMapKey_(pl)] = String(x.ma_hnc).trim().toUpperCase();
+      d.dong.forEach(pl => {
+        const codes = uniq_(lines.filter(l => l.src === pl.dong).map(l => l.code));
+        if (!codes.length || !receiptMapKey_(pl)) return;
+        const nm = plan.list.find(m => codes.indexOf(m.code) !== -1);
+        map[receiptMapKey_(pl)] = codes.length === 1 ? codes[0] : (nm ? nm.base : codes[0].slice(0, -1));
       });
       const txt = JSON.stringify(map);
       if (txt.length < 8500) props.setProperty(receiptMapProp_(d.ncc), txt);
@@ -1343,11 +1386,141 @@ function receiptConfirm_(body, nguoi, dryRun) {
     props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
     pruneTickets_(props, 'stk_');
     CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'nhập phiếu ' + d.id, ops, pn: d.id }), UNDO_SECONDS);
-    return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao,
+    return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao, tao_moi: taoMoi,
       undo_until: new Date(Date.now() + UNDO_SECONDS * 1000).toISOString(), _sync: uniq_(ops.map(o => o.sheet)) };
   } finally {
     lock.releaseLock();
   }
+}
+
+/** Kiểm danh sách mã mới → { list:[{code, base, color, sizes, name, nganh}], codes:Set, errors:[] } (chưa ghi gì). */
+function receiptNewCodesPlan_(raw, lines, d, canhBao) {
+  const plan = { list: [], codes: new Set(), errors: [] };
+  (Array.isArray(raw) ? raw : []).forEach(m => {
+    const code = String((m && m.ma_hnc) || '').trim().toUpperCase();
+    const err = msg => plan.errors.push({ ma_hnc: code, error: msg });
+    if (!/^[A-Z0-9]{3,20}$/.test(code)) return err('mã mới không hợp lệ (3-20 chữ / số)');
+    if (plan.codes.has(code)) return err('mã mới trùng trong danh sách');
+    const used = lines.filter(l => l.code === code);
+    if (!used.length) return err('mã mới không có trong dòng chia nào');
+    if (knownProductCode_(code)) { canhBao.push(code + ' đã có trong SANPHAM / KHO → nhập như mã cũ, không tạo mới'); return; }
+    const base = String(m.ma_goc || code.slice(0, -1)).trim().toUpperCase();
+    if (!base || code.indexOf(base) !== 0 || code.length <= base.length) return err('mã mới phải là mã gốc + chữ màu (vd ' + (base || '32837') + 'D)');
+    const color = String(m.mau || '').trim().slice(0, 30);
+    if (!color) return err('thiếu màu (mau)');
+    const sizes = uniq_((Array.isArray(m.day_size) ? m.day_size : []).map(x => normSize_(x)).concat(used.map(l => normSize_(l.size))));
+    if (sizes.some(x => x && !/^\d{2}$/.test(x))) return err('day_size phải là size 2 chữ số');
+    const pl = d.dong.find(x => x.dong === used[0].src) || {};
+    plan.list.push({ code, base, color, sizes: sizes.sort((a, b) => sizeOrder_(a) - sizeOrder_(b)),
+      name: String(m.ten_tam || pl.mo_ta || pl.ma_ncc || code).trim().slice(0, 120), nganh: String(m.nganh || '').trim(), ncc: d.ncc || '' });
+    plan.codes.add(code);
+  });
+  return plan;
+}
+
+/** Dòng KHO cần thêm: mã mới → cả 2 kho × dãy size; mã có rồi → đúng kho × size đang nhập mà KHO chưa có dòng. */
+function receiptKhoRowsPlan_(plan, lines) {
+  const out = [];
+  const seen = {};
+  const add = (kho, code, size, color) => {
+    const k = kho + '|' + code + '|' + size;
+    if (seen[k]) return;
+    seen[k] = true;
+    if (!plan.codes.has(code) && findKhoRows_(kho, code, [size]).length) return;
+    out.push({ kho, code, size, color });
+  };
+  plan.list.forEach(m => ['15E', 'Y3C'].forEach(kho => m.sizes.forEach(sz => add(kho, m.code, sz, m.color))));
+  lines.forEach(l => {
+    const kho = KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()];
+    const size = normSize_(l.size);
+    if (!kho || plan.codes.has(l.code) || !knownProductCode_(l.code)) return;
+    add(kho, l.code, size, lookupColor_(l.code));
+  });
+  return out;
+}
+
+/**
+ * Thêm 1 dòng SANPHAM tối thiểu (tiêu đề hàng 2): chép công thức của dòng cuối (mã cha, giới tính, size, tên, ngành…),
+ * điền mã, màu, tên tạm "CẦN BỔ SUNG - <mô tả phiếu>", NCC; thuộc tính mẫu lấy từ dòng cùng mã cha nếu có. Không ghi giá.
+ */
+function appendSanphamMin_(m) {
+  const sheet = getSheet_('SANPHAM');
+  const data = sheetValues_('SANPHAM');
+  let hr = -1;
+  for (let r = 0; r < Math.min(2, data.length); r++) if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+  if (hr === -1) throw new Error('Tab SANPHAM không có cột product_code ở hàng 1-2');
+  const col = headerMap_(data[hr]);
+  requireColumns_('SANPHAM', col, ['product_code', 'product_color', 'product_name']);
+  let last = data.length;
+  while (last > hr + 1 && String(data[last - 1][col.product_code]).trim() === '') last--;
+  const row = last + 1;
+  if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
+  const ncol = data[hr].length;
+
+  // Dòng mẫu cùng mã cha (cùng mẫu, khác màu) → chép thuộc tính chữ (không chép giá, ảnh, cờ đã đăng)
+  const pc = col.parent_product_code;
+  const sib = pc === undefined ? null : data.slice(hr + 1).find(r => String(r[pc]).trim().toUpperCase() === m.base ||
+    String(r[col.product_code]).trim().toUpperCase().slice(0, -1) === m.base);
+  const formulas = last > hr + 1 ? sheet.getRange(last, 1, 1, ncol).getFormulasR1C1()[0] : [];
+  const cols = [];
+  for (let c = 0; c < ncol; c++) {
+    if (formulas[c] && String(formulas[c]).charAt(0) === '=') {
+      sheet.getRange(row, c + 1).setFormulaR1C1(formulas[c]);
+      cols.push(c + 1);
+    }
+  }
+  const values = { product_code: m.code, product_color: m.color, product_name: PN_NEW_FLAG + m.name };
+  const copyCols = ['Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Size Plus', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:', 'Chất liệu đế:', 'Lót trong:',
+    'Mặt lót đế:', 'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'product_unit', 'product_origin'];
+  if (sib) copyCols.forEach(n => { if (col[n] !== undefined && sib[col[n]] !== '' && !formulas[col[n]]) values[n] = sib[col[n]]; });
+  if (m.nganh && col['Tên Ngành Hàng'] !== undefined) values['Tên Ngành Hàng'] = m.nganh;
+  if (col.product_unit !== undefined && values.product_unit === undefined && !formulas[col.product_unit]) values.product_unit = 'Đôi';
+  if (col.supplier !== undefined && m.ncc) values.supplier = m.ncc;
+  if (pc !== undefined && !formulas[pc]) values.parent_product_code = m.base;
+  Object.keys(values).forEach(n => {
+    sheet.getRange(row, col[n] + 1).setValue(values[n]);
+    if (cols.indexOf(col[n] + 1) === -1) cols.push(col[n] + 1);
+  });
+  const mem = formulas.length ? formulas.slice(0, ncol).map(f => (f && String(f).charAt(0) === '=' ? f : '')) : new Array(ncol).fill('');
+  Object.keys(values).forEach(n => { mem[col[n]] = values[n]; });
+  while (data.length < row - 1) data.push(new Array(ncol).fill(''));
+  data[row - 1] = mem; // bộ nhớ đệm: mã mới tiếp theo ghi dòng kế
+  return { type: 'row', sheet: 'SANPHAM', row, hr: hr + 1, cols, check: { product_code: m.code }, guard: { code: m.code } };
+}
+
+/** Thêm 1 dòng KHO (tồn đầu 0) như HNC "Đồng bộ SKU" — công thức FSKU + tồn hiện tại dựng theo tên cột NHAP / XUAT / BAN. */
+function appendKhoRow_(k) {
+  const sheetName = KHO_SHEETS[k.kho];
+  const sheet = getSheet_(sheetName);
+  const data = sheetValues_(sheetName);
+  const col = headerMap_(data[0]);
+  requireColumns_(sheetName, col, ['product_code', 'product_color', 'item_size', 'opening_quantity', 'current_quantity', 'product_location', k.kho]);
+  let last = data.length;
+  while (last > 1 && String(data[last - 1][col.product_code]).trim() === '') last--;
+  const row = last + 1;
+  if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
+  const L = c => columnLetter_(col[c] + 1);
+  const src = (tab, qtyCol) => {
+    const h = headerMap_(sheetValues_(tab)[0]);
+    requireColumns_(tab, h, ['FSKU', qtyCol]);
+    const f = columnLetter_(h.FSKU + 1), q = columnLetter_(h[qtyCol] + 1);
+    return 'SUMIF(' + tab + '!' + f + ':' + f + '; ' + L(k.kho) + row + '; ' + tab + '!' + q + ':' + q + ')';
+  };
+  const same = findKhoRows_(k.kho, k.code, null).find(r => r.product_location);
+  const values = { product_code: k.code, product_color: k.color || '', item_size: sizeValue_(k.size), opening_quantity: 0,
+    product_location: same ? same.product_location : '' };
+  const formulas = {};
+  formulas[k.kho] = '=CONCATENATE($' + L(k.kho) + '$1;' + L('product_code') + row + ';' + L('item_size') + row + ')';
+  formulas.current_quantity = '=' + L('opening_quantity') + row + ' + ' + src('NHAP', 'Số lượng (*)') + ' - ' + src('XUAT', 'item_quantity') + ' - ' + src('BAN', 'item_quantity');
+  // Ghi cả dòng 1 lần (chuỗi bắt đầu "=" thành công thức); dòng mới nên các cột khác vốn trống
+  const arr = new Array(data[0].length).fill('');
+  Object.keys(values).forEach(n => { arr[col[n]] = values[n]; });
+  Object.keys(formulas).forEach(n => { arr[col[n]] = formulas[n]; });
+  sheet.getRange(row, 1, 1, arr.length).setValues([arr]);
+  while (data.length < row - 1) data.push(new Array(arr.length).fill(''));
+  data[row - 1] = arr; // bộ nhớ đệm: dòng KHO tiếp theo ghi dòng kế, khỏi đọc lại tab
+  return { type: 'row', sheet: sheetName, row, written: Object.keys(values).concat(Object.keys(formulas)),
+    check: { product_code: k.code, item_size: k.size }, guard: { code: k.code, size: k.size, kho: k.kho } };
 }
 
 /** Huỷ lần xác nhận phiếu (ticket_id của xac_nhan), chỉ của chính người đó, ≤ 10 phút → phiếu về "chờ chia". */

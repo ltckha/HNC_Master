@@ -64,8 +64,11 @@ function mockSheet(n) {
       return {
         getValues: () => Array.from({ length: nr || 1 }, (_, k) => Array.from({ length: nc || 1 }, (_, j) => ((d[r - 1 + k] || [])[c - 1 + j] ?? ''))),
         getValue: () => ((d[r - 1] || [])[c - 1] ?? ''),
-        setValue: v => { WRITES.push({ sheet: n, cell: [r, c], v }); if (n !== 'SANPHAM' && n !== 'META') put(v); },
+        setValue: v => { WRITES.push({ sheet: n, cell: [r, c], v }); if (n !== 'META') put(v); },
         setFormula: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
+        setValues: vals => vals.forEach((rowV, k) => rowV.forEach((v, j) => { WRITES.push({ sheet: n, cell: [r + k, c + j], v }); while (d.length < r + k) d.push([]); while (d[r - 1 + k].length < c + j) d[r - 1 + k].push(''); d[r - 1 + k][c - 1 + j] = v; })),
+        setFormulaR1C1: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
+        getFormulasR1C1: () => [Array.from({ length: nc || 1 }, (_, j) => { const v = (d[r - 1] || [])[c - 1 + j]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; })],
         clearContent: () => put(''),
       };
     },
@@ -307,6 +310,7 @@ eq('trả hàng ghi NHAP TRA-', [sr.ok, /^TRA-\d{6}$/.test(newRow[1]), newRow[2]
 
 // ---- Nhập từ phiếu NCC ----
 PROPS.GEMINI_API_KEY = 'g';
+DATA.BAN = DATA.BAN || [['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'FSKU', 'channel', 'seller']];
 const pn = (b, dry) => ctx.handleStock_(Object.assign({ nguoi: 'kris@hn.vn' }, b), !!dry);
 let pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-phieu').toString('base64'), mime: 'image/jpeg', nguon: 'app' });
 eq('đọc phiếu → nháp', [pr.ok, pr.ncc_ten, pr.so_phieu, pr.so_dong, pr.so_doi, pr.trang_thai, GEMINI_CALLS], [true, 'Tuấn Phong', 'PX2898', 2, 5, 'cho_chia', 1]);
@@ -326,6 +330,7 @@ pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc
 eq('dry-run có lý do → ok + cảnh báo', [pr.ok, pr.dry_run, pr.canh_bao.length, pr.results.map(r => r.dong_phieu)], [true, true, 1, [1, 2]]);
 const nhLen = DATA.NHAP.length;
 pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 }, ly_do: 'thieu' }, { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '41': 2 } }] });
+if (!pr.ok) console.log(JSON.stringify(pr));
 const added = DATA.NHAP.slice(nhLen);
 eq('ghi NHAP: số chứng từ = mã phiếu, không đánh dấu Zalo', [pr.ok, added.length, added.every(r => r[1] === pid), added.every(r => !r[10]), !!pr.undo_until], [true, 2, true, true, true]);
 eq('phiếu → da_ghi', pn({ action: 'ds_nhap' }).phieu[0].trang_thai, 'da_ghi');
@@ -343,6 +348,78 @@ eq('huỷ → xoá ô NHAP, phiếu về chờ chia', [pr.ok, added.every(r => r
 eq('bỏ phiếu nháp', pn({ action: 'bo_nhap', id: pid }).trang_thai, 'huy');
 eq('ds_nhap ẩn phiếu đã bỏ', pn({ action: 'ds_nhap' }).phieu.length, 0);
 eq('prompt có danh sách NCC', /Tuấn Phong/.test(ctx.receiptPrompt_(['Tuấn Phong', 'Chú Dũng'])), true);
+
+// ---- Nhập từ phiếu V2: tách màu, mã mới tạo SANPHAM + KHO ----
+DATA.SANPHAM[1].push('product_color', 'product_name', 'Tên Ngành Hàng', 'product_unit');
+DATA.SANPHAM.push(['TH2040', 'TH2040X', '', '', 'Tuấn Phong', '', '=CONCATENATE(R[0]C[-5])', 'Xám', 'Giày tây TH2040X', 'Giày tây nam', 'Đôi']);
+GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX3000', ngay: '2026-10-15', dong: [{ ma_ncc: '32837', mo_ta: 'Giày mọi da', sl: 12, don_gia: 400000 }, { ma_ncc: 'TH', mo_ta: 'Giày tây', sl: 1, don_gia: 500000 }], tong_sl: 13, tong_tien: 5300000 };
+GEMINI_CALLS = 0;
+const SENT0 = SENT.length;
+PROPS.OWNER_CHAT_ID = 'owner1';
+PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
+pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-2').toString('base64'), mime: 'image/jpeg' });
+const p2 = pr.id;
+eq('V2 đọc phiếu: model 2.5 trước + Zalo báo phiếu chờ chia', [pr.ok, pr.model, GEMINI_CALLS, SENT.length - SENT0, /Có phiếu chờ chia: Chú Dũng PX3000 · 2 dòng · 13 đôi → https:\/\/giayhainancy\.vn\/admin\/app#phieu-PN/.test((SENT[SENT0] || {}).text || '')],
+  [true, 'gemini-2.5-flash', 1, 1, true]);
+const sz = o => o; // sizes
+const v2 = {
+  action: 'xac_nhan', id: p2, ticket_id: 'V2A',
+  dong: [
+    { dong: 1, ma_hnc: '32837D', kho: '15E', sizes: { '38': 1, '39': 1, '40': 1 } },
+    { dong: 1, ma_hnc: '32837D', kho: 'Y3C', sizes: { '41': 1, '42': 1, '43': 1 } },
+    { dong: 1, ma_hnc: '32837N', kho: '15E', sizes: { '38': 2, '40': 1 } },
+    { dong: 1, ma_hnc: '32837N', kho: 'Y3C', sizes: { '44': 3 } },
+    { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '43': 1 } },
+  ],
+  ma_moi: [{ ma_hnc: '32837D', ma_goc: '32837', mau: 'Đen', day_size: ['38', '39', '40', '41', '42', '43', '44'] }, { ma_hnc: '32837N', mau: 'Nâu', day_size: ['38', '39', '40', '41', '42', '43', '44'] }],
+};
+pr = pn(Object.assign({}, v2, { ma_moi: undefined }), true);
+eq('V2 không cờ mã mới → chặn mã chưa có', [pr.ok, pr.results && pr.results.filter(r => !r.ok).length], [false, 9]);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: '32837D', mau: '' }] }), true);
+eq('V2 mã mới thiếu màu → lỗi', [pr.ok, pr.loi_dong && pr.loi_dong[0].error], [false, 'thiếu màu (mau)']);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: 'ABCD', mau: 'Đen' }] }), true);
+eq('V2 mã mới không dùng trong dòng nào → lỗi', [pr.ok, /không có trong dòng chia/.test(pr.loi_dong[0].error)], [false, true]);
+pr = pn(Object.assign({}, v2, { dong: v2.dong.slice(1) }), true);
+eq('V2 tổng mọi màu × kho lệch SL phiếu → bắt lý do', [pr.ok, pr.loi_dong && pr.loi_dong[0].dong], [false, 1]);
+const spLen = DATA.SANPHAM.length, k15 = DATA.KHO15E.length, ky3 = DATA.KHOY3C.length, nh2 = DATA.NHAP.length, w0 = WRITES.length;
+pr = pn(v2, true);
+eq('V2 chạy thử: tạo 2 SANPHAM, 2 kho × 7 size + 1 dòng KHO thiếu, không ghi', [pr.ok, pr.tao_moi.sanpham, pr.tao_moi.kho.length, pr.tao_moi.kho.indexOf('Y3C TH2040N 43') !== -1, WRITES.length - w0],
+  [true, ['32837D', '32837N'], 29, true, 0]);
+pr = pn(v2);
+if (!pr.ok) console.log(JSON.stringify(pr));
+const spNew = DATA.SANPHAM.slice(spLen);
+eq('V2 SANPHAM tối thiểu: mã, màu, tên tạm cần bổ sung, chép công thức + thuộc tính mẫu', [spNew.length, spNew.map(r => r[1]), spNew.map(r => r[7]), spNew[0][8], spNew[0][0], spNew[0][6], spNew[0][10]],
+  [2, ['32837D', '32837N'], ['Đen', 'Nâu'], 'CẦN BỔ SUNG - Giày mọi da', '32837', '=CONCATENATE(R[0]C[-5])', 'Đôi']);
+const kNew = DATA.KHO15E.slice(k15);
+eq('V2 KHO15E: 14 dòng tồn đầu 0 + công thức theo tên cột', [kNew.length, kNew[0].slice(1, 5), kNew[0][0], kNew[0][5]],
+  [14, ['32837D', 'Đen', 38, 0], '=CONCATENATE($A$1;B' + (k15 + 1) + ';D' + (k15 + 1) + ')',
+   '=E' + (k15 + 1) + ' + SUMIF(NHAP!H:H; A' + (k15 + 1) + '; NHAP!G:G) - SUMIF(XUAT!G:G; A' + (k15 + 1) + '; XUAT!F:F) - SUMIF(BAN!H:H; A' + (k15 + 1) + '; BAN!F:F)']);
+eq('V2 KHOY3C: 14 dòng mã mới + TH2040N 43 (mã cũ thiếu size)', [DATA.KHOY3C.filter(r => /^32837[DN]$/.test(r[1])).length, DATA.KHOY3C.filter(r => r[1] === 'TH2040N' && r[3] === 43 && r[4] === 0).length], [14, 1]);
+const nNew = DATA.NHAP.filter(r => r[1] === p2); // dòng đã huỷ trước đó được dùng lại → lọc theo mã phiếu
+eq('V2 NHAP: 11 dòng size, số chứng từ = mã phiếu', [pr.ok, nNew.length, nNew.every(r => r[1] === p2), nNew.reduce((t, r) => t + Number(r[6]), 0)], [true, 10, true, 13]);
+eq('V2 sync: SANPHAM + 2 kho + NHAP', pr._sync.slice().sort(), ['KHO15E', 'KHOY3C', 'NHAP', 'SANPHAM']);
+eq('V2 học mã gốc khi tách màu', pn({ action: 'xem_nhap', id: p2 }).dong.map(x => x.goi_y_ma_hnc), ['32837', 'TH2040N']);
+pr = pn({ action: 'huy_nhap', ticket_id: 'V2A' });
+eq('V2 huỷ: xoá NHAP + dòng SANPHAM / KHO mới', [pr.ok, nNew.every(r => r[2] === ''), spNew.every(r => r[1] === '' && r[6] === ''), kNew.every(r => r[1] === '' && r[0] === ''), pn({ action: 'ds_nhap' }).phieu[0].trang_thai],
+  [true, true, true, true, 'cho_chia']);
+// Mã mới đã có giao dịch khác → không huỷ
+pr = pn(Object.assign({}, v2, { ticket_id: 'V2B' }));
+DATA.XUAT.push(['16/10/2026', '32837D', 'Đen', '15E', 38, 1, '']);
+pr = pn({ action: 'huy_nhap', ticket_id: 'V2B' });
+eq('V2 mã mới đã xuất → không huỷ', [pr.ok, /32837D size 38 kho 15E đã có giao dịch khác \(XUAT/.test(pr.error)], [false, true]);
+DATA.XUAT.pop();
+// Gemini hết lượt
+const realFetch = ctx.UrlFetchApp.fetch;
+ctx.UrlFetchApp.fetch = (url, opt) => (url.indexOf('generativelanguage') !== -1 ? { getResponseCode: () => 429, getContentText: () => '' } : realFetch(url, opt));
+pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-3').toString('base64') });
+eq('Gemini hết lượt → báo lỗi rõ', [pr.ok, /hết lượt miễn phí/.test(pr.error)], [false, true]);
+ctx.UrlFetchApp.fetch = realFetch;
+// Zalo không nhận ảnh phiếu nữa
+PROPS.WEBHOOK_KEY = PROPS.WEBHOOK_KEY || 'wk_12345';
+const g0 = GEMINI_CALLS, s1 = SENT.length;
+ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.image.received', message: { chat: { id: 'owner1' }, message_id: 'img1', photo_url: 'https://x/y.jpg' } }) } });
+eq('Zalo gửi ảnh → bỏ qua, không gọi Gemini', [GEMINI_CALLS - g0, SENT.length - s1], [0, 0]);
+delete PROPS.SYNC_HINT_URL;
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

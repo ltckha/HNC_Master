@@ -112,9 +112,9 @@ Trả về:
   - Với `huy`: `không có thao tác để huỷ…`, `chỉ huỷ được thao tác của chính mình`, `Không huỷ được vì dữ liệu đã thay đổi…`.
 - Ghi xong (kể cả huỷ), bot tự báo web chép lại đúng tab (NHAP / XUAT / KHO… kèm KHO15E, KHOY3C).
 
-## Nhập từ phiếu nhà cung cấp (API cho app + ảnh qua Zalo)
+## Nhập từ phiếu nhà cung cấp (API cho web /admin + app)
 
-Luồng: chụp phiếu → Gemini đọc (1 lượt / phiếu) → **phiếu nháp** → app chia size khi đếm hàng thật → xác nhận → ghi NHAP bằng đúng hàm `nhap`.
+Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đọc (1 lượt / phiếu) → **phiếu nháp** → chia mã (tách màu) × kho × size khi đếm hàng thật → xác nhận → (mã mới: tạo SANPHAM + KHO) → ghi NHAP bằng đúng hàm `nhap`. Bản V2, anh Kha "LÀM" 16/10: **không nhận ảnh phiếu qua Zalo**.
 
 - **Khoá:** dùng chung `STOCK_KEY` (cùng màn Kho của app, cùng quyền nhập kho). Gọi `POST {WEBAPP_URL}?stock_key=<STOCK_KEY>` với `action` dưới đây. Cần thêm Script Properties `GEMINI_API_KEY`.
 - **Lưu phiếu:** Drive riêng tư `Phiếu mua hàng` (theo ID `PN_FOLDER_ID`, mặc định thư mục có sẵn).
@@ -125,25 +125,32 @@ Luồng: chụp phiếu → Gemini đọc (1 lượt / phiếu) → **phiếu nh
 
 | action | Gửi | Trả |
 |---|---|---|
-| `doc_phieu` | `anh_base64` (≤ 8 MB, nên nén ~2 MB), `mime`, `nguon` ("app"), `nguoi` (email) | `{ok, id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai:"cho_chia"}` |
+| `doc_phieu` | `anh_base64` (≤ 8 MB, nên nén ~2 MB), `mime`, `nguon` ("app" / "web"), `nguoi` (email) | `{ok, id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai:"cho_chia", model}`. Lỗi Gemini: `{ok:false, error}` (hết lượt miễn phí thì báo rõ) |
 | `ds_nhap` | `limit?` (50), `tat_ca?` (hiện cả phiếu đã bỏ) | `{ok, phieu:[{id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai}]}`, mới nhất trước. `trang_thai`: `cho_chia` / `da_ghi` / `huy` |
 | `xem_nhap` | `id`, `kem_anh?` | `{…đầu phiếu, dong:[{dong, ma_ncc, mo_ta, sl_phieu, goi_y_ma_hnc?}], da_ghi?, anh_mime?, anh_base64?}` |
-| `xac_nhan` | `id`, `ticket_id`, `nguoi`, `dry_run?`, `dong:[{dong, ma_hnc, kho, sizes:{"39":2,"40":1}, sl?, ly_do?, ghi_chu?}]` | Giống cửa kho: `{ok, results:[…, dong_phieu], canh_bao:[…], undo_until}` |
+| `xac_nhan` | `id`, `ticket_id`, `nguoi`, `dry_run?`, `dong:[{dong, ma_hnc, kho, sizes:{"39":2,"40":1}, sl?, ly_do?, ghi_chu?}]`, `ma_moi?:[{ma_hnc, ma_goc?, mau, day_size?, ten_tam?, nganh?}]` | Giống cửa kho: `{ok, results:[…, dong_phieu], canh_bao:[…], tao_moi:{sanpham:[mã], kho:["15E 32837D 38",…]}, undo_until}` |
 | `huy_nhap` | `ticket_id` (của `xac_nhan`), `nguoi` | `{ok, id}`. Chỉ của chính `nguoi`, ≤ 10 phút; phiếu về `cho_chia` |
 | `bo_nhap` | `id`, `nguoi` | `{ok, trang_thai:"huy"}`. Chỉ phiếu `cho_chia` (quyền "Chủ" do app kiểm) |
 
 - **`xac_nhan`:**
   - Mỗi dòng phiếu: tổng `sizes` (hàng không size dùng `sl` hoặc khoá `""`) phải bằng `sl_phieu`. Lệch thì bắt buộc `ly_do`: `thieu` / `du` / `loi_tra_lai` / `khac`, ghi vào `canh_bao` và lưu kèm phiếu. Không nhận dòng nào thì gửi `sizes` rỗng + `ly_do`.
-  - Mã HNC phải có trong SANPHAM / KHO. Mẫu mới bị chặn: tạo SANPHAM trước.
+  - **Tách màu:** 1 dòng phiếu gửi nhiều phần tử `dong` (cùng số `dong`), mỗi phần tử 1 mã × 1 kho (15E / Y3C) × `sizes`. Tổng mọi mã / kho / size so với `sl_phieu`.
+  - Mã phải có trong SANPHAM / KHO, hoặc khai trong `ma_moi`. Mã trong `ma_moi` mà đã có thì nhập như mã cũ (có `canh_bao`).
+  - **Mã mới (`ma_moi`):** `ma_hnc` = mã gốc + chữ màu (`ma_goc` mặc định bỏ ký tự cuối), `mau` bắt buộc, `day_size` = dãy size của mẫu (cộng thêm size đang nhập), `ten_tam` mặc định mô tả dòng phiếu, `nganh` tuỳ chọn.
+    - SANPHAM: thêm 1 dòng sau dòng cuối, chép công thức của dòng cuối (mã cha, giới tính, size, ngành…), điền mã, màu, `product_name` = "CẦN BỔ SUNG - <tên tạm>", `supplier` = NCC; thuộc tính chữ (ngành, chất liệu, đơn vị…) lấy từ dòng cùng mã cha nếu có. **Không ghi giá.** Cột đăng sàn / MISA để trống.
+    - KHO: thêm dòng tồn đầu 0 cho **cả 2 kho × day_size** (công thức FSKU + tồn hiện tại dựng theo tên cột NHAP / XUAT / BAN, giống menu HNC "Đồng bộ SKU").
+    - Mã cũ nhập size / kho chưa có dòng KHO: thêm dòng KHO đó luôn (lấy vị trí kệ của dòng cùng mã).
+    - Ghi xong gửi sync-hint `SANPHAM`, `KHO15E`, `KHOY3C`, `NHAP` (gom 60 giây như mọi lần ghi).
+  - Tồn hiện tại và các màu của mã gốc: web tự lấy từ D1, không có API tra.
   - Kiểm hết trước: có dòng lỗi (`loi_dong` hoặc `results[].error`) thì không ghi dòng nào.
 - **Dòng NHAP:**
   - Như nhập thường (anh Kha 16/10): không đánh dấu `Zalo_Update`, nên menu HNC in tem, đồng bộ kho, xuất phiếu nhập MISA.
   - `Số chứng từ (*)` = mã phiếu (`PN<yyMMdd>-XXXX`); `Ngày chứng từ` = ngày xác nhận.
-  - Bot học bảng ghép (mã NCC / mô tả → mã HNC) để gợi ý lần sau.
+  - Bot học bảng ghép (mã NCC / mô tả → mã HNC; dòng tách nhiều màu thì nhớ mã gốc) để gợi ý lần sau.
+- **Huỷ (`huy_nhap`, ≤ 10 phút):** xoá các dòng NHAP vừa ghi; dòng SANPHAM / KHO tạo mới cũng xoá (cả ô công thức). Nếu mã mới (kho × size) đã có giao dịch khác (NHAP khác, bán, xuất) thì **không huỷ gì**, báo để sửa tay.
 - **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` = mã phiếu thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
-- **Ảnh qua bot Zalo:**
-  - Gửi ảnh phiếu vào bot. Sự kiện `message.image.received` (`message.photo_url`, theo tài liệu bên thứ ba, cần kiểm bằng tin thật) → đọc → bot trả "📄 Đã đọc phiếu … → mở app chia size: <web>/admin/app#phieu-<mã>".
-  - Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Sự kiện Zalo chưa xử lý được ghi vào Nhật ký để kiểm.
+- **Gemini:** thử `gemini-2.5-flash` trước (khoá miễn phí nhiều lượt nhất), lỗi thì 3.6 → 3.8 Flash; mọi model báo 429 thì trả lỗi "hết lượt miễn phí". Model đã dùng lưu trong phiếu (`model`).
+- **Zalo chỉ báo tin:** đọc phiếu xong bot nhắn `OWNER_CHAT_ID` "📄 Có phiếu chờ chia: <NCC> <số> · n dòng · m đôi → <web>/admin/app#phieu-<mã>". Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Bot **không** nhận ảnh phiếu qua Zalo (ảnh gửi vào bot bị bỏ qua, ghi Nhật ký).
 
 ## Cửa "báo đơn web" (API)
 
