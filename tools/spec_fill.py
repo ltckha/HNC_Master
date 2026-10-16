@@ -34,8 +34,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHEET_ID = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"  # HNC_Control_Center
 SANPHAM_HEADER_ROW = 2  # luật 4: SANPHAM để tên cột kỹ thuật ở hàng 2
 MEDIA_DIR = "/Volumes/Media/HNC_Master"
-GDRIVE_EXPORT = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/Spark/HNC_Master/HNC_Exported_Files"
-EXPORT_DIR = GDRIVE_EXPORT if os.path.isdir(GDRIVE_EXPORT) else os.path.join(ROOT, "HNC_Exported_Files")
+sys.path.insert(0, ROOT)
+from hnc_paths import find_system_dir  # noqa: E402  (đường dẫn Drive khai 1 chỗ)
+EXPORT_DIR = os.path.join(find_system_dir(), "HNC_Exported_Files")
 GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
 
 # (cột SANPHAM hàng 2, cột mặc định ở SUB hàng 1) — so khớp sau khi bỏ khoảng trắng 2 đầu

@@ -6,7 +6,7 @@
 ===================================================================
 Automated E-Commerce & Inventory Management System for HNC Master
 Installed at: /Users/khan/Developer/HNC_Master
-Synced with Google Drive: /Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/HNC_Master
+Thư mục Drive (mẫu, file xuất): xem hnc_paths.py — My Drive/HNC/He_thong, cũ: My Drive/Spark/HNC_Master
 """
 
 import os
@@ -66,46 +66,20 @@ except ImportError:
 # Paths Configuration
 LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def detect_gdrive_dir():
-    """Tự động nhận diện thư mục Google Drive linh hoạt trên máy macOS (Ưu tiên Spark/HNC_Master)."""
-    # 1. Ưu tiên thư mục quy hoạch mới: Spark/HNC_Master
-    spark_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/Spark/HNC_Master"
-    if os.path.exists(spark_path):
-        return spark_path
-
-    # 2. Thư mục cũ: HNC_Master
-    default_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/HNC_Master"
-    if os.path.exists(default_path):
-        return default_path
-    
-    # 3. Dò tìm tự động trong CloudStorage của user
-    home_cloud = os.path.expanduser("~/Library/CloudStorage")
-    if os.path.exists(home_cloud):
-        for item in os.listdir(home_cloud):
-            if item.startswith("GoogleDrive-"):
-                cand_spark = os.path.join(home_cloud, item, "My Drive", "Spark", "HNC_Master")
-                if os.path.exists(cand_spark):
-                    return cand_spark
-                cand = os.path.join(home_cloud, item, "My Drive", "HNC_Master")
-                if os.path.exists(cand):
-                    return cand
-    return LOCAL_BASE_DIR
-
-GDRIVE_DIR = detect_gdrive_dir()
+# Thư mục Drive khai 1 chỗ ở hnc_paths.py: My Drive/HNC/He_thong → My Drive/Spark/HNC_Master; không thấy thì dừng, không dùng local.
+from hnc_paths import find_system_dir, in_csv_path
+try:
+    GDRIVE_DIR = find_system_dir()
+except FileNotFoundError as _e:
+    print(f"❌ {_e}")
+    sys.exit(1)
 
 CREDENTIALS_PATH = os.path.join(LOCAL_BASE_DIR, "credentials.json")
 if not os.path.exists(CREDENTIALS_PATH) and os.path.exists(os.path.join(GDRIVE_DIR, "credentials.json")):
     CREDENTIALS_PATH = os.path.join(GDRIVE_DIR, "credentials.json")
 
-if os.path.exists(os.path.join(GDRIVE_DIR, "HNC_Templates")):
-    TEMPLATES_DIR = os.path.join(GDRIVE_DIR, "HNC_Templates")
-else:
-    TEMPLATES_DIR = os.path.join(LOCAL_BASE_DIR, "HNC_Templates")
-
-if os.path.exists(GDRIVE_DIR):
-    EXPORT_DIR = os.path.join(GDRIVE_DIR, "HNC_Exported_Files")
-else:
-    EXPORT_DIR = os.path.join(LOCAL_BASE_DIR, "HNC_Exported_Files")
+TEMPLATES_DIR = os.path.join(GDRIVE_DIR, "HNC_Templates")
+EXPORT_DIR = os.path.join(GDRIVE_DIR, "HNC_Exported_Files")
 
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
@@ -2615,7 +2589,7 @@ def process_export_task(choice, loader):
         out_df.to_csv(exported_filepath, index=False)
 
         # Ghi đè trực tiếp vào file IN.csv cố định
-        in_fixed_path = "/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/IN Mini Code/IN.csv"
+        in_fixed_path = in_csv_path()
         try:
             os.makedirs(os.path.dirname(in_fixed_path), exist_ok=True)
             out_df.to_csv(in_fixed_path, index=False)
