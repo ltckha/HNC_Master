@@ -128,28 +128,33 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
 | `doc_phieu` | `anh_base64` (≤ 8 MB, nên nén ~2 MB), `mime`, `nguon` ("app" / "web"), `nguoi` (email) | `{ok, id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai:"cho_chia", model}`. Lỗi Gemini: `{ok:false, error}` (hết lượt miễn phí thì báo rõ) |
 | `ds_nhap` | `limit?` (50), `tat_ca?` (hiện cả phiếu đã bỏ) | `{ok, phieu:[{id, ncc_ten, so_phieu, ngay, so_dong, so_doi, trang_thai}]}`, mới nhất trước. `trang_thai`: `cho_chia` / `da_ghi` / `huy` |
 | `xem_nhap` | `id`, `kem_anh?` | `{…đầu phiếu, dong:[{dong, ma_ncc, mo_ta, sl_phieu, goi_y_ma_hnc?}], da_ghi?, anh_mime?, anh_base64?}` |
-| `xac_nhan` | `id`, `ticket_id`, `nguoi`, `dry_run?`, `dong:[{dong, ma_hnc, kho, sizes:{"39":2,"40":1}, sl?, ly_do?, ghi_chu?}]`, `ma_moi?:[{ma_hnc, ma_goc?, mau, day_size?, ten_tam?, nganh?}]` | Giống cửa kho: `{ok, results:[…, dong_phieu], canh_bao:[…], tao_moi:{sanpham:[mã], kho:["15E 32837D 38",…]}, undo_until}` |
-| `huy_nhap` | `ticket_id` (của `xac_nhan`), `nguoi` | `{ok, id}`. Chỉ của chính `nguoi`, ≤ 10 phút; phiếu về `cho_chia` |
+| `xac_nhan` | `id`, `ticket_id`, `nguoi`, `dry_run?`, `dong:[{dong, ma_hnc, kho, sizes:{"39":2,"40":1}, sl?, ly_do?, ghi_chu?}]`, `ma_moi?:[{ma_hnc, ma_goc?, mau, gia_ban, day_size?, ten_tam?, nganh?}]` | Giống cửa kho: `{ok, results:[…, dong_phieu], canh_bao:[…], tao_moi:{sanpham:[mã], kho:["15E 32837D 38",…]}, so_chung_tu:{"15E":"NK000027"}, undo_until}` |
+| `huy_nhap` | `ticket_id` (của `xac_nhan`), `nguoi`, `id?`, `chu?` | `{ok, id, so_dong}`. Người ghi: ≤ 10 phút. **Chủ** (`chu: true` + `id` phiếu; web kiểm quyền): quá 10 phút vẫn huỷ được. Phiếu về `cho_chia` |
+| `bo_sung_sp` | `product_code`, `nguoi`, `dry_run?`, `cot:{"Tên Ngành Hàng": …, "Đặc điểm": …}`, `product_price?` | `{ok, da_ghi:[cột], canh_bao:[…], can_bo_sung}`. Form "Bổ sung thông tin mã mới" (xem dưới) |
 | `bo_nhap` | `id`, `nguoi` | `{ok, trang_thai:"huy"}`. Chỉ phiếu `cho_chia` (quyền "Chủ" do app kiểm) |
 
 - **`xac_nhan`:**
   - Mỗi dòng phiếu: tổng `sizes` (hàng không size dùng `sl` hoặc khoá `""`) phải bằng `sl_phieu`. Lệch thì bắt buộc `ly_do`: `thieu` / `du` / `loi_tra_lai` / `khac`, ghi vào `canh_bao` và lưu kèm phiếu. Không nhận dòng nào thì gửi `sizes` rỗng + `ly_do`.
   - **Tách màu:** 1 dòng phiếu gửi nhiều phần tử `dong` (cùng số `dong`), mỗi phần tử 1 mã × 1 kho (15E / Y3C) × `sizes`. Tổng mọi mã / kho / size so với `sl_phieu`.
   - Mã phải có trong SANPHAM / KHO, hoặc khai trong `ma_moi`. Mã trong `ma_moi` mà đã có thì nhập như mã cũ (có `canh_bao`).
-  - **Mã mới (`ma_moi`):** `ma_hnc` = mã gốc + chữ màu (`ma_goc` mặc định bỏ ký tự cuối), `mau` bắt buộc, `day_size` = dãy size của mẫu (cộng thêm size đang nhập), `ten_tam` mặc định mô tả dòng phiếu, `nganh` tuỳ chọn.
-    - SANPHAM: thêm 1 dòng sau dòng cuối, chép công thức của dòng cuối (mã cha, giới tính, size, ngành…), điền mã, màu, `product_name` = "CẦN BỔ SUNG - <tên tạm>", `supplier` = NCC; thuộc tính chữ (ngành, chất liệu, đơn vị…) lấy từ dòng cùng mã cha nếu có. **Không ghi giá.** Cột đăng sàn / MISA để trống.
+  - **Mã mới (`ma_moi`):** `ma_hnc` = mã gốc + chữ màu (`ma_goc` mặc định bỏ ký tự cuối), `mau` bắt buộc, `gia_ban` bắt buộc (đồng, ≥ 1.000; app nhập), `day_size` = dãy size của mẫu (cộng thêm size đang nhập), `nganh` tuỳ chọn (phải có trong SUB), `ten_tam` chỉ lưu trong phiếu.
+    - SANPHAM: thêm 1 dòng sau dòng cuối, chép công thức của dòng cuối (mã cha, tên `product_name`, CON_NAME / CON_DES, mô tả…), điền mã, màu, `product_price` = `gia_ban`, `purchase_price` = đơn giá dòng phiếu (`invoice_price` để anh điền, anh Kha 16/10), `Size` = dãy size, `supplier` = NCC, `product_unit` "Đôi", `product_origin` "Việt Nam".
+    - Cột thông tin mẫu (Tên Ngành Hàng, Đặc điểm, Chất liệu, Nhấn mạnh, Chất liệu quai / đế, Lót trong, Mặt lót đế, Dáng giày mũi, Phần dưới giày, Kết hợp trang phục, Sử dụng, Bonus) + Thương hiệu, đơn vị, xuất xứ: chép từ dòng cùng mã cha nếu có, không có thì để trống.
+    - Ngành trống → `Giới tính`, `product_category_id` để trống (không ra "female" / #N/A); bổ sung ngành qua `bo_sung_sp` thì công thức tự chép lại. Cột đăng sàn / MISA để trống.
     - KHO: thêm dòng tồn đầu 0 cho **cả 2 kho × day_size** (công thức FSKU + tồn hiện tại dựng theo tên cột NHAP / XUAT / BAN, giống menu HNC "Đồng bộ SKU").
     - Mã cũ nhập size / kho chưa có dòng KHO: thêm dòng KHO đó luôn (lấy vị trí kệ của dòng cùng mã).
     - Ghi xong gửi sync-hint `SANPHAM`, `KHO15E`, `KHOY3C`, `NHAP` (gom 60 giây như mọi lần ghi).
-    - Mã còn "CẦN BỔ SUNG" tự bị **bỏ qua** khi menu HNC xuất web cũ / Shopee / TikTok / MISA (danh mục + phiếu nhập; in 1 dòng "Bỏ qua n mã chưa bổ sung", trạng thái để trống để xuất sau) và khi cổng `mark_exported` đánh dấu (trả `chua_bo_sung`). In tem, đồng bộ kho vẫn chạy. Bổ sung xong: sửa `product_name` (bỏ chữ "CẦN BỔ SUNG"), điền giá / thuộc tính.
+    - **Mã "cần bổ sung"** = dòng SANPHAM trống `Tên Ngành Hàng` hoặc giá bán (`product_price` ≤ 0). Tự bị **bỏ qua** khi menu HNC xuất web cũ / Shopee / TikTok / MISA (danh mục + phiếu nhập; in 1 dòng "Bỏ qua n mã chưa bổ sung", trạng thái để trống để xuất sau) và khi cổng `mark_exported` đánh dấu (trả `chua_bo_sung`). In tem, đồng bộ kho vẫn chạy. Web ẩn mã theo cùng dấu hiệu.
   - Tồn hiện tại và các màu của mã gốc: web tự lấy từ D1, không có API tra.
   - Kiểm hết trước: có dòng lỗi (`loi_dong` hoặc `results[].error`) thì không ghi dòng nào.
 - **Dòng NHAP:**
   - Như nhập thường (anh Kha 16/10): không đánh dấu `Zalo_Update`, nên menu HNC in tem, đồng bộ kho, xuất phiếu nhập MISA.
-  - `Số chứng từ (*)` = mã phiếu (`PN<yyMMdd>-XXXX`); `Ngày chứng từ` = ngày xác nhận.
+  - `Số chứng từ (*)` = `NK` + 6 số, **chạy theo từng kho** (như Sheet đang dùng): cùng kho + cùng NCC + cùng ngày đã có số thì dùng chung, khác thì số lớn nhất của kho đó + 1. NCC của dòng cũ: theo phiếu nếu dòng thuộc phiếu NCC, còn lại theo `supplier` SANPHAM. Mã phiếu `PN…` chỉ giữ nội bộ (vé, huỷ, hoá đơn; chỉ mục `pnx_` lưu `nk` theo kho).
+  - `Ngày chứng từ` = ngày xác nhận.
   - Bot học bảng ghép (mã NCC / mô tả → mã HNC; dòng tách nhiều màu thì nhớ mã gốc) để gợi ý lần sau.
-- **Huỷ (`huy_nhap`, ≤ 10 phút):** xoá các dòng NHAP vừa ghi; dòng SANPHAM / KHO tạo mới cũng xoá (cả ô công thức). Nếu mã mới (kho × size) đã có giao dịch khác (NHAP khác, bán, xuất) thì **không huỷ gì**, báo để sửa tay.
-- **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` = mã phiếu thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
+- **Huỷ (`huy_nhap`):** xoá các dòng NHAP vừa ghi; dòng SANPHAM / KHO tạo mới cũng xoá (cả ô công thức). Nếu mã mới (kho × size) đã có giao dịch khác (NHAP khác, bán, xuất) thì **không huỷ gì**, báo để sửa tay. Người ghi ≤ 10 phút; Chủ (`chu: true`, kèm `id`) lúc nào cũng được (thao tác lưu trong dữ liệu phiếu).
+- **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` NK… của một phiếu NCC thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
+- **`bo_sung_sp` (form "Bổ sung thông tin mã mới" trên web):** chỉ ghi các cột thông tin mẫu ở trên (theo tên cột hàng 2, khoảng trắng / dấu ":" cuối tên không quan trọng) + `product_price`. Cột khác → lỗi, không ghi gì. `Tên Ngành Hàng` phải có trong SUB, không được trống. Không đụng `product_name` / công thức; có ngành thì chép lại công thức `Giới tính`, `product_category_id` từ dòng gần nhất phía trên. `can_bo_sung` = mã còn trống ngành / giá bán không. Ghi xong gửi sync-hint `SANPHAM`.
 - **Gemini:** thử `gemini-2.5-flash` trước (khoá miễn phí nhiều lượt nhất), lỗi thì 3.6 → 3.8 Flash; mọi model báo 429 thì trả lỗi "hết lượt miễn phí". Model đã dùng lưu trong phiếu (`model`).
 - **Zalo chỉ báo tin:** đọc phiếu xong bot nhắn `OWNER_CHAT_ID` "📄 Có phiếu chờ chia: <NCC> <số> · n dòng · m đôi → <web>/admin/app#phieu-<mã>". Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Bot **không** nhận ảnh phiếu qua Zalo (ảnh gửi vào bot bị bỏ qua, ghi Nhật ký).
 

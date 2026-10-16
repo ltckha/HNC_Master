@@ -68,6 +68,7 @@ function mockSheet(n) {
         setFormula: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
         setValues: vals => vals.forEach((rowV, k) => rowV.forEach((v, j) => { WRITES.push({ sheet: n, cell: [r + k, c + j], v }); while (d.length < r + k) d.push([]); while (d[r - 1 + k].length < c + j) d[r - 1 + k].push(''); d[r - 1 + k][c - 1 + j] = v; })),
         setFormulaR1C1: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
+        getFormulaR1C1: () => { const v = (d[r - 1] || [])[c - 1]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; },
         getFormulasR1C1: () => [Array.from({ length: nc || 1 }, (_, j) => { const v = (d[r - 1] || [])[c - 1 + j]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; })],
         clearContent: () => put(''),
       };
@@ -332,7 +333,8 @@ const nhLen = DATA.NHAP.length;
 pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 }, ly_do: 'thieu' }, { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '41': 2 } }] });
 if (!pr.ok) console.log(JSON.stringify(pr));
 const added = DATA.NHAP.slice(nhLen);
-eq('ghi NHAP: số chứng từ = mã phiếu, không đánh dấu Zalo', [pr.ok, added.length, added.every(r => r[1] === pid), added.every(r => !r[10]), !!pr.undo_until], [true, 2, true, true, true]);
+eq('ghi NHAP: số chứng từ NK theo kho, không đánh dấu Zalo', [pr.ok, added.length, added.map(r => r[4] + ':' + r[1]), pr.so_chung_tu, added.every(r => !r[10]), !!pr.undo_until],
+  [true, 2, ['15E:NK000001', 'Y3C:NK000001'], { '15E': 'NK000001', Y3C: 'NK000001' }, true, true]);
 eq('phiếu → da_ghi', pn({ action: 'ds_nhap' }).phieu[0].trang_thai, 'da_ghi');
 const hn = PN_ROOT.kids.find(k => k.name === 'Hải Nancy'), yl = PN_ROOT.kids.find(k => k.name === 'Yen Leather');
 const inFolder = f => Object.values(DFILES).filter(x => f && x.folder === f.kids[0].getId()).map(x => x.name.split('.').pop()).sort();
@@ -350,8 +352,11 @@ eq('ds_nhap ẩn phiếu đã bỏ', pn({ action: 'ds_nhap' }).phieu.length, 0);
 eq('prompt có danh sách NCC', /Tuấn Phong/.test(ctx.receiptPrompt_(['Tuấn Phong', 'Chú Dũng'])), true);
 
 // ---- Nhập từ phiếu V2: tách màu, mã mới tạo SANPHAM + KHO ----
-DATA.SANPHAM[1].push('product_color', 'product_name', 'Tên Ngành Hàng', 'product_unit');
-DATA.SANPHAM.push(['TH2040', 'TH2040X', '', '', 'Tuấn Phong', '', '=CONCATENATE(R[0]C[-5])', 'Xám', 'Giày tây TH2040X', 'Giày tây nam', 'Đôi']);
+// SANPHAM thêm cột:            7               8              9                10             11              12               13      14           15                    16          17
+DATA.SANPHAM[1].push('product_color', 'product_name', 'Tên Ngành Hàng', 'product_unit', 'product_price', 'purchase_price', 'Size', 'Giới tính', 'product_category_id', 'Đặc điểm', 'product_origin');
+DATA.SANPHAM.push(['TH2040', 'TH2040X', '', '', 'Tuấn Phong', '', '=CONCATENATE(R[0]C[-5])', 'Xám', '=R[0]C[-2]', 'Giày tây nam', 'Đôi', 900000, 500000,
+  '=IF(R[0]C[1]="male";"38,39";"35,36")', '=IF(REGEXMATCH(R[0]C[-5];"nam");"male";"female")', '=INDEX(SUB!A:B;1;1)', 'cột dây', 'Việt Nam']);
+DATA.SUB[0][0] = 'Tên Ngành Hàng';
 GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX3000', ngay: '2026-10-15', dong: [{ ma_ncc: '32837', mo_ta: 'Giày mọi da', sl: 12, don_gia: 400000 }, { ma_ncc: 'TH', mo_ta: 'Giày tây', sl: 1, don_gia: 500000 }], tong_sl: 13, tong_tien: 5300000 };
 GEMINI_CALLS = 0;
 const SENT0 = SENT.length;
@@ -371,32 +376,38 @@ const v2 = {
     { dong: 1, ma_hnc: '32837N', kho: 'Y3C', sizes: { '44': 3 } },
     { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '43': 1 } },
   ],
-  ma_moi: [{ ma_hnc: '32837D', ma_goc: '32837', mau: 'Đen', day_size: ['38', '39', '40', '41', '42', '43', '44'] }, { ma_hnc: '32837N', mau: 'Nâu', day_size: ['38', '39', '40', '41', '42', '43', '44'] }],
+  ma_moi: [{ ma_hnc: '32837D', ma_goc: '32837', mau: 'Đen', gia_ban: 1200000, day_size: ['38', '39', '40', '41', '42', '43', '44'] },
+    { ma_hnc: '32837N', mau: 'Nâu', gia_ban: '1.200.000', day_size: ['38', '39', '40', '41', '42', '43', '44'] }],
 };
 pr = pn(Object.assign({}, v2, { ma_moi: undefined }), true);
 eq('V2 không cờ mã mới → chặn mã chưa có', [pr.ok, pr.results && pr.results.filter(r => !r.ok).length], [false, 9]);
-pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: '32837D', mau: '' }] }), true);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: '32837D', mau: 'Đen' }] }), true);
+eq('V2 mã mới thiếu giá bán → lỗi', [pr.ok, /thiếu giá bán/.test(pr.loi_dong[0].error)], [false, true]);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: '32837D', mau: 'Đen', gia_ban: 900000, nganh: 'Giày bay' }] }), true);
+eq('V2 ngành không có trong SUB → lỗi', [pr.ok, /không có trong SUB/.test(pr.loi_dong[0].error)], [false, true]);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: '32837D', mau: '', gia_ban: 900000 }] }), true);
 eq('V2 mã mới thiếu màu → lỗi', [pr.ok, pr.loi_dong && pr.loi_dong[0].error], [false, 'thiếu màu (mau)']);
-pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: 'ABCD', mau: 'Đen' }] }), true);
+pr = pn(Object.assign({}, v2, { ma_moi: [{ ma_hnc: 'ABCD', mau: 'Đen', gia_ban: 900000 }] }), true);
 eq('V2 mã mới không dùng trong dòng nào → lỗi', [pr.ok, /không có trong dòng chia/.test(pr.loi_dong[0].error)], [false, true]);
 pr = pn(Object.assign({}, v2, { dong: v2.dong.slice(1) }), true);
 eq('V2 tổng mọi màu × kho lệch SL phiếu → bắt lý do', [pr.ok, pr.loi_dong && pr.loi_dong[0].dong], [false, 1]);
 const spLen = DATA.SANPHAM.length, k15 = DATA.KHO15E.length, ky3 = DATA.KHOY3C.length, nh2 = DATA.NHAP.length, w0 = WRITES.length;
 pr = pn(v2, true);
-eq('V2 chạy thử: tạo 2 SANPHAM, 2 kho × 7 size + 1 dòng KHO thiếu, không ghi', [pr.ok, pr.tao_moi.sanpham, pr.tao_moi.kho.length, pr.tao_moi.kho.indexOf('Y3C TH2040N 43') !== -1, WRITES.length - w0],
-  [true, ['32837D', '32837N'], 29, true, 0]);
+eq('V2 chạy thử: tạo 2 SANPHAM, 2 kho × 7 size + 1 dòng KHO thiếu, số NK, không ghi', [pr.ok, pr.tao_moi.sanpham, pr.tao_moi.kho.length, pr.tao_moi.kho.indexOf('Y3C TH2040N 43') !== -1, pr.so_chung_tu, WRITES.length - w0],
+  [true, ['32837D', '32837N'], 29, true, { '15E': 'NK000001', Y3C: 'NK000001' }, 0]);
 pr = pn(v2);
 if (!pr.ok) console.log(JSON.stringify(pr));
 const spNew = DATA.SANPHAM.slice(spLen);
-eq('V2 SANPHAM tối thiểu: mã, màu, tên tạm cần bổ sung, chép công thức + thuộc tính mẫu', [spNew.length, spNew.map(r => r[1]), spNew.map(r => r[7]), spNew[0][8], spNew[0][0], spNew[0][6], spNew[0][10]],
-  [2, ['32837D', '32837N'], ['Đen', 'Nâu'], 'CẦN BỔ SUNG - Giày mọi da', '32837', '=CONCATENATE(R[0]C[-5])', 'Đôi']);
+eq('V2 SANPHAM tối thiểu: mã, màu, giữ công thức tên, giá bán + giá nhập theo phiếu, size = dãy size, ngành trống → giới tính / danh mục trống',
+  [spNew.length, spNew.map(r => r[1]), spNew.map(r => r[7]), spNew[0][8], spNew[0][0], spNew[0][6], spNew[0][10], spNew.map(r => r[11]), spNew[0][12], spNew[0][13], spNew[0][14], spNew[0][15], spNew[0][9], spNew[0][17], spNew[0][4]],
+  [2, ['32837D', '32837N'], ['Đen', 'Nâu'], '=R[0]C[-2]', '32837', '=CONCATENATE(R[0]C[-5])', 'Đôi', [1200000, 1200000], 400000, '38,39,40,41,42,43,44', '', '', '', 'Việt Nam', 'Chú Dũng']);
 const kNew = DATA.KHO15E.slice(k15);
 eq('V2 KHO15E: 14 dòng tồn đầu 0 + công thức theo tên cột', [kNew.length, kNew[0].slice(1, 5), kNew[0][0], kNew[0][5]],
   [14, ['32837D', 'Đen', 38, 0], '=CONCATENATE($A$1;B' + (k15 + 1) + ';D' + (k15 + 1) + ')',
    '=E' + (k15 + 1) + ' + SUMIF(NHAP!H:H; A' + (k15 + 1) + '; NHAP!G:G) - SUMIF(XUAT!G:G; A' + (k15 + 1) + '; XUAT!F:F) - SUMIF(BAN!H:H; A' + (k15 + 1) + '; BAN!F:F)']);
 eq('V2 KHOY3C: 14 dòng mã mới + TH2040N 43 (mã cũ thiếu size)', [DATA.KHOY3C.filter(r => /^32837[DN]$/.test(r[1])).length, DATA.KHOY3C.filter(r => r[1] === 'TH2040N' && r[3] === 43 && r[4] === 0).length], [14, 1]);
-const nNew = DATA.NHAP.filter(r => r[1] === p2); // dòng đã huỷ trước đó được dùng lại → lọc theo mã phiếu
-eq('V2 NHAP: 11 dòng size, số chứng từ = mã phiếu', [pr.ok, nNew.length, nNew.every(r => r[1] === p2), nNew.reduce((t, r) => t + Number(r[6]), 0)], [true, 10, true, 13]);
+const nNew = DATA.NHAP.filter(r => r[1] === 'NK000001'); // dòng đã huỷ trước đó được dùng lại → lọc theo số chứng từ
+eq('V2 NHAP: 10 dòng size, số chứng từ NK theo kho', [pr.ok, nNew.length, nNew.reduce((t, r) => t + Number(r[6]), 0), pr.so_chung_tu], [true, 10, 13, { '15E': 'NK000001', Y3C: 'NK000001' }]);
 eq('V2 sync: SANPHAM + 2 kho + NHAP', pr._sync.slice().sort(), ['KHO15E', 'KHOY3C', 'NHAP', 'SANPHAM']);
 eq('V2 học mã gốc khi tách màu', pn({ action: 'xem_nhap', id: p2 }).dong.map(x => x.goi_y_ma_hnc), ['32837', 'TH2040N']);
 pr = pn({ action: 'huy_nhap', ticket_id: 'V2A' });
@@ -408,8 +419,35 @@ DATA.XUAT.push(['16/10/2026', '32837D', 'Đen', '15E', 38, 1, '']);
 pr = pn({ action: 'huy_nhap', ticket_id: 'V2B' });
 eq('V2 mã mới đã xuất → không huỷ', [pr.ok, /32837D size 38 kho 15E đã có giao dịch khác \(XUAT/.test(pr.error)], [false, true]);
 DATA.XUAT.pop();
-r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['32837D', 'TH2040D'], at: '2026-10-16T03:05:00Z' }, true);
-eq('mark_exported bỏ qua mã CẦN BỔ SUNG', [r2.ok, r2.written, r2.chua_bo_sung], [true, 1, ['32837D']]);
+r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['32837D', 'TH2040X'], at: '2026-10-16T03:05:00Z' }, true);
+eq('mark_exported bỏ qua mã cần bổ sung (trống ngành)', [r2.ok, r2.written, r2.chua_bo_sung], [true, 1, ['32837D']]);
+// Cùng kho + cùng NCC + cùng ngày → dùng chung số NK; Chủ huỷ sau 10 phút
+const spRow = DATA.SANPHAM.findIndex(r => r[1] === '32837D');
+// bo_sung_sp: chỉ cột cho phép, ngành theo SUB, khôi phục công thức giới tính / danh mục
+const bs = (b, dry) => ctx.handleStock_(Object.assign({ action: 'bo_sung_sp', nguoi: 'kha@hn.vn', product_code: '32837D' }, b), !!dry);
+let bf = bs({ cot: { 'Tên Ngành Hàng': 'Giày mọi nam', 'product_name': 'x' } }, true);
+eq('bo_sung_sp: cột ngoài danh sách → lỗi, không ghi', [bf.ok, bf.loi], [false, ['cột "product_name" không được sửa']]);
+bf = bs({ cot: { 'Tên Ngành Hàng': 'Giày bay' } }, true);
+eq('bo_sung_sp: ngành không có trong SUB → lỗi', [bf.ok, /không có trong SUB/.test(bf.loi[0])], [false, true]);
+bf = bs({ cot: { 'Tên Ngành Hàng': 'Giày mọi nam', 'Đặc điểm ': 'xỏ chân' } });
+eq('bo_sung_sp: ghi ngành + đặc điểm, khôi phục công thức, hết cần bổ sung', [bf.ok, bf.da_ghi, bf.can_bo_sung, DATA.SANPHAM[spRow][9], DATA.SANPHAM[spRow][16], DATA.SANPHAM[spRow][14], DATA.SANPHAM[spRow][15], bf._sync],
+  [true, ['Tên Ngành Hàng', 'Đặc điểm', 'Giới tính', 'product_category_id'], false, 'Giày mọi nam', 'xỏ chân', '=IF(REGEXMATCH(R[0]C[-5];"nam");"male";"female")', '=INDEX(SUB!A:B;1;1)', ['SANPHAM']]);
+r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['32837D'], at: '2026-10-16T03:06:00Z' }, true);
+eq('đủ thông tin → mark_exported đánh dấu', [r2.written, r2.chua_bo_sung], [1, []]);
+GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX3001', ngay: '2026-10-16', dong: [{ ma_ncc: 'CXE', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+let p3 = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-4').toString('base64') }).id;
+pr = pn({ action: 'xac_nhan', id: p3, ticket_id: 'V3', dong: [{ dong: 1, ma_hnc: 'CXED', kho: 'Y3C', sizes: { '40': 1 } }] }, true);
+eq('cùng kho + cùng NCC + cùng ngày → dùng chung số NK', pr.so_chung_tu, { Y3C: 'NK000001' });
+GEMINI_REPLY.ncc = 'Tuấn Phong';
+p3 = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-5').toString('base64') }).id;
+pr = pn({ action: 'xac_nhan', id: p3, ticket_id: 'V4', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: 'Y3C', sizes: { '40': 1 } }] }, true);
+eq('khác NCC → số lớn nhất của kho + 1', pr.so_chung_tu, { Y3C: 'NK000002' });
+pr = pn({ action: 'huy_nhap', ticket_id: 'V2B', id: p2, nguoi: 'khac@hn.vn' });
+eq('quá 10 phút / người khác, không phải Chủ → không huỷ', pr.ok, false);
+delete CACHE.stkops_V2B; // giả lập quá 10 phút
+pr = pn({ action: 'huy_nhap', ticket_id: 'V2B', id: p2, nguoi: 'chu@hn.vn', chu: true });
+eq('Chủ huỷ sau 10 phút → xoá hết dòng của phiếu, phiếu về chờ chia', [pr.ok, pr.so_dong, DATA.NHAP.filter(r => r[1] === 'NK000001').length, DATA.SANPHAM.filter(r => /^32837/.test(r[1])).length, pn({ action: 'ds_nhap' }).phieu[0].trang_thai],
+  [true, 41, 0, 0, 'cho_chia']);
 // Gemini hết lượt
 const realFetch = ctx.UrlFetchApp.fetch;
 ctx.UrlFetchApp.fetch = (url, opt) => (url.indexOf('generativelanguage') !== -1 ? { getResponseCode: () => 429, getContentText: () => '' } : realFetch(url, opt));

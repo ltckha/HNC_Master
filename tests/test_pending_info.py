@@ -1,4 +1,4 @@
-"""Test: xuất MISA / sàn / web cũ bỏ qua mã "CẦN BỔ SUNG" (mã tạo từ phiếu NCC).
+"""Test: xuất MISA / sàn / web cũ bỏ qua mã "cần bổ sung" (trống Tên Ngành Hàng hoặc giá bán).
 Chạy: venv/bin/python tests/test_pending_info.py  → thoát mã 1 nếu có ca sai. Không gọi Google."""
 import os
 import sys
@@ -23,17 +23,18 @@ def eq(name, got, want):
 
 # SANPHAM giả: hàng 1 tên nhóm, hàng 2 tên cột kỹ thuật
 df_sp = pd.DataFrame([
-    ["Mã hàng hóa cha", "", ""],
-    ["parent_product_code", "product_code", "product_name"],
-    ["GT1782", "GT1782D", "Giày cột dây nam GT1782D"],
-    ["32837", "32837D", "CẦN BỔ SUNG - Giày mọi da"],
-    ["32837", "32837n\x08", "cần bổ sung - Giày mọi da"],
-    ["", "", ""],
+    ["Mã hàng hóa cha", "", "", ""],
+    ["parent_product_code", "Tên Ngành Hàng", "product_code", "product_price"],
+    ["GT1782", "Giày tây nam", "GT1782D", "800000"],
+    ["32837", "", "32837D", "1200000"],
+    ["32837", "Giày mọi nam", "32837n\x08", ""],
+    ["32837", "Giày mọi nam", "32837X", "0"],
+    ["", "", "", ""],
 ])
-col_map = {"parent_product_code": 0, "product_code": 1, "product_name": 2}
+col_map = {"parent_product_code": 0, "Tên Ngành Hàng": 1, "product_code": 2, "product_price": 3}
 codes = main.pending_info_codes(df_sp, col_map)
-eq("tìm mã CẦN BỔ SUNG (không phân biệt hoa thường, bỏ ký tự ẩn)", sorted(codes), ["32837D", "32837N"])
-eq("thiếu cột product_name → không bỏ gì", main.pending_info_codes(df_sp, {"product_code": 1}), set())
+eq("mã cần bổ sung: trống ngành hoặc giá bán (bỏ ký tự ẩn)", sorted(codes), ["32837D", "32837N", "32837X"])
+eq("thiếu cả 2 cột → không bỏ gì", main.pending_info_codes(df_sp, {"product_code": 2}), set())
 
 recs = [{"product_code": "GT1782D"}, {"product_code": "32837d"}, {"product_code": "32837N"}, {"product_code": "TH2040D"}]
 kept, idx = main.drop_pending_info(recs, [3, 4, 5, 6], codes)

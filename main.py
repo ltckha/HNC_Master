@@ -110,9 +110,9 @@ STATUS_COLUMNS = {
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
-# Mã tạo từ phiếu NCC (bot HNC, V2 16/10/2026): product_name = "CẦN BỔ SUNG - <tên tạm>", chưa có giá / thuộc tính.
-# Xuất MISA / Shopee / TikTok / web cũ tự BỎ QUA các mã này (giữ trạng thái trống để xuất sau khi bổ sung).
-PENDING_INFO_PREFIX = "CẦN BỔ SUNG"
+# Mã "cần bổ sung" (anh Kha 16/10/2026; thường là mã tạo từ phiếu NCC): SANPHAM trống "Tên Ngành Hàng" hoặc giá bán.
+# Xuất MISA / Shopee / TikTok / web cũ tự BỎ QUA các mã này (giữ trạng thái trống để xuất sau khi bổ sung). Giống bot HNC (needsInfo_).
+PENDING_INFO_COLUMNS = ("Tên Ngành Hàng", "product_price")
 # Tác vụ bỏ qua mã chưa bổ sung: 1 web đăng mới, 2 Shopee đăng mới, 3 TikTok đăng mới, 4 MISA danh mục, 5 web tồn, 8 MISA phiếu nhập
 PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8}
 
@@ -123,18 +123,23 @@ def clean_code(value):
 
 
 def pending_info_codes(df_sp, col_map_sp, data_start_row=2):
-    """Tập mã SANPHAM (chữ hoa) có product_name bắt đầu "CẦN BỔ SUNG" — mã tạo từ phiếu NCC, chưa bổ sung thông tin."""
-    p_idx, n_idx = col_map_sp.get('product_code'), col_map_sp.get('product_name')
-    if p_idx is None or n_idx is None:
+    """Tập mã SANPHAM (chữ hoa) "cần bổ sung": trống Tên Ngành Hàng hoặc giá bán (product_price ≤ 0)."""
+    p_idx = col_map_sp.get('product_code')
+    checks = [(n, col_map_sp.get(n)) for n in PENDING_INFO_COLUMNS if col_map_sp.get(n) is not None]
+    if p_idx is None or not checks:
         return set()
     codes = set()
     for r in range(data_start_row, len(df_sp)):
         row = df_sp.iloc[r]
-        name = str(row[n_idx]).strip() if pd.notna(row[n_idx]) else ""
-        if name.upper().startswith(PENDING_INFO_PREFIX):
-            code = clean_code(row[p_idx]).upper() if pd.notna(row[p_idx]) else ""
-            if code:
+        code = clean_code(row[p_idx]).upper() if pd.notna(row[p_idx]) else ""
+        if not code:
+            continue
+        for name, idx in checks:
+            val = row[idx] if pd.notna(row[idx]) else ""
+            empty = parse_number(val) <= 0 if name == 'product_price' else not str(val).strip()
+            if empty:
                 codes.add(code)
+                break
     return codes
 
 
@@ -152,7 +157,7 @@ def drop_pending_info(records, row_indices, codes):
         keep_idx.append(idx)
     if skipped:
         uniq = sorted(set(skipped))
-        print(f"⏭️ Bỏ qua {len(uniq)} mã chưa bổ sung (CẦN BỔ SUNG): {', '.join(uniq[:10])}{' …' if len(uniq) > 10 else ''}")
+        print(f"⏭️ Bỏ qua {len(uniq)} mã chưa bổ sung (trống ngành / giá bán): {', '.join(uniq[:10])}{' …' if len(uniq) > 10 else ''}")
     return keep_rec, keep_idx
 
 
@@ -1137,7 +1142,7 @@ def process_export_task(choice, loader):
                 total_exported_sku += len(out_rows)
 
             if skipped_full:
-                print(f"⏭️ Bỏ qua {len(skipped_full)} mã chưa bổ sung (CẦN BỔ SUNG): {', '.join(sorted(skipped_full)[:10])}{' …' if len(skipped_full) > 10 else ''}")
+                print(f"⏭️ Bỏ qua {len(skipped_full)} mã chưa bổ sung (trống ngành / giá bán): {', '.join(sorted(skipped_full)[:10])}{' …' if len(skipped_full) > 10 else ''}")
             exported_filepath = "\n📁 ".join(exported_files)
             success_msg = f"\n✅ Đã xuất FULL toàn bộ {total_exported_sku} SKU tồn kho Website thành công!\n📁 {exported_filepath}\n"
             if HAS_RICH:

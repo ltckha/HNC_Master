@@ -919,7 +919,8 @@ function handleStock_(body, dryRun) {
   const ticket = String(body.ticket_id || '').trim();
   const seller = String(body.seller || body.nguoi || '').trim().toLowerCase().slice(0, 80);
   if (PN_ACTIONS.indexOf(action) !== -1) return handleReceipt_(action, body, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS).join(', ') };
+  if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -1067,7 +1068,13 @@ const PN_UNSPLIT = 'Chưa chia';
 const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
 const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
-const PN_NEW_FLAG = 'CẦN BỔ SUNG - '; // đầu product_name của dòng SANPHAM tạo từ phiếu (tên tạm = mô tả phiếu)
+// Mã "cần bổ sung" (anh Kha 16/10): SANPHAM trống Tên Ngành Hàng hoặc giá bán → xuất sàn / MISA / mark_exported bỏ qua, web ẩn.
+const PN_NEED_INFO_COLS = ['Tên Ngành Hàng', 'product_price'];
+// Cột thông tin mẫu: chép từ mẫu cùng mã cha khi tạo mã mới; form "Bổ sung thông tin" (bo_sung_sp) chỉ được ghi các cột này + product_price
+const PN_INFO_COLS = ['Tên Ngành Hàng', 'Đặc điểm', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:', 'Chất liệu đế:', 'Lót trong:', 'Mặt lót đế:',
+  'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:'];
+// Cột công thức phụ thuộc ngành: ngành trống thì để trống (tránh "female" / #N/A), có ngành thì chép lại công thức
+const PN_NGANH_FORMULA_COLS = ['Giới tính', 'product_category_id'];
 
 function handleReceipt_(action, body, dryRun) {
   MEMO = {};
@@ -1193,9 +1200,11 @@ function receiptLoad_(id) {
 function receiptSave_(d) {
   const ix = receiptIndex_(d.id);
   DriveApp.getFileById(ix.f).setContent(JSON.stringify(d, null, 1));
-  const nx = Object.assign({}, ix, { ncc: d.ncc, so: d.so_phieu, ngay: d.ngay, nd: d.dong.length, sl: d.tong_sl, st: d.trang_thai });
+  const nx = Object.assign({}, ix, { ncc: d.ncc, so: d.so_phieu, ngay: d.ngay, nd: d.dong.length, sl: d.tong_sl, st: d.trang_thai,
+    nk: d.xac_nhan && d.xac_nhan.so_ct ? d.xac_nhan.so_ct : undefined });
   PropertiesService.getScriptProperties().setProperty('pnx_' + d.id, JSON.stringify(nx));
   MEMO.__pnx[d.id] = nx;
+  delete MEMO.__pnByNk;
 }
 
 function receiptCreate_(bytes, mime, nguon, nguoi) {
@@ -1335,17 +1344,18 @@ function receiptConfirm_(body, nguoi, dryRun) {
     if (!lines.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'không có dòng nào để ghi', canh_bao: canhBao };
     const khoRows = receiptKhoRowsPlan_(plan, lines);
     const taoMoi = { sanpham: plan.list.map(m => m.code), kho: khoRows.map(k => k.kho + ' ' + k.code + (k.size ? ' ' + k.size : '')) };
+    const nk = receiptNkPlan_(uniq_(lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()]).filter(Boolean)), d.ncc);
 
     // Lượt 1: chạy thử bằng đúng hàm "nhap" (mã mới coi như đã có)
-    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes };
+    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes, nk };
     const checked = lines.map((ln, i) => stockLine_('nhap', {}, ln, i, true));
     checked.forEach((r, i) => { r.result.dong_phieu = lines[i].src; });
     if (checked.some(r => !r.ok)) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', results: checked.map(r => r.result), canh_bao: canhBao };
-    if (dryRun) return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result), canh_bao: canhBao, tao_moi: taoMoi };
+    if (dryRun) return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result), canh_bao: canhBao, tao_moi: taoMoi, so_chung_tu: nk };
 
     // Lượt 2: ghi thật — SANPHAM mới → dòng KHO → NHAP
     MEMO = { __pnx: MEMO.__pnx };
-    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes };
+    CTX = { seller: '', pending: {}, receiptId: d.id, newCodes: plan.codes, nk };
     const ops = [];
     const out = [];
     try {
@@ -1367,8 +1377,8 @@ function receiptConfirm_(body, nguoi, dryRun) {
       CTX.newCodes = null;
     }
     d.trang_thai = 'da_ghi';
-    d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, ma_moi: plan.list, canh_bao: canhBao,
-      rows: ops.map(o => o.sheet + '!' + o.row) };
+    d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, ma_moi: plan.list, canh_bao: canhBao, so_ct: nk,
+      rows: ops.map(o => o.sheet + '!' + o.row), ops }; // ops: để Chủ huỷ được sau 10 phút (huy_nhap chu:true)
     receiptSave_(d);
     try { receiptFileByHousehold_(d, lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()])); }
     catch (err) { console.error('Không chuyển được ảnh phiếu sang thư mục hộ: ' + (err && err.message ? err.message : err)); }
@@ -1386,7 +1396,7 @@ function receiptConfirm_(body, nguoi, dryRun) {
     props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
     pruneTickets_(props, 'stk_');
     CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'nhập phiếu ' + d.id, ops, pn: d.id }), UNDO_SECONDS);
-    return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao, tao_moi: taoMoi,
+    return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao, tao_moi: taoMoi, so_chung_tu: nk,
       undo_until: new Date(Date.now() + UNDO_SECONDS * 1000).toISOString(), _sync: uniq_(ops.map(o => o.sheet)) };
   } finally {
     lock.releaseLock();
@@ -1410,9 +1420,13 @@ function receiptNewCodesPlan_(raw, lines, d, canhBao) {
     if (!color) return err('thiếu màu (mau)');
     const sizes = uniq_((Array.isArray(m.day_size) ? m.day_size : []).map(x => normSize_(x)).concat(used.map(l => normSize_(l.size))));
     if (sizes.some(x => x && !/^\d{2}$/.test(x))) return err('day_size phải là size 2 chữ số');
+    const price = Math.round(moneyValue_(m.gia_ban));
+    if (!(price >= 1000)) return err('thiếu giá bán (gia_ban, đồng, ≥ 1.000)');
+    const nganh = String(m.nganh || '').trim();
+    if (nganh && productCategories_().indexOf(nganh) === -1) return err('ngành "' + nganh + '" không có trong SUB');
     const pl = d.dong.find(x => x.dong === used[0].src) || {};
-    plan.list.push({ code, base, color, sizes: sizes.sort((a, b) => sizeOrder_(a) - sizeOrder_(b)),
-      name: String(m.ten_tam || pl.mo_ta || pl.ma_ncc || code).trim().slice(0, 120), nganh: String(m.nganh || '').trim(), ncc: d.ncc || '' });
+    plan.list.push({ code, base, color, sizes: sizes.sort((a, b) => sizeOrder_(a) - sizeOrder_(b)), price, cost: pl.don_gia || 0,
+      name: String(m.ten_tam || pl.mo_ta || pl.ma_ncc || code).trim().slice(0, 120), nganh, ncc: d.ncc || '' });
     plan.codes.add(code);
   });
   return plan;
@@ -1440,8 +1454,9 @@ function receiptKhoRowsPlan_(plan, lines) {
 }
 
 /**
- * Thêm 1 dòng SANPHAM tối thiểu (tiêu đề hàng 2): chép công thức của dòng cuối (mã cha, giới tính, size, tên, ngành…),
- * điền mã, màu, tên tạm "CẦN BỔ SUNG - <mô tả phiếu>", NCC; thuộc tính mẫu lấy từ dòng cùng mã cha nếu có. Không ghi giá.
+ * Thêm 1 dòng SANPHAM tối thiểu (tiêu đề hàng 2): chép công thức của dòng cuối (mã cha, tên, mô tả…; product_name giữ công thức),
+ * điền mã, màu, giá bán (app nhập), giá nhập = đơn giá phiếu, NCC, size = dãy size; cột thông tin mẫu chép từ mẫu cùng mã cha nếu có.
+ * Ngành trống → Giới tính / product_category_id để trống (mã "cần bổ sung", bổ sung qua bo_sung_sp).
  */
 function appendSanphamMin_(m) {
   const sheet = getSheet_('SANPHAM');
@@ -1450,42 +1465,186 @@ function appendSanphamMin_(m) {
   for (let r = 0; r < Math.min(2, data.length); r++) if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
   if (hr === -1) throw new Error('Tab SANPHAM không có cột product_code ở hàng 1-2');
   const col = headerMap_(data[hr]);
-  requireColumns_('SANPHAM', col, ['product_code', 'product_color', 'product_name']);
+  requireColumns_('SANPHAM', col, ['product_code', 'product_color', 'product_price']);
   let last = data.length;
   while (last > hr + 1 && String(data[last - 1][col.product_code]).trim() === '') last--;
   const row = last + 1;
   if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
   const ncol = data[hr].length;
 
-  // Dòng mẫu cùng mã cha (cùng mẫu, khác màu) → chép thuộc tính chữ (không chép giá, ảnh, cờ đã đăng)
+  // Mẫu cùng mã cha (cùng mẫu, khác màu) → chép cột thông tin mẫu (không chép giá, ảnh, cờ đã đăng)
   const pc = col.parent_product_code;
-  const sib = pc === undefined ? null : data.slice(hr + 1).find(r => String(r[pc]).trim().toUpperCase() === m.base ||
-    String(r[col.product_code]).trim().toUpperCase().slice(0, -1) === m.base);
+  const sib = data.slice(hr + 1).find(r => String(r[col.product_code]).trim() &&
+    ((pc !== undefined && String(r[pc]).trim().toUpperCase() === m.base) || String(r[col.product_code]).trim().toUpperCase().slice(0, -1) === m.base));
+  const values = { product_code: m.code, product_color: m.color, product_price: m.price };
+  PN_INFO_COLS.concat(['Thương hiệu', 'product_unit', 'product_origin']).forEach(n => {
+    if (sib && col[n] !== undefined && String(sib[col[n]]).trim() !== '') values[n] = sib[col[n]];
+  });
+  if (m.nganh && col['Tên Ngành Hàng'] !== undefined) values['Tên Ngành Hàng'] = m.nganh;
+  if (col.product_unit !== undefined && values.product_unit === undefined) values.product_unit = 'Đôi';
+  if (col.product_origin !== undefined && values.product_origin === undefined) values.product_origin = 'Việt Nam'; // anh Kha 16/10
+  if (col.Size !== undefined && m.sizes.some(Boolean)) values.Size = m.sizes.filter(Boolean).join(',');
+  if (col.purchase_price !== undefined && m.cost) values.purchase_price = m.cost; // invoice_price để anh điền (anh Kha 16/10)
+  if (col.supplier !== undefined && m.ncc) values.supplier = m.ncc;
+  const hasNganh = col['Tên Ngành Hàng'] !== undefined && String(values['Tên Ngành Hàng'] || '').trim() !== '';
+  if (!hasNganh) PN_NGANH_FORMULA_COLS.forEach(n => { if (col[n] !== undefined) values[n] = ''; });
+
   const formulas = last > hr + 1 ? sheet.getRange(last, 1, 1, ncol).getFormulasR1C1()[0] : [];
   const cols = [];
+  const mem = new Array(ncol).fill('');
   for (let c = 0; c < ncol; c++) {
-    if (formulas[c] && String(formulas[c]).charAt(0) === '=') {
+    const name = String(data[hr][c]).trim();
+    if (formulas[c] && String(formulas[c]).charAt(0) === '=' && !(name && values[name] !== undefined)) {
       sheet.getRange(row, c + 1).setFormulaR1C1(formulas[c]);
       cols.push(c + 1);
+      mem[c] = formulas[c];
     }
   }
-  const values = { product_code: m.code, product_color: m.color, product_name: PN_NEW_FLAG + m.name };
-  const copyCols = ['Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Size Plus', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:', 'Chất liệu đế:', 'Lót trong:',
-    'Mặt lót đế:', 'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'product_unit', 'product_origin'];
-  if (sib) copyCols.forEach(n => { if (col[n] !== undefined && sib[col[n]] !== '' && !formulas[col[n]]) values[n] = sib[col[n]]; });
-  if (m.nganh && col['Tên Ngành Hàng'] !== undefined) values['Tên Ngành Hàng'] = m.nganh;
-  if (col.product_unit !== undefined && values.product_unit === undefined && !formulas[col.product_unit]) values.product_unit = 'Đôi';
-  if (col.supplier !== undefined && m.ncc) values.supplier = m.ncc;
-  if (pc !== undefined && !formulas[pc]) values.parent_product_code = m.base;
+  if (pc !== undefined && !(formulas[pc] && String(formulas[pc]).charAt(0) === '=')) values.parent_product_code = m.base;
   Object.keys(values).forEach(n => {
-    sheet.getRange(row, col[n] + 1).setValue(values[n]);
+    if (values[n] !== '') sheet.getRange(row, col[n] + 1).setValue(values[n]);
     if (cols.indexOf(col[n] + 1) === -1) cols.push(col[n] + 1);
+    mem[col[n]] = values[n];
   });
-  const mem = formulas.length ? formulas.slice(0, ncol).map(f => (f && String(f).charAt(0) === '=' ? f : '')) : new Array(ncol).fill('');
-  Object.keys(values).forEach(n => { mem[col[n]] = values[n]; });
   while (data.length < row - 1) data.push(new Array(ncol).fill(''));
   data[row - 1] = mem; // bộ nhớ đệm: mã mới tiếp theo ghi dòng kế
   return { type: 'row', sheet: 'SANPHAM', row, hr: hr + 1, cols, check: { product_code: m.code }, guard: { code: m.code } };
+}
+
+/** Các ngành trong SUB (cột Tên Ngành Hàng). */
+function productCategories_() {
+  if (!MEMO.__cats) {
+    const sub = sheetValues_('SUB');
+    const c = headerMap_(sub[0] || []);
+    MEMO.__cats = c['Tên Ngành Hàng'] === undefined ? [] : uniq_(sub.slice(1).map(r => String(r[c['Tên Ngành Hàng']] || '').trim()).filter(Boolean));
+  }
+  return MEMO.__cats;
+}
+
+/** Mã "cần bổ sung": dòng SANPHAM trống Tên Ngành Hàng hoặc giá bán. */
+function needsInfo_(row, col) {
+  return PN_NEED_INFO_COLS.some(n => col[n] !== undefined &&
+    (n === 'product_price' ? !(moneyValue_(row[col[n]]) > 0) : String(row[col[n]] === undefined || row[col[n]] === null ? '' : row[col[n]]).trim() === ''));
+}
+
+/**
+ * Số chứng từ NHAP cho lần xác nhận: theo từng kho, NK + 6 số (như Sheet đang dùng).
+ * Cùng kho + cùng NCC + cùng ngày (hôm nay) đã có số → dùng chung; khác → số lớn nhất của kho đó + 1.
+ */
+function receiptNkPlan_(khos, ncc) {
+  const nh = sheetValues_('NHAP');
+  const col = headerMap_(nh[0]);
+  requireColumns_('NHAP', col, ['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'KHO']);
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const sup = productSuppliers_();
+  const max = {}, same = {};
+  for (let r = 1; r < nh.length; r++) {
+    const m = String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase().match(/^NK(\d+)$/);
+    if (!m) continue;
+    const kho = KHO_ALIASES[String(nh[r][col.KHO] || '').trim().toUpperCase()];
+    if (!kho) continue;
+    max[kho] = Math.max(max[kho] || 0, Number(m[1]));
+    if (!ncc || same[kho] || dateKey_(nh[r][col['Ngày chứng từ (*)']]) !== today) continue;
+    const pnr = receiptByNhap_(kho, 'NK' + m[1]); // dòng của phiếu NCC → NCC theo phiếu, còn lại theo SANPHAM
+    const rowNcc = pnr ? pnr.ncc : sup[String(nh[r][col.product_code] || '').trim().toUpperCase()];
+    if (norm_(rowNcc || '') === norm_(ncc)) same[kho] = 'NK' + m[1];
+  }
+  const out = {};
+  khos.forEach(k => { out[k] = same[k] || 'NK' + String((max[k] || 0) + 1).padStart(6, '0'); });
+  return out;
+}
+
+/** product_code → supplier (SANPHAM). */
+function productSuppliers_() {
+  if (!MEMO.__sup) {
+    const sp = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+    const c = headerMap_(sp[hr]);
+    MEMO.__sup = {};
+    if (c.supplier !== undefined) for (let r = hr + 1; r < sp.length; r++) {
+      const code = String(sp[r][c.product_code] || '').trim().toUpperCase();
+      if (code) MEMO.__sup[code] = String(sp[r][c.supplier] || '').trim();
+    }
+  }
+  return MEMO.__sup;
+}
+
+/**
+ * Form "Bổ sung thông tin mã mới" (web /admin): ghi đúng các cột PN_INFO_COLS (+ product_price) của 1 mã, theo tên cột hàng 2.
+ * Body: { action:"bo_sung_sp", product_code, nguoi, dry_run?, cot:{"Tên Ngành Hàng": "...", …}, product_price? }
+ * Ngành phải có trong SUB. Có ngành thì chép lại công thức Giới tính / product_category_id (từ dòng gần nhất có công thức).
+ */
+function productFill_(body, nguoi, dryRun) {
+  const code = String(body.product_code || '').trim().toUpperCase();
+  const fail = msg => ({ ok: false, action: 'bo_sung_sp', product_code: code, error: msg });
+  if (!nguoi) return fail('thiếu nguoi (email người dùng app)');
+  if (!/^[A-Z0-9]{2,20}$/.test(code)) return fail('product_code không hợp lệ');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    MEMO = {};
+    const sheet = getSheet_('SANPHAM');
+    const data = sheetValues_('SANPHAM');
+    let hr = -1;
+    for (let r = 0; r < Math.min(2, data.length); r++) if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+    if (hr === -1) return fail('Tab SANPHAM không có cột product_code');
+    const col = headerMap_(data[hr]);
+    let ri = -1;
+    for (let r = hr + 1; r < data.length; r++) if (String(data[r][col.product_code]).trim().toUpperCase() === code) { ri = r; break; }
+    if (ri === -1) return fail('không có mã ' + code + ' trong SANPHAM');
+
+    const cot = body.cot && typeof body.cot === 'object' ? body.cot : {};
+    const errors = [], canhBao = [];
+    const values = {};
+    Object.keys(cot).forEach(k => {
+      const name = String(k).trim();
+      if (PN_INFO_COLS.indexOf(name) === -1) { errors.push('cột "' + name + '" không được sửa'); return; }
+      if (col[name] === undefined) { canhBao.push('SANPHAM không có cột "' + name + '", bỏ qua'); return; }
+      const v = String(cot[k] === null || cot[k] === undefined ? '' : cot[k]).replace(/\s+/g, ' ').trim();
+      if (v.length > 200) { errors.push('"' + name + '" dài quá 200 ký tự'); return; }
+      if (v.charAt(0) === '=') { errors.push('"' + name + '" không được bắt đầu bằng ='); return; }
+      values[name] = v;
+    });
+    if (values['Tên Ngành Hàng'] !== undefined) {
+      if (!values['Tên Ngành Hàng']) errors.push('Tên Ngành Hàng không được để trống');
+      else if (productCategories_().indexOf(values['Tên Ngành Hàng']) === -1) errors.push('ngành "' + values['Tên Ngành Hàng'] + '" không có trong SUB');
+    }
+    if (body.product_price !== undefined && body.product_price !== null && body.product_price !== '') {
+      const price = Math.round(moneyValue_(body.product_price));
+      if (!(price >= 1000)) errors.push('product_price phải ≥ 1.000 đồng');
+      else values.product_price = price;
+    }
+    if (errors.length) return Object.assign(fail('Có lỗi, chưa ghi gì'), { loi: errors });
+    const names = Object.keys(values);
+    if (!names.length) return fail('không có cột nào để ghi');
+
+    // Có ngành → khôi phục công thức phụ thuộc ngành nếu ô đang không phải công thức
+    const nganh = values['Tên Ngành Hàng'] !== undefined ? values['Tên Ngành Hàng'] : String(data[ri][col['Tên Ngành Hàng']] || '').trim();
+    const restore = [];
+    if (nganh) {
+      const rowF = sheet.getRange(ri + 1, 1, 1, data[hr].length).getFormulasR1C1()[0];
+      PN_NGANH_FORMULA_COLS.forEach(n => {
+        if (col[n] === undefined || String(rowF[col[n]] || '').charAt(0) === '=') return;
+        for (let r = ri; r > hr; r--) { // dòng gần nhất phía trên có công thức ở cột này
+          const f = sheet.getRange(r, col[n] + 1).getFormulaR1C1();
+          if (f && f.charAt(0) === '=') { restore.push({ name: n, f }); break; }
+        }
+      });
+    }
+    const after = data[ri].slice();
+    names.forEach(n => { after[col[n]] = values[n]; });
+    const result = { ok: true, action: 'bo_sung_sp', product_code: code, dry_run: dryRun, da_ghi: names.concat(restore.map(x => x.name)), canh_bao: canhBao,
+      can_bo_sung: needsInfo_(after, col) };
+    if (dryRun) return result;
+    names.forEach(n => sheet.getRange(ri + 1, col[n] + 1).setValue(values[n]));
+    restore.forEach(x => sheet.getRange(ri + 1, col[x.name] + 1).setFormulaR1C1(x.f));
+    console.log('bo_sung_sp ' + code + ' bởi ' + nguoi + ': ' + result.da_ghi.join(', '));
+    result._sync = ['SANPHAM'];
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Thêm 1 dòng KHO (tồn đầu 0) như HNC "Đồng bộ SKU" — công thức FSKU + tồn hiện tại dựng theo tên cột NHAP / XUAT / BAN. */
@@ -1523,33 +1682,97 @@ function appendKhoRow_(k) {
     check: { product_code: k.code, item_size: k.size }, guard: { code: k.code, size: k.size, kho: k.kho } };
 }
 
-/** Huỷ lần xác nhận phiếu (ticket_id của xac_nhan), chỉ của chính người đó, ≤ 10 phút → phiếu về "chờ chia". */
+/**
+ * Huỷ lần xác nhận phiếu (ticket_id của xac_nhan) → phiếu về "chờ chia".
+ * Người ghi: ≤ 10 phút. Chủ (chu: true, web kiểm quyền, kèm id phiếu): quá 10 phút vẫn huỷ được nếu các mã chưa có giao dịch khác.
+ */
 function receiptUndo_(body, nguoi, dryRun) {
   const ticket = String(body.ticket_id || '').trim();
   const cache = CacheService.getScriptCache();
   const raw = cache.get('stkops_' + ticket);
-  if (!raw) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'không có thao tác để huỷ (quá 10 phút, đã huỷ, hoặc sai mã)' };
-  const rec = JSON.parse(raw);
-  if (rec.seller !== nguoi) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'chỉ huỷ được thao tác của chính mình' };
+  let rec = raw ? JSON.parse(raw) : null;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    if (!rec && body.chu === true) rec = receiptUndoRecord_(String(body.id || '').trim(), ticket);
+    if (!rec) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'không có thao tác để huỷ (quá 10 phút, đã huỷ, hoặc sai mã)' };
+    if (rec.error) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: rec.error };
+    if (rec.seller !== nguoi && body.chu !== true) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'chỉ huỷ được thao tác của chính mình' };
     const r = undoRecord_(rec, dryRun);
     if (r.ok && !dryRun) {
       cache.remove('stkops_' + ticket);
       const d = rec.pn ? receiptLoad_(rec.pn) : null;
       if (d && d.trang_thai === 'da_ghi') {
         d.trang_thai = 'nhap';
-        d.lich_su_huy = (d.lich_su_huy || []).concat([{ luc: new Date().toISOString(), nguoi, xac_nhan: d.xac_nhan }]);
+        d.lich_su_huy = (d.lich_su_huy || []).concat([{ luc: new Date().toISOString(), nguoi, chu: body.chu === true, xac_nhan: d.xac_nhan }]);
         delete d.xac_nhan;
         receiptSave_(d);
       }
     }
-    return { ok: r.ok, action: 'huy_nhap', ticket_id: ticket, id: rec.pn || '', dry_run: dryRun,
+    return { ok: r.ok, action: 'huy_nhap', ticket_id: ticket, id: rec.pn || '', dry_run: dryRun, so_dong: rec.ops.length,
       error: r.ok ? undefined : 'Không huỷ được vì dữ liệu đã thay đổi: ' + (r.problems || []).join('; '), _sync: r.touched || [] };
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Bản ghi huỷ của phiếu đã ghi, lấy từ dữ liệu phiếu (Chủ huỷ sau 10 phút). Phiếu ghi trước khi lưu ops: dựng lại từ danh sách dòng
+ * (xoá cả dòng vì đều là dòng bot thêm), kiểm từng dòng còn đúng mã / số chứng từ của phiếu.
+ */
+function receiptUndoRecord_(id, ticket) {
+  const d = receiptLoad_(id);
+  if (!d) return { error: 'thiếu / sai id phiếu' };
+  if (d.trang_thai !== 'da_ghi' || !d.xac_nhan) return { error: 'phiếu ' + id + ' chưa ghi hoặc đã huỷ' };
+  if (d.xac_nhan.ticket_id !== ticket) return { error: 'ticket_id không khớp lần ghi của phiếu ' + id };
+  let ops = d.xac_nhan.ops;
+  if (!ops) {
+    const newCodes = (d.xac_nhan.ma_moi || []).map(m => m.code);
+    const lineCodes = uniq_((d.xac_nhan.dong || []).map(x => String(x.ma_hnc || '').trim().toUpperCase()));
+    const docs = [d.id].concat(Object.keys(d.xac_nhan.so_ct || {}).map(k => d.xac_nhan.so_ct[k]));
+    ops = [];
+    for (const ref of d.xac_nhan.rows || []) {
+      const m = String(ref).match(/^([A-Z0-9]+)!(\d+)$/);
+      if (!m) continue;
+      const sheet = getSheet_(m[1]);
+      const hr = m[1] === 'SANPHAM' ? 2 : 1;
+      const header = sheet.getRange(hr, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headerMap_(header);
+      const vals = sheet.getRange(Number(m[2]), 1, 1, header.length).getValues()[0];
+      const code = String(vals[col.product_code] || '').trim().toUpperCase();
+      const allCols = header.map((_, i) => i + 1);
+      if (m[1] === 'NHAP') {
+        if (lineCodes.indexOf(code) === -1 || docs.indexOf(String(vals[col['Số chứng từ (*)']] || '').trim()) === -1) return { error: ref + ' không còn là dòng của phiếu' };
+        ops.push({ type: 'row', sheet: 'NHAP', row: Number(m[2]), cols: allCols, check: { product_code: code } });
+      } else if (m[1] === 'SANPHAM') {
+        if (newCodes.indexOf(code) === -1) return { error: ref + ' không còn là mã mới của phiếu' };
+        ops.push({ type: 'row', sheet: 'SANPHAM', row: Number(m[2]), hr: 2, cols: allCols, check: { product_code: code }, guard: { code } });
+      } else if (KHO_SHEETS['15E'] === m[1] || KHO_SHEETS['Y3C'] === m[1]) {
+        if (lineCodes.indexOf(code) === -1 && newCodes.indexOf(code) === -1) return { error: ref + ' không còn là dòng kho của phiếu' };
+        const kho = m[1] === KHO_SHEETS['15E'] ? '15E' : 'Y3C';
+        ops.push({ type: 'row', sheet: m[1], row: Number(m[2]), cols: allCols, check: { product_code: code },
+          guard: { code, size: normSize_(vals[col.item_size]), kho } });
+      }
+    }
+  }
+  return { seller: d.xac_nhan.nguoi, label: 'nhập phiếu ' + d.id, ops, pn: d.id };
+}
+
+/** Dòng NHAP có Số chứng từ NK… → phiếu NCC đã ghi (theo chỉ mục pnx: nk theo kho; phiếu cũ: theo danh sách dòng). */
+function receiptByNhap_(kho, so) {
+  if (!MEMO.__pnByNk) {
+    MEMO.__pnByNk = {};
+    const all = PropertiesService.getScriptProperties().getProperties();
+    Object.keys(all).filter(k => k.indexOf('pnx_') === 0).forEach(k => {
+      let v = null;
+      try { v = JSON.parse(all[k]); } catch (e) { return; }
+      if (!v || v.st !== 'da_ghi') return;
+      if (!MEMO.__pnx) MEMO.__pnx = {};
+      MEMO.__pnx[k.slice(4)] = v;
+      if (v.nk) Object.keys(v.nk).forEach(kh => { MEMO.__pnByNk[kh + '|' + v.nk[kh]] = v; });
+    });
+  }
+  return (so && MEMO.__pnByNk[kho + '|' + so]) || null;
 }
 
 // =====================================================================
@@ -1785,12 +2008,12 @@ function handleExport_(body, dryRun) {
       codes.forEach(c => { want[c] = true; });
       const found = {};
       const cells = [];
-      const pending = []; // mã tạo từ phiếu còn "CẦN BỔ SUNG" → không đánh dấu đã đăng
+      const pending = []; // mã "cần bổ sung" (trống ngành / giá bán) → không đánh dấu đã đăng
       for (let r = headerRow + 1; r < data.length; r++) {
         const c = String(data[r][col.product_code]).trim().toUpperCase();
         if (!want[c]) continue;
         found[c] = true;
-        if (col.product_name !== undefined && String(data[r][col.product_name]).indexOf(PN_NEW_FLAG.trim()) === 0) { pending.push(c); continue; }
+        if (needsInfo_(data[r], col)) { pending.push(c); continue; }
         cells.push(columnLetter_(col[statusName] + 1) + (r + 1));
       }
       if (!dryRun && cells.length) getSheet_('SANPHAM').getRangeList(cells).setValue('Done - ' + stamp);
@@ -1894,7 +2117,8 @@ function invoiceTickets_() {
     const qty = Number(nh[r][col['Số lượng (*)']]) || 0;
     if (qty <= 0) continue;
     const p = prod[code] || { supplier: '', price: 0, name: '', parent: code.replace(/[A-Z]$/, '') };
-    const pn = receiptIndex_(String(nh[r][col['Số chứng từ (*)']] || '').trim()); // nhập từ phiếu NCC → NCC / số phiếu theo phiếu
+    const so = String(nh[r][col['Số chứng từ (*)']] || '').trim();
+    const pn = receiptIndex_(so) || receiptByNhap_(kho, so); // nhập từ phiếu NCC → NCC / số phiếu theo phiếu
     const supplier = (pn && pn.ncc) || p.supplier || NO_SUPPLIER;
     const key = date + '|' + supplier + '|' + kho;
     const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {}, ncc_docs: [] });
@@ -2134,8 +2358,8 @@ function appendNhap_(code, color, size, qty, kho, isReturn) {
   if (isReturn) values['Số chứng từ (*)'] = 'TRA-' + Utilities.formatDate(new Date(), TZ, 'ddMMyy');
   if (CTX.receiptId && !isReturn) {
     // Nhập từ phiếu NCC: như nhập thường (anh Kha 16/10) — không đánh dấu, HNC in tem / đồng bộ kho / xuất MISA;
-    // Số chứng từ = mã phiếu nháp để nối NCC / số phiếu NCC / hoá đơn.
-    values['Số chứng từ (*)'] = CTX.receiptId;
+    // Số chứng từ = NK<6 số> chạy theo kho (receiptNkPlan_); mã phiếu PN… chỉ giữ nội bộ.
+    values['Số chứng từ (*)'] = (CTX.nk && CTX.nk[kho]) || '';
   } else {
     NHAP_MARK_COLUMNS.forEach(c => { values[c] = isReturn ? NHAP_RETURN_MARK : NHAP_ZALO_MARK; });
   }
