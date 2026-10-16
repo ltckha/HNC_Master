@@ -1063,7 +1063,7 @@ function stockUndo_(body, seller, ticket, dryRun, props) {
 // =====================================================================
 
 const PN_ACTIONS = ['doc_phieu', 'ds_nhap', 'xem_nhap', 'xac_nhan', 'huy_nhap', 'bo_nhap'];
-const PN_FOLDER_DEFAULT = '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD'; // "Phiếu mua hàng" (Thue2026 → HNC/Thue/2026), đổi bằng PN_FOLDER_ID
+const PN_FOLDER_DEFAULT = '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD'; // My Drive/HNC/Thue/2026/Phiếu mua hàng (theo ID), đổi bằng PN_FOLDER_ID
 const PN_UNSPLIT = 'Chưa chia';
 // Email Chủ được xem giá nhập (xem_nhap kem_gia); đổi bằng Script Property OWNER_EMAILS (cách nhau dấu phẩy)
 const OWNER_EMAILS_DEFAULT = ['ltckha@gmail.com', 'giayhainancy@gmail.com'];
@@ -2088,7 +2088,7 @@ function digestHex_(text) {
 const INVOICE_START = '2026-09-01';       // chỉ theo dõi / nhắc phiếu từ ngày này
 const INVOICE_MATCH_FROM = '2026-01-01';  // ghép hoá đơn với phiếu từ đầu năm để hoá đơn cũ không ghép nhầm vào phiếu mới
 const INVOICE_REMIND_DAYS = 7;
-const INVOICE_FOLDER_DEFAULT = '1KLzyJnbtSEd2BhE_GPxshqxTNqmR5hs4'; // My Drive/Thue2026/Hoá đơn 2026 (đổi bằng INVOICE_FOLDER_ID)
+const INVOICE_FOLDER_DEFAULT = '1KLzyJnbtSEd2BhE_GPxshqxTNqmR5hs4'; // My Drive/HNC/Thue/2026/Hoá đơn 2026 (theo ID, kéo thư mục vẫn chạy; đổi bằng INVOICE_FOLDER_ID)
 const INVOICE_HKD_FOLDERS = { '15E': 'Hải Nancy', 'Y3C': 'Yen Leather' };
 const NO_SUPPLIER = '(chưa có NCC)';
 
@@ -2665,6 +2665,13 @@ function checkConfig() {
   ['HKD_15E', 'HKD_Y3C'].forEach(n => { const v = props.getProperty(n) || ''; console.log(n + ': ' + (v ? '✅ có (' + v.split('|').length + ' phần: tên | MST | địa chỉ)' : '❌ chưa có')); });
   const folders = invoiceFolders_();
   console.log('Thư mục hoá đơn Drive: ' + (folders ? '✅ đọc được (' + Object.keys(folders).map(k => k + ': ' + Object.keys(folders[k]).length + ' NCC').join(', ') + ')' : '❌ chưa đọc được'));
+  try {
+    const pf = receiptRoot_();
+    let path = pf.getName();
+    const up = pf.getParents();
+    if (up.hasNext()) path = up.next().getName() + '/' + path;
+    console.log('Thư mục phiếu mua hàng Drive: ✅ đọc được (' + path + ')');
+  } catch (err) { console.log('Thư mục phiếu mua hàng Drive: ❌ ' + (err && err.message ? err.message : err)); }
   const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
   SYNC_TRIGGER_HANDLERS.forEach(h => console.log('Trigger ' + h + ': ' + (handlers.indexOf(h) !== -1 ? '✅' : '❌ chưa có (chạy setupChangeTrigger)')));
 }
