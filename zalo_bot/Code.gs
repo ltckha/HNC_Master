@@ -822,6 +822,8 @@ function handleSale_(body, dryRun) {
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (SALE_CHANNELS.indexOf(channel) === -1) return { ok: false, ticket_id: ticket, error: 'channel phải là: ' + SALE_CHANNELS.join(', ') };
   if (!lines.length || lines.length > SALE_MAX_LINES) return { ok: false, ticket_id: ticket, error: 'lines phải có 1-' + SALE_MAX_LINES + ' dòng' };
+  const inv = misaInvoiceInput_(body);
+  if (inv.error) return { ok: false, ticket_id: ticket, error: inv.error };
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -838,6 +840,7 @@ function handleSale_(body, dryRun) {
     const results = [];
     const plan = [];
     let touchedKygui = false;
+    let misaSent = 0;
     lines.forEach((ln, i) => {
       ln = ln || {};
       const code = String(ln.code || '').trim().toUpperCase();
@@ -908,9 +911,15 @@ function handleSale_(body, dryRun) {
       }
       props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: written }));
       pruneTickets_(props, 'sale_');
+      if (inv.hd) {
+        try { misaSent = misaInvoiceSend_(ticket, channel, seller, inv, plan); }
+        catch (err) { console.error('Không gửi được tin MISA: ' + (err && err.stack ? err.stack : err)); misaSent = 0; }
+      }
       if (touchedKygui) { try { queueSyncHint_([KYGUI_TAB]); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
     }
-    return { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
+    const out = { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
+    if (inv.hd) out.misa = dryRun ? { se_gui: uniq_([].concat.apply([], plan.map(x => (x.r.phan || [{ chu_hang: x.kho }]).map(ph => ph.chu_hang)))).sort() } : { da_gui: misaSent };
+    return out;
   } finally {
     lock.releaseLock();
   }
@@ -1844,6 +1853,163 @@ function receiptByNhap_(kho, so) {
 }
 
 // =====================================================================
+// TIN ZALO MISA (anh Kha "làm" 17/10): bot soạn sẵn để nhập MISA ở quầy, theo CHỦ HÀNG (tính ký gửi).
+// - Đơn khách lấy hoá đơn (lay_hoa_don trong phiếu bán): gửi ngay 1 tin / hộ, đủ ô MISA.
+// - Còn lại: dailyMisaSummary (trigger 21:00) gửi 1 tin tổng / hộ từ dòng BAN hôm nay, bỏ các dòng đã gửi riêng.
+// Gửi tới Script Property MISA_CHAT_IDS (phẩy), mặc định OWNER_CHAT_ID. Thuế theo danh mục MISA HNC xuất: GTGT 1%, TNCN 0,5%.
+// =====================================================================
+
+const MISA_TAX_TEXT = 'Thuế: GTGT 1% · TNCN 0,5% (theo danh mục MISA)';
+const SALE_CHANNEL_LABEL = { '': 'quầy', cua_hang: 'quầy', web: 'web', shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', zalo: 'Zalo', facebook: 'Facebook' };
+
+/** Kiểm trường khách / hoá đơn của phiếu bán → { hd?, khach?, thanh_toan, phi_ship } hoặc { error }. */
+function misaInvoiceInput_(body) {
+  const clip = (v, n) => String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const out = { thanh_toan: clip(body.thanh_toan, 60), phi_ship: '' };
+  if (body.phi_ship !== undefined && body.phi_ship !== null && body.phi_ship !== '') {
+    const f = Number(body.phi_ship);
+    if (!isFinite(f) || f < 0) return { error: 'phi_ship không hợp lệ' };
+    out.phi_ship = Math.round(f);
+  }
+  const k = body.khach && typeof body.khach === 'object' ? body.khach : {};
+  out.khach = { ten: clip(k.ten, 80), sdt: clip(k.sdt, 20) };
+  const h = body.lay_hoa_don;
+  if (h && typeof h === 'object') {
+    const hd = { ten_cty: clip(h.ten_cty, 160), mst: clip(h.mst, 20).replace(/\s/g, ''), dia_chi: clip(h.dia_chi, 200), email: clip(h.email, 100) };
+    if (!hd.ten_cty && !hd.mst) return { error: 'lay_hoa_don cần ten_cty hoặc mst' };
+    if (hd.mst && !/^\d{10}(-\d{3})?$|^\d{12}$/.test(hd.mst)) return { error: 'mst phải 10 số, 10 số-3 số, hoặc 12 số (CCCD)' };
+    if (hd.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(hd.email)) return { error: 'email hoá đơn không hợp lệ' };
+    out.hd = hd;
+  }
+  return out;
+}
+
+function misaChats_() {
+  const p = PropertiesService.getScriptProperties();
+  return String(p.getProperty('MISA_CHAT_IDS') || p.getProperty('OWNER_CHAT_ID') || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+/** Tên hộ theo kho chủ hàng (Script Property HKD_<kho> = tên | MST | địa chỉ). */
+function householdName_(kho) {
+  const v = PropertiesService.getScriptProperties().getProperty('HKD_' + kho) || '';
+  return (v.split('|')[0] || '').trim() || INVOICE_HKD_FOLDERS[kho] || kho;
+}
+
+/** Tên / ĐVT theo mã (SANPHAM, tên cột hàng 2). */
+function productInfo_(code) {
+  if (!MEMO.__pinfo) {
+    MEMO.__pinfo = {};
+    const sp = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+    const c = headerMap_(sp[hr]);
+    for (let r = hr + 1; r < sp.length; r++) {
+      const k = String(sp[r][c.product_code] || '').trim().toUpperCase();
+      if (k) MEMO.__pinfo[k] = { name: c.product_name !== undefined ? String(sp[r][c.product_name] || '').trim() : '', unit: c.product_unit !== undefined ? String(sp[r][c.product_unit] || '').trim() : '' };
+    }
+  }
+  return MEMO.__pinfo[code] || { name: '', unit: '' };
+}
+
+/** 1 dòng hàng kiểu MISA: mã MISA (mã + size, như danh mục con HNC xuất) · tên · ĐVT · SL × đơn giá = thành tiền. */
+function misaLine_(i, code, size, qty, price) {
+  const info = productInfo_(code);
+  const amount = (Number(price) || 0) * qty;
+  return (i + 1) + '. ' + code + (size || '') + ' · ' + (info.name || code) + ' · ' + (info.unit || 'Đôi') + ' · ' + qty + ' × ' +
+    (price === '' || price === null || price === undefined ? '(chưa có giá)' : money_(price)) + ' = ' + money_(amount);
+}
+
+/** Gửi tin hoá đơn MISA ngay (mỗi hộ chủ hàng 1 tin), ghi nhớ dòng BAN đã gửi để tin cuối ngày bỏ qua. Trả số tin đã gửi. */
+function misaInvoiceSend_(ticket, channel, seller, inv, plan) {
+  const byOwner = {};
+  plan.forEach(x => (x.r.phan || [{ chu_hang: x.kho, qty: x.qty }]).forEach(ph => {
+    (byOwner[ph.chu_hang] = byOwner[ph.chu_hang] || []).push({ code: x.code, size: x.size, qty: ph.qty, price: x.price });
+  }));
+  const day = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
+  const chats = misaChats_();
+  let sent = 0;
+  Object.keys(byOwner).forEach(owner => {
+    const items = byOwner[owner];
+    const total = items.reduce((t, it) => t + (Number(it.price) || 0) * it.qty, 0);
+    const text = ['🧾 HOÁ ĐƠN MISA – ' + householdName_(owner) + ' (' + owner + ')',
+      'Ngày ' + day + ' · Số CT ' + ticket + ' · Kênh ' + (SALE_CHANNEL_LABEL[channel] || channel) + ' · Người bán ' + (seller || '-'),
+      'Khách: ' + ([inv.khach.ten, inv.khach.sdt].filter(Boolean).join(' · ') || '-'),
+      'Công ty: ' + (inv.hd.ten_cty || '-') + ' · MST ' + (inv.hd.mst || '-'),
+      'Địa chỉ: ' + (inv.hd.dia_chi || '-') + ' · Email: ' + (inv.hd.email || '-'),
+    ].concat(items.map((it, i) => misaLine_(i, it.code, it.size, it.qty, it.price)), [MISA_TAX_TEXT,
+      'Tổng: ' + money_(total) + ' · Thanh toán: ' + (inv.thanh_toan || '-') + ' · Ship: ' + (inv.phi_ship === '' ? '-' : money_(inv.phi_ship))]).join('\n');
+    chats.forEach(c => { if (sendMessage_(c, text)) sent++; });
+  });
+  // dòng BAN của phiếu này → không lặp ở tin cuối ngày
+  const key = 'misa_hd_' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd');
+  const props = PropertiesService.getScriptProperties();
+  let rows = [];
+  try { rows = JSON.parse(props.getProperty(key) || '[]'); } catch (e) { rows = []; }
+  plan.forEach(x => (x.r.rows || [x.r.row]).forEach(r => { if (r) rows.push(r); }));
+  props.setProperty(key, JSON.stringify(uniq_(rows)));
+  return sent;
+}
+
+/** Trigger 21:00: 1 tin tổng / hộ chủ hàng các dòng BAN hôm nay (bỏ dòng đã gửi riêng vì lấy hoá đơn). dryRun = chỉ ghi Nhật ký. */
+function dailyMisaSummary(dryRun) {
+  MEMO = {};
+  dryRun = dryRun === true;
+  const props = PropertiesService.getScriptProperties();
+  const todayKey = Utilities.formatDate(new Date(), TZ, 'yyyyMMdd');
+  let skip = [];
+  try { skip = JSON.parse(props.getProperty('misa_hd_' + todayKey) || '[]'); } catch (e) { skip = []; }
+  const msgs = misaSummaryMessages_(today_(), skip);
+  const chats = misaChats_();
+  msgs.forEach(m => { if (dryRun) console.log(m); else chats.forEach(c => sendMessage_(c, m)); });
+  // dọn khoá misa_hd_ cũ hơn 7 ngày
+  Object.keys(props.getProperties()).filter(k => k.indexOf('misa_hd_') === 0 && k.slice(8) < Utilities.formatDate(new Date(Date.now() - 7 * 86400000), TZ, 'yyyyMMdd'))
+    .forEach(k => props.deleteProperty(k));
+  return msgs;
+}
+
+/** Soạn tin tổng cuối ngày (cắt nhiều tin nếu dài). */
+function misaSummaryMessages_(day, skipRows) {
+  const ban = sheetValues_('BAN');
+  const c = headerMap_(ban[0]);
+  requireColumns_('BAN', c, ['Ngày', 'product_code', 'item_size', 'item_quantity', 'KHO', 'Giá']);
+  const dayKey = Utilities.formatDate(day, TZ, 'yyyy-MM-dd');
+  const owners = {};
+  let skipped = 0;
+  for (let r = 1; r < ban.length; r++) {
+    if (dateKey_(ban[r][c['Ngày']]) !== dayKey) continue;
+    const code = String(ban[r][c.product_code] || '').trim().toUpperCase();
+    if (!code) continue;
+    if (skipRows.indexOf(r + 1) !== -1) { skipped++; continue; }
+    const kho = KHO_ALIASES[String(ban[r][c.KHO] || '').trim().toUpperCase()] || String(ban[r][c.KHO] || '');
+    const owner = (c.chu_hang !== undefined && KHO_ALIASES[String(ban[r][c.chu_hang] || '').trim().toUpperCase()]) || kho;
+    const ch = c.channel !== undefined ? String(ban[r][c.channel] || '').trim().toLowerCase() : '';
+    (owners[owner] = owners[owner] || []).push({ code, size: normSize_(ban[r][c.item_size]), qty: Number(ban[r][c.item_quantity]) || 0,
+      price: ban[r][c['Giá']] === '' ? '' : moneyValue_(ban[r][c['Giá']]), kho, ch, seller: c.seller !== undefined ? String(ban[r][c.seller] || '').trim() : '' });
+  }
+  const dd = Utilities.formatDate(day, TZ, 'dd/MM/yyyy');
+  const out = [];
+  Object.keys(owners).sort().forEach(owner => {
+    const items = owners[owner];
+    const total = items.reduce((t, it) => t + (Number(it.price) || 0) * it.qty, 0);
+    const byCh = {};
+    items.forEach(it => { const l = SALE_CHANNEL_LABEL[it.ch] || it.ch; byCh[l] = (byCh[l] || 0) + (Number(it.price) || 0) * it.qty; });
+    const head = '📒 MISA CUỐI NGÀY ' + dd + ' – ' + householdName_(owner) + ' (' + owner + '): ' + items.length + ' dòng · ' + money_(total);
+    const lines = items.map((it, i) => misaLine_(i, it.code, it.size, it.qty, it.price) + ' · ' + (SALE_CHANNEL_LABEL[it.ch] || it.ch) +
+      (it.kho !== owner ? ' · ký gửi ở ' + it.kho : '') + (it.seller ? ' · ' + it.seller : ''));
+    const tail = ['Theo kênh: ' + Object.keys(byCh).map(k => k + ' ' + money_(byCh[k])).join(' · '), MISA_TAX_TEXT];
+    let cur = head;
+    lines.concat(tail).forEach(l => {
+      if ((cur + '\n' + l).length > 1900) { out.push(cur); cur = head + ' (tiếp)'; }
+      cur += '\n' + l;
+    });
+    out.push(cur);
+  });
+  if (!out.length) out.push('📒 MISA CUỐI NGÀY ' + dd + ': không có dòng bán nào cần nhập' + (skipped ? ' (đã gửi riêng ' + skipped + ' dòng lấy hoá đơn)' : '') + '.');
+  else if (skipped) out[out.length - 1] += '\n(Đã gửi riêng ' + skipped + ' dòng lấy hoá đơn, không lặp ở đây.)';
+  return out;
+}
+
+// =====================================================================
 // CỬA "BÁO ĐƠN WEB"
 // POST {WEBAPP_URL}?notify_key=<WEB_NOTIFY_KEY>   Body JSON: { order_id, text }
 // Chỉ gửi text tới OWNER_CHAT_ID. KHÔNG đọc lệnh, KHÔNG ghi Sheet. Chống trùng theo order_id.
@@ -1903,7 +2069,7 @@ function handleNotify_(body, owner, props) {
 const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI'];
 const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
 const SYNC_MIN_INTERVAL_MS = 60 * 1000;
-const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder'];
+const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder', 'dailyMisaSummary'];
 
 /** Trigger cài đặt onEdit (người sửa ô). */
 function onSheetEditHint(e) {
@@ -1986,6 +2152,9 @@ function setupChangeTrigger() {
   if (have.indexOf('flushSyncHints') === -1) ScriptApp.newTrigger('flushSyncHints').timeBased().everyMinutes(1).create();
   if (have.indexOf('weeklyInvoiceReminder') === -1) {
     ScriptApp.newTrigger('weeklyInvoiceReminder').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
+  }
+  if (have.indexOf('dailyMisaSummary') === -1) {
+    ScriptApp.newTrigger('dailyMisaSummary').timeBased().everyDays(1).atHour(21).create(); // tin MISA cuối ngày
   }
   console.log('Trigger hiện có: ' + ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()).join(', '));
 }

@@ -53,6 +53,10 @@ Content-Type: application/json   (hoặc text/plain)
   "lines": [                              // 1-50 dòng
     { "code": "TH2040D", "size": 40, "qty": 1, "warehouse": "15E", "price": 800000 }
   ],
+  "khach": { "ten": "Chị B", "sdt": "0909…" },               // tuỳ chọn, dùng cho tin MISA
+  "lay_hoa_don": { "ten_cty": "…", "mst": "0312345678", "dia_chi": "…", "email": "…" },  // tuỳ chọn: khách lấy hoá đơn
+  "thanh_toan": "CK Techcombank",          // tuỳ chọn: tiền mặt / CK vào TK nào / COD / sàn
+  "phi_ship": 30000,                       // tuỳ chọn
   "dry_run": true                         // tuỳ chọn: chỉ kiểm tra, không ghi
 }
 ```
@@ -60,7 +64,9 @@ Content-Type: application/json   (hoặc text/plain)
 - Apps Script trả lời qua 1 lần chuyển hướng (302). Bên gọi phải **đi theo chuyển hướng** (`fetch` mặc định đã theo; `curl` cần `-L`).
 
 **Trả về (JSON):**
-- `{"ok":true,"ticket_id":...,"dry_run":false,"rows":N,"results":[{"line":1,"code":...,"size":...,"qty":...,"warehouse":...,"stock_before":...,"row":...,"warning"?:...}]}`
+- `{"ok":true,"ticket_id":...,"dry_run":false,"rows":N,"results":[{"line":1,"code":...,"size":...,"qty":...,"warehouse":...,"stock_before":...,"row":...,"rows"?:[..],"phan":[{"chu_hang":"15E","qty":1}],"chu_hang":"15E","warning"?:...}], "misa"?:{...}}`
+- `phan` / `chu_hang` (cả chạy thử): chủ hàng theo sổ ký gửi (xem mục "Sổ ký gửi"). Dòng lẫn 2 chủ → `chu_hang` = "" và bot ghi 2 dòng BAN (`rows`).
+- `lay_hoa_don`: cần `ten_cty` hoặc `mst` (10 số, 10 số-3 số, hoặc 12 số); sai → lỗi, không ghi. Có thì `misa` = `{se_gui:[hộ]}` (chạy thử) / `{da_gui:n}` (số tin đã gửi).
 - Có dòng lỗi → `{"ok":false,"error":"Có dòng lỗi, chưa ghi dòng nào","results":[...{"ok":false,"error":"..."}]}`. **Không ghi dòng nào.**
 - Gửi lại cùng `ticket_id` → `{"ok":true,"duplicate":true,...}`, không ghi thêm. Mã phiếu được nhớ 30 ngày.
 - Ghi dở do lỗi giữa chừng → `{"ok":false,"partial":true,"rows":<đã ghi>}`. **Không gửi lại**, kiểm tra tab `BAN`.
@@ -70,6 +76,23 @@ Content-Type: application/json   (hoặc text/plain)
 **Ghi vào BAN:** mỗi dòng phiếu = 1 dòng BAN (Ngày, product_code, product_color tự lấy, Giá, item_size, item_quantity, KHO, `channel`, `seller`). **Quy ước kênh (anh Kha chốt 16/10):** ô `channel` **trống** = bán tại cửa hàng theo KHO (Y3C = cửa hàng 3C, 15E = cửa hàng 15E). Chỉ ghi `channel` khi bán ngoài cửa hàng: `web`, `shopee`, `tiktok`. Dữ liệu cũ ghi `cua_hang` vẫn được hiểu là cửa hàng. Lệnh `ban` qua Zalo: bán tại quầy để trống `channel`; thêm chữ `shopee` / `tiktok` (`tt`) / `web` / `lazada` / `zalo` / `facebook` (`fb`) trong tin (vd `ban BT01D 40 YEN shopee`) thì ghi kênh đó. Cửa ghi bán của app nhận `cua_hang` nhưng ghi ô trống. `seller` = tên Zalo người nhắn. Nếu tab BAN chưa có cột `channel` / `seller` thì bot bỏ qua 2 cột đó, phần còn lại ghi bình thường.
 
 **Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
+
+## Sổ ký gửi giữa 2 hộ (tab KYGUI, anh Kha "làm" 17/10)
+
+Chuyển hàng giữa 2 hộ (15E = Hải Nancy, Y3C = Yen Leather) không xuất hoá đơn, chỉ ghi ký gửi: hàng của hộ này đang nằm ở kho hộ kia.
+- **Tab `KYGUI`** (hàng 1): `product_code` · `item_size` · `chu_hang` (15E / Y3C) · `kho_dang_o` · `so_luong` · `cap_nhat`. Dòng về 0 vẫn giữ. Chưa có tab → tính năng tắt (chủ hàng = kho).
+- **Chuyển A → B** (`chuyen_kho` app / lệnh `chuyen kho` Zalo): trừ trước KYGUI(chủ B, ở A) (trả về chủ), phần còn lại cộng KYGUI(chủ A, ở B). App nhận `results[].ky_gui = [{size, chu_hang, qty, loai: tra_ve_chu | thanh_ky_gui}]`.
+- **Bán ở kho K** (cửa ghi bán, lệnh `ban` Zalo): bán trước hàng ký gửi của hộ kia đang ở K → `BAN.chu_hang` = hộ kia; còn lại `chu_hang` = K. Lẫn 2 chủ → 2 dòng BAN. Dòng BAN cũ trống `chu_hang` = chủ theo KHO.
+- **Trả hàng** (`tra_hang`): về đúng chủ: `chu_hang` gửi kèm dòng, không có thì theo dòng BAN gần nhất cùng mã / size / kho. Chủ khác kho → cộng lại KYGUI.
+- **Cảnh báo** (không chặn): ký gửi đang ở kho > tồn kho đó.
+- Huỷ 10 phút trả KYGUI về như trước. Đổi KYGUI gửi sync-hint `KYGUI`.
+
+## Tin Zalo MISA (anh Kha "làm" 17/10)
+
+Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký gửi). Gửi tới Script Property `MISA_CHAT_IDS` (nhiều chat cách nhau dấu phẩy), mặc định `OWNER_CHAT_ID`. Tên hộ lấy từ `HKD_15E` / `HKD_Y3C`.
+- **Đơn khách lấy hoá đơn** (`lay_hoa_don` trong phiếu bán): gửi ngay 1 tin / hộ: hộ, ngày, số CT (`ticket_id`), kênh, người bán, khách, công ty, MST, địa chỉ, email; từng dòng mã MISA (mã + size, như danh mục con HNC xuất), tên, ĐVT, SL × đơn giá = thành tiền; thuế (GTGT 1%, TNCN 0,5% theo danh mục MISA); tổng, thanh toán, ship.
+- **Còn lại**: trigger `dailyMisaSummary` 21:00 gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
+- Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập MISA cuối ngày: chờ mẫu nhập khẩu bán hàng từ MISA eShop.
 
 ## Cửa "kho" cho app điện thoại (API)
 

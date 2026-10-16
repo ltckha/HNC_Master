@@ -527,5 +527,29 @@ eq('ký gửi > tồn → cảnh báo, vẫn ok', [ks.ok, /Sổ ký gửi/.test(
 const zt = ctx.handleText_('ban TH2040D 41 YEN 800k', true, 'c1', 'Kris');
 eq('Zalo bán: báo phần hàng ký gửi', /là hàng của hộ 15E/.test(zt), true);
 
+// ---- Tin Zalo MISA ----
+vm.runInContext('this.dailyMisaSummary=dailyMisaSummary;this.misaSummaryMessages_=misaSummaryMessages_;', ctx);
+PROPS.OWNER_CHAT_ID = 'owner1';
+PROPS.HKD_15E = 'Hải Nancy|0000000000|Đà Lạt'; PROPS.HKD_Y3C = 'Yen Leather|1111111111|Đà Lạt';
+kyRow('15E', 'Y3C', 41)[4] = 1; ctx.MEMO = {};
+let mb = ctx.handleSale_({ ticket_id: 'M0', channel: 'web', seller: 'kris', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C', price: 800000 }], lay_hoa_don: { ten_cty: 'Cty A' , mst: '12345' } }, true);
+eq('MST sai → lỗi, không ghi', [mb.ok, /mst/.test(mb.error)], [false, true]);
+mb = ctx.handleSale_({ ticket_id: 'M1', channel: 'web', seller: 'kris', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }],
+  khach: { ten: 'Chị B', sdt: '0909' }, lay_hoa_don: { ten_cty: 'Cty A', mst: '0312345678', dia_chi: '1 Lê Lợi', email: 'a@b.vn' }, thanh_toan: 'CK Techcombank', phi_ship: 30000 }, true);
+eq('chạy thử lấy hoá đơn: báo sẽ gửi cho 2 hộ, chưa gửi', [mb.ok, mb.misa, SENT.length], [true, { se_gui: ['15E', 'Y3C'] }, SENT.length]);
+const s0 = SENT.length;
+mb = ctx.handleSale_({ ticket_id: 'M1', channel: 'web', seller: 'kris', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }],
+  khach: { ten: 'Chị B', sdt: '0909' }, lay_hoa_don: { ten_cty: 'Cty A', mst: '0312345678', dia_chi: '1 Lê Lợi', email: 'a@b.vn' }, thanh_toan: 'CK Techcombank', phi_ship: 30000 }, false);
+const misaMsgs = SENT.slice(s0).map(x => x.text);
+eq('lấy hoá đơn: gửi ngay 1 tin / hộ chủ hàng', [mb.ok, mb.misa, misaMsgs.length, misaMsgs.map(t => t.split('\n')[0])],
+  [true, { da_gui: 2 }, 2, ['🧾 HOÁ ĐƠN MISA – Hải Nancy (15E)', '🧾 HOÁ ĐƠN MISA – Yen Leather (Y3C)']]);
+eq('tin hoá đơn đủ ô: số CT, kênh, người bán, khách, MST, dòng mã MISA, thuế, tổng, thanh toán, ship',
+  [/Số CT M1 · Kênh web · Người bán kris/.test(misaMsgs[0]), /Khách: Chị B · 0909/.test(misaMsgs[0]), /MST 0312345678/.test(misaMsgs[0]), /Email: a@b\.vn/.test(misaMsgs[0]),
+   /1\. TH2040D41 · .* · Đôi · 1 × 800\.000/.test(misaMsgs[0]), /GTGT 1% · TNCN 0,5%/.test(misaMsgs[0]), /Tổng: 800\.000đ · Thanh toán: CK Techcombank · Ship: 30\.000đ/.test(misaMsgs[0])],
+  [true, true, true, true, true, true, true]);
+const sumMsgs = ctx.dailyMisaSummary(true);
+eq('tin cuối ngày: theo hộ chủ hàng, bỏ dòng đã gửi riêng', [sumMsgs.every(m => !/M1/.test(m)), /Đã gửi riêng 2 dòng lấy hoá đơn/.test(sumMsgs[sumMsgs.length - 1]), sumMsgs.some(m => /^📒 MISA CUỐI NGÀY .* – Yen Leather \(Y3C\)/.test(m))], [true, true, true]);
+eq('tin cuối ngày ghi hàng ký gửi theo chủ', sumMsgs.some(m => /Hải Nancy \(15E\)[\s\S]*ký gửi ở Y3C/.test(m)), true);
+
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

@@ -15,7 +15,7 @@ flowchart LR
   subgraph AS[Apps Script – bot HNC<br/>gắn Sheet HNC_Control_Center]
     BOT[doPost: webhook Zalo<br/>+ cửa sale / stock / export / notify]
     PN[Nhập từ phiếu<br/>Gemini đọc → nháp → xác nhận]
-    TRG[Trigger: onEdit / onChange,<br/>flushSyncHints mỗi phút,<br/>nhắc hoá đơn T2 8:00]
+    TRG[Trigger: onEdit / onChange,<br/>flushSyncHints mỗi phút,<br/>nhắc hoá đơn T2 8:00,<br/>tin MISA 21:00]
   end
 
   subgraph MAC[Mac mini – main.py]
@@ -48,7 +48,7 @@ flowchart LR
 | Phần | Nơi chạy | Cách chạy |
 |---|---|---|
 | Bot HNC (`zalo_bot/Code.gs`) | Google Apps Script, gắn Sheet | Web App `/exec` (1 bản triển khai, link giữ nguyên). Cập nhật: `commands/bot_deploy.command` (test → `clasp push` → cập nhật đúng bản triển khai) |
-| Trigger bot | Apps Script | `onSheetEditHint` (onEdit), `onSheetChangeHint` (onChange), `flushSyncHints` mỗi 1 phút, `weeklyInvoiceReminder` thứ Hai 8:00. Tạo bằng hàm `setupChangeTrigger` |
+| Trigger bot | Apps Script | `onSheetEditHint` (onEdit), `onSheetChangeHint` (onChange), `flushSyncHints` mỗi 1 phút, `weeklyInvoiceReminder` thứ Hai 8:00, `dailyMisaSummary` 21:00 (tin MISA cuối ngày theo hộ). Tạo bằng hàm `setupChangeTrigger` |
 | Menu HNC (`main.py`) | Mac mini, `venv` | Bấm đúp `run.command`. Không có lịch tự chạy |
 | `tools/spec_fill.py` | Mac mini | `plan` / `ai` / `apply` (điền thông số còn trống trong SANPHAM) |
 | Media | NAS `/Volumes/Media/HNC_Master/` | Menu 5 gom ảnh từ Photoroom (NAS) và Downloads |
@@ -59,7 +59,8 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 **Sheet `HNC_Control_Center`** (đọc / ghi theo tên cột; SANPHAM tên cột ở **hàng 2**, các tab khác hàng 1):
 - `SANPHAM`: danh mục SP. Bot thêm dòng mã mới từ phiếu, `bo_sung_sp`, cờ `shopee_upload` / `tiktok_upload` (mark_exported). main.py ghi cờ `*_upload`, `get_images`, ảnh.
 - `KHO15E`, `KHOY3C`: tồn = `opening_quantity` + NHAP − XUAT − BAN (công thức SUMIF theo FSKU). Bot / main.py thêm dòng SKU mới, bot sửa `product_location`.
-- `NHAP` (hàng 2 là tiêu đề kỹ thuật), `XUAT`, `BAN` (`channel`, `seller`): bot ghi; main.py đánh dấu `web_stock`, `web_label`, `misa_stock`, `kho_sync`.
+- `NHAP` (hàng 2 là tiêu đề kỹ thuật), `XUAT`, `BAN` (`channel`, `seller`, `chu_hang`): bot ghi; main.py đánh dấu `web_stock`, `web_label`, `misa_stock`, `kho_sync`.
+- `KYGUI` (product_code · item_size · chu_hang · kho_dang_o · so_luong · cap_nhat): sổ ký gửi giữa 2 hộ, bot ghi khi chuyển kho / bán / trả hàng.
 - `SUB`: ngành hàng, NCC (Mã / Tên đối tượng, thuế), % giá sàn, kích thước. Chỉ đọc.
 - `META` (key / value / updated_at): `shopee_last_update`, `tiktok_last_update`.
 
@@ -82,7 +83,7 @@ Hoá đơn NCC: bot gom NHAP theo ngày × NCC × kho, so với thư mục `Hoá
 ## Khoá & bí mật (không ghi giá trị)
 - `.env` (Mac, git bỏ qua): `GEMINI_API_KEY` (khoá riêng HNC), `SYNC_HINT_URL`, `SYNC_HINT_KEY`, `WEB_IMG_BASE` (tuỳ chọn).
 - `credentials.json` (Mac, git bỏ qua): service account Google Sheets cho main.py / spec_fill.
-- Script Properties bot: `BOT_TOKEN`, `WEBHOOK_KEY`, `WEBAPP_URL`, `ALLOWED_CHAT_IDS`, `OWNER_CHAT_ID`, `DRY_RUN`, `SALE_KEY`, `STOCK_KEY`, `EXPORT_KEY`, `WEB_NOTIFY_KEY`, `SYNC_HINT_URL`, `SYNC_HINT_KEY`, `GEMINI_API_KEY`, `HKD_15E`, `HKD_Y3C`; tuỳ chọn `INVOICE_FOLDER_ID`, `PN_FOLDER_ID`, `APP_URL`, `OWNER_EMAILS`. Kiểm bằng hàm `checkConfig`.
+- Script Properties bot (tuỳ chọn thêm `MISA_CHAT_IDS`): `BOT_TOKEN`, `WEBHOOK_KEY`, `WEBAPP_URL`, `ALLOWED_CHAT_IDS`, `OWNER_CHAT_ID`, `DRY_RUN`, `SALE_KEY`, `STOCK_KEY`, `EXPORT_KEY`, `WEB_NOTIFY_KEY`, `SYNC_HINT_URL`, `SYNC_HINT_KEY`, `GEMINI_API_KEY`, `HKD_15E`, `HKD_Y3C`; tuỳ chọn `INVOICE_FOLDER_ID`, `PN_FOLDER_ID`, `APP_URL`, `OWNER_EMAILS`. Kiểm bằng hàm `checkConfig`.
 - Đặt khoá Gemini: chỉ dùng `~/Developer/Ecosystem-Hub/commands/dat_khoa_gemini.command` (chọn 3 = HNC).
 
 ## Nối với project khác
@@ -97,3 +98,4 @@ Hoá đơn NCC: bot gom NHAP theo ngày × NCC × kho, so với thư mục `Hoá
 - Mã "cần bổ sung" = SANPHAM trống `Tên Ngành Hàng` hoặc `product_price`; xuất sàn / MISA và `mark_exported` bỏ qua. `product_name` là công thức, đừng ghi đè.
 - NHAP từ phiếu NCC: `Số chứng từ` = `NK` + 6 số chạy theo kho; mã `PN…` chỉ là nội bộ của bot.
 - Cửa web → bot phải để khoá trong URL (Apps Script không đọc được header); chiều bot → web dùng header.
+- Chủ hàng ≠ kho xuất: hàng ký gửi (KYGUI) bán ở kho hộ kia thì tiền / hoá đơn / tin MISA thuộc `BAN.chu_hang`, không theo `KHO`.
