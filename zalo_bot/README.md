@@ -226,7 +226,7 @@ Khi tab `SANPHAM`, `KHO15E`, `KHOY3C`, `BAN`, `NHAP`, `XUAT` hoặc `SUB` thay �
 - **Nguồn báo:**
   - Trigger cài đặt `onEdit` + `onChange`, bắt khi người sửa trên Sheet.
   - Bot tự báo sau khi ghi BAN / NHAP / XUAT / vị trí: lệnh Zalo, `huy`, cửa ghi bán.
-- **Gộp:** tên tab vào hàng chờ, mỗi phút gửi **tối đa 1 lần**: `POST SYNC_HINT_URL?key=SYNC_HINT_KEY`, body `{"tabs":[...]}`. Đổi BAN / NHAP / XUAT thì gửi kèm `KHO15E`, `KHOY3C`. Trigger mỗi phút gửi phần còn lại trong hàng chờ.
+- **Gộp:** tên tab vào hàng chờ, mỗi phút gửi **tối đa 1 lần**: `POST SYNC_HINT_URL`, header `x-sync-key: SYNC_HINT_KEY` (không để khoá trong URL), body `{"tabs":[...]}`. Đổi BAN / NHAP / XUAT thì gửi kèm `KHO15E`, `KHOY3C`. Trigger mỗi phút gửi phần còn lại trong hàng chờ.
 - **Web trả:** 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi Nhật ký, không gửi dồn lại.
 - **Ghi từ `main.py`** (AI nhập SP, đồng bộ kho, cột trạng thái, cào ảnh): Google không chạy trigger cho ghi qua Sheets API. Vì vậy `main.py` tự gửi 1 báo gộp sau mỗi tác vụ có ghi. Cấu hình `SYNC_HINT_URL`, `SYNC_HINT_KEY` trong `HNC_Master/.env` (mẫu ở `.env.example`). Thiếu cấu hình hoặc lỗi thì chỉ in cảnh báo.
 

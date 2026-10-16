@@ -99,7 +99,7 @@ let GEMINI_REPLY = { ncc: 'Tuấn Phong', so_phieu: 'PX2898', ngay: '2026-10-02'
 let GEMINI_CALLS = 0;
 ctx.UrlFetchApp = { fetch: (url, opt) => {
   if (url.indexOf('generativelanguage') !== -1) { GEMINI_CALLS++; return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(GEMINI_REPLY) }] } }] }) }; }
-  if (url.indexOf('sync-hint') !== -1) { HINTS.push({ url, body: JSON.parse(opt.payload) }); return { getResponseCode: () => 202, getContentText: () => '' }; }
+  if (url.indexOf('sync-hint') !== -1) { HINTS.push({ url, headers: opt.headers || {}, body: JSON.parse(opt.payload) }); return { getResponseCode: () => 202, getContentText: () => '' }; }
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
@@ -468,7 +468,8 @@ eq('chưa cấu hình URL → không gửi', HINTS.length, 0);
 delete CACHE.sync_q;
 PROPS.SYNC_HINT_URL = 'https://web.example/api/sync-hint'; PROPS.SYNC_HINT_KEY = 'synckey_1234567890';
 ctx.queueSyncHint_(['BAN']);
-eq('BAN đổi → gửi kèm KHO15E, KHOY3C', [HINTS.length, HINTS[0] && HINTS[0].body.tabs, /key=synckey_1234567890/.test(HINTS[0] && HINTS[0].url)], [1, ['KHO15E', 'KHOY3C', 'BAN'], true]);
+eq('BAN đổi → gửi kèm KHO15E, KHOY3C; khoá ở header, không ở URL', [HINTS.length, HINTS[0] && HINTS[0].body.tabs, HINTS[0] && HINTS[0].headers['x-sync-key'], /synckey/.test(HINTS[0] && HINTS[0].url)],
+  [1, ['KHO15E', 'KHOY3C', 'BAN'], 'synckey_1234567890', false]);
 ctx.queueSyncHint_(['SANPHAM']);
 ctx.queueSyncHint_(['SUB']);
 eq('trong 60 giây → gộp, chưa gửi', HINTS.length, 1);

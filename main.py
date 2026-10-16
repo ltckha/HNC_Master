@@ -351,7 +351,7 @@ class EngineDataLoader:
 
     def flush_sync_hint(self):
         """Báo web giayhainancy.vn chép lại các tab vừa ghi (Sheets API không chạy trigger Apps Script).
-        POST SYNC_HINT_URL?key=SYNC_HINT_KEY, body {"tabs":[...]}. Thiếu cấu hình hoặc lỗi → chỉ in cảnh báo."""
+        POST SYNC_HINT_URL, header x-sync-key: SYNC_HINT_KEY (không để khoá trong URL — lọt log), body {"tabs":[...]}. Thiếu cấu hình hoặc lỗi → chỉ in cảnh báo."""
         tabs = set(self._sync_tabs)
         self._sync_tabs.clear()
         if not tabs:
@@ -364,7 +364,7 @@ class EngineDataLoader:
             tabs |= {'KHO15E', 'KHOY3C'}
         ordered = [t for t in SYNC_WATCH_TABS if t in tabs]
         try:
-            r = requests.post(url, params={'key': key}, json={'tabs': ordered}, timeout=15)
+            r = requests.post(url, headers={'x-sync-key': key}, json={'tabs': ordered}, timeout=15)
             if r.status_code in (200, 202):
                 print(f"🔄 Đã báo web chép lại Sheet: {', '.join(ordered)}")
             else:

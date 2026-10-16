@@ -1835,7 +1835,7 @@ function handleNotify_(body, owner, props) {
 // =====================================================================
 // BÁO WEB CHÉP LẠI SHEET KHI SHEET ĐỔI
 // Trigger cài đặt onEdit + onChange → ghi tên tab vào hàng chờ (CacheService).
-// Mỗi phút gửi tối đa 1 lần: POST SYNC_HINT_URL?key=SYNC_HINT_KEY, body {"tabs":[...]}.
+// Mỗi phút gửi tối đa 1 lần: POST SYNC_HINT_URL, header x-sync-key: SYNC_HINT_KEY (không để khoá trong URL — lọt log), body {"tabs":[...]}.
 // Web trả 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi log, không gửi dồn lại.
 // =====================================================================
 
@@ -1903,9 +1903,10 @@ function flushSyncHint_(force) {
   } finally {
     lock.releaseLock();
   }
-  const res = UrlFetchApp.fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(key), {
+  const res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
+    headers: { 'x-sync-key': key },
     payload: JSON.stringify({ tabs: SYNC_WATCH_TABS.filter(t => tabs.indexOf(t) !== -1) }),
     muteHttpExceptions: true,
   });
