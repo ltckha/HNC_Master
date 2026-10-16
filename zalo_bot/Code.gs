@@ -1086,7 +1086,7 @@ function receiptAppLink_(id) {
   let base = props.getProperty('APP_URL') || '';
   if (!base) {
     const m = String(props.getProperty('SYNC_HINT_URL') || '').match(/^(https?:\/\/[^/]+)/);
-    base = m ? m[1] + '/app' : '/app';
+    base = m ? m[1] + '/admin/app' : '/admin/app';
   }
   return base + '#phieu-' + id;
 }

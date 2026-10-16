@@ -142,8 +142,8 @@ Luồng: chụp phiếu → Gemini đọc (1 lượt / phiếu) → **phiếu nh
   - Bot học bảng ghép (mã NCC / mô tả → mã HNC) để gợi ý lần sau.
 - **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` = mã phiếu thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
 - **Ảnh qua bot Zalo:**
-  - Gửi ảnh phiếu vào bot. Sự kiện `message.image.received` (`message.photo_url`, theo tài liệu bên thứ ba, cần kiểm bằng tin thật) → đọc → bot trả "📄 Đã đọc phiếu … → mở app chia size: <web>/app#phieu-<mã>".
-  - Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/app`. Sự kiện Zalo chưa xử lý được ghi vào Nhật ký để kiểm.
+  - Gửi ảnh phiếu vào bot. Sự kiện `message.image.received` (`message.photo_url`, theo tài liệu bên thứ ba, cần kiểm bằng tin thật) → đọc → bot trả "📄 Đã đọc phiếu … → mở app chia size: <web>/admin/app#phieu-<mã>".
+  - Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Sự kiện Zalo chưa xử lý được ghi vào Nhật ký để kiểm.
 
 ## Cửa "báo đơn web" (API)
 
