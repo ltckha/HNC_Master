@@ -26,6 +26,28 @@ DATA.NHAP = [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code',
   ['23/09/2026', '', 'CXED', 'Đen', 'YEN', '40', '0'], ['05/08/2026', '', 'TH2040D', 'Đen', '15E', '40', '1']];
 const DRIVE = { 'Hải Nancy': { 'Tuấn Phong': ['20260912'] }, 'Yen Leather': { 'Chú Dũng': ['20260930'] } };
 DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', ''], ['tiktok_last_update', '', '']];
+// Drive giả có ghi: thư mục + file theo id
+const DFILES = {}, DFOLDERS = {};
+let DSEQ = 0;
+function dFolder(name, parent) {
+  const id = 'F' + (++DSEQ);
+  const f = { id, name, parent, kids: [], getId: () => id, getName: () => name,
+    getFoldersByName: n => driveIt(f.kids.filter(k => k.name === n)), getFolders: () => driveIt(f.kids), getFiles: () => driveIt(Object.values(DFILES).filter(x => x.folder === id)),
+    createFolder: n => { const c = dFolder(n, f); f.kids.push(c); return c; },
+    createFile: blob => dFile(blob.name, blob.bytes, blob.mime, id) };
+  DFOLDERS[id] = f;
+  return f;
+}
+function dFile(name, bytes, mime, folder) {
+  const id = 'D' + (++DSEQ);
+  const file = { id, name, bytes, mime, folder, getId: () => id, getName: () => name,
+    getBlob: () => ({ getDataAsString: () => Buffer.from(file.bytes).toString(), getBytes: () => file.bytes, getContentType: () => file.mime }),
+    setContent: t => { file.bytes = Array.from(Buffer.from(t)); }, moveTo: f => { file.folder = f.getId(); },
+    makeCopy: (n, f) => dFile(n, file.bytes, file.mime, f.getId()) };
+  DFILES[id] = file;
+  return file;
+}
+const PN_ROOT = dFolder('Phiếu mua hàng', null);
 function driveIt(a) { let i = 0; return { hasNext: () => i < a.length, next: () => a[i++] }; }
 function driveFolder(name, kids, hasFiles) {
   return { getName: () => name, getFolders: () => driveIt(kids), getFoldersByName: n => driveIt(kids.filter(k => k.getName() === n)), getFiles: () => driveIt(hasFiles ? [1] : []) };
@@ -53,7 +75,8 @@ function mockSheet(n) {
 const CACHE = {};
 const ctx = {
   console,
-  Utilities: { DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' }, computeDigest: (a, t) => Array.from(require('crypto').createHash('md5').update(t).digest()).map(b => (b > 127 ? b - 256 : b)), formatDate: (d, tz, f) => {
+  Utilities: { base64Decode: b => Array.from(Buffer.from(b, 'base64')), base64Encode: b => Buffer.from(b).toString('base64'),
+    newBlob: (bytes, mime, name) => ({ bytes: typeof bytes === 'string' ? Array.from(Buffer.from(bytes)) : bytes, mime, name }), DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' }, computeDigest: (a, t) => Array.from(require('crypto').createHash('md5').update(t).digest()).map(b => (b > 127 ? b - 256 : b)), formatDate: (d, tz, f) => {
     const parts = {};
     new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       .formatToParts(d).forEach(x => { parts[x.type] = x.value; });
@@ -62,18 +85,21 @@ const ctx = {
   SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => DATA[n] ? mockSheet(n) : null }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => PROPS[k] || null, setProperty: (k, v) => { PROPS[k] = v; }, getProperties: () => PROPS, deleteProperty: k => { delete PROPS[k]; } }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }), getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
-  DriveApp: { getFolderById: () => driveFolder('root', Object.keys(DRIVE).map(h => driveFolder(h, Object.keys(DRIVE[h]).map(sp => driveFolder(sp, DRIVE[h][sp].map(d => driveFolder(d, [], true))))))) },
+  DriveApp: { getFileById: id => DFILES[id], getFolderById: id => (id === '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD' ? PN_ROOT : driveFolder('root', Object.keys(DRIVE).map(h => driveFolder(h, Object.keys(DRIVE[h]).map(sp => driveFolder(sp, DRIVE[h][sp].map(d => driveFolder(d, [], true)))))))) },
   CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
 };
 vm.createContext(ctx);
 const SENT = [];
 const HINTS = [];
+let GEMINI_REPLY = { ncc: 'Tuấn Phong', so_phieu: 'PX2898', ngay: '2026-10-02', dong: [{ ma_ncc: '32837', mo_ta: 'Giày tây đen', sl: 3, don_gia: 445000 }, { ma_ncc: '', mo_ta: 'Búp bê kem', sl: 2, don_gia: 300000 }], tong_sl: 5, tong_tien: 1935000 };
+let GEMINI_CALLS = 0;
 ctx.UrlFetchApp = { fetch: (url, opt) => {
+  if (url.indexOf('generativelanguage') !== -1) { GEMINI_CALLS++; return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(GEMINI_REPLY) }] } }] }) }; }
   if (url.indexOf('sync-hint') !== -1) { HINTS.push({ url, body: JSON.parse(opt.payload) }); return { getResponseCode: () => 202, getContentText: () => '' }; }
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.receiptPrompt_=receiptPrompt_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -278,6 +304,45 @@ sr = stk({ action: 'tra_hang', ticket_id: 'S9', lines: [{ code: 'TH2040D', size:
 if (!sr.ok) console.log(JSON.stringify(sr));
 const newRow = DATA.NHAP[nhapLen] || [];
 eq('trả hàng ghi NHAP TRA-', [sr.ok, /^TRA-\d{6}$/.test(newRow[1]), newRow[2], newRow[4]], [true, true, 'TH2040D', '15E']);
+
+// ---- Nhập từ phiếu NCC ----
+PROPS.GEMINI_API_KEY = 'g';
+const pn = (b, dry) => ctx.handleStock_(Object.assign({ nguoi: 'kris@hn.vn' }, b), !!dry);
+let pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-phieu').toString('base64'), mime: 'image/jpeg', nguon: 'app' });
+eq('đọc phiếu → nháp', [pr.ok, pr.ncc_ten, pr.so_phieu, pr.so_dong, pr.so_doi, pr.trang_thai, GEMINI_CALLS], [true, 'Tuấn Phong', 'PX2898', 2, 5, 'cho_chia', 1]);
+const pid = pr.id;
+const unsplit = PN_ROOT.kids.find(k => k.name === 'Chưa chia');
+eq('ảnh + dữ liệu vào "Chưa chia/Tuấn Phong"', [!!unsplit, unsplit && unsplit.kids[0].name, Object.values(DFILES).filter(f => f.name.indexOf(pid) === 0).length], [true, 'Tuấn Phong', 2]);
+eq('ds_nhap', pn({ action: 'ds_nhap' }).phieu.map(x => [x.id, x.ncc_ten, x.so_doi, x.trang_thai]), [[pid, 'Tuấn Phong', 5, 'cho_chia']]);
+let pv = pn({ action: 'xem_nhap', id: pid });
+eq('xem_nhap không trả giá', [pv.dong.length, pv.dong[0].sl_phieu, 'don_gia' in pv.dong[0], JSON.stringify(pv).indexOf('445000')], [2, 3, false, -1]);
+eq('xem_nhap kem_gia (HNC)', pn({ action: 'xem_nhap', id: pid, kem_gia: true }).dong[0].don_gia, 445000);
+eq('xem_nhap kem_anh', !!pn({ action: 'xem_nhap', id: pid, kem_anh: true }).anh_base64, true);
+pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 } }, { dong: 2, ma_hnc: 'TH2040N', kho: '15E', sizes: { '41': 2 } }] }, true);
+eq('lệch SL không lý do → lỗi', [pr.ok, pr.loi_dong && pr.loi_dong[0].dong], [false, 1]);
+pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 }, ly_do: 'thieu' }, { dong: 2, ma_hnc: 'KHONGCO1X', kho: '15E', sizes: { '41': 2 } }] }, true);
+eq('mẫu mới (chưa có SANPHAM) → chặn', [pr.ok, pr.results[1].error], [false, 'mã không có trong SANPHAM / KHO']);
+pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 }, ly_do: 'thieu' }, { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '41': 2 } }] }, true);
+eq('dry-run có lý do → ok + cảnh báo', [pr.ok, pr.dry_run, pr.canh_bao.length, pr.results.map(r => r.dong_phieu)], [true, true, 1, [1, 2]]);
+const nhLen = DATA.NHAP.length;
+pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 }, ly_do: 'thieu' }, { dong: 2, ma_hnc: 'TH2040N', kho: 'Y3C', sizes: { '41': 2 } }] });
+const added = DATA.NHAP.slice(nhLen);
+eq('ghi NHAP: số chứng từ = mã phiếu, không đánh dấu Zalo', [pr.ok, added.length, added.every(r => r[1] === pid), added.every(r => !r[10]), !!pr.undo_until], [true, 2, true, true, true]);
+eq('phiếu → da_ghi', pn({ action: 'ds_nhap' }).phieu[0].trang_thai, 'da_ghi');
+const hn = PN_ROOT.kids.find(k => k.name === 'Hải Nancy'), yl = PN_ROOT.kids.find(k => k.name === 'Yen Leather');
+const inFolder = f => Object.values(DFILES).filter(x => f && x.folder === f.kids[0].getId()).map(x => x.name.split('.').pop()).sort();
+eq('ảnh sang thư mục 2 hộ', [inFolder(hn), inFolder(yl)], [['jpg', 'json'], ['jpg']]);
+ctx.MEMO = {};
+const invTk = ctx.invoiceTickets_().find(t => t.kho === '15E' && t.ncc_docs && t.ncc_docs.length);
+eq('hoá đơn: phiếu × kho có NCC + số phiếu NCC', [invTk && invTk.supplier, invTk && invTk.ncc_docs], ['Tuấn Phong', ['PX2898']]);
+eq('câu nhắn hoá đơn ghi số phiếu NCC', /theo phiếu xuất PX2898/.test(ctx.invoiceMessage_(invTk)), true);
+eq('học bảng ghép mã', pn({ action: 'xem_nhap', id: pid }).dong[0].goi_y_ma_hnc, 'TH2040D');
+eq('người khác không huỷ được', /chính mình/.test(ctx.handleStock_({ action: 'huy_nhap', ticket_id: 'X1', nguoi: 'khac@hn.vn' }, false).error), true);
+pr = pn({ action: 'huy_nhap', ticket_id: 'X1' });
+eq('huỷ → xoá ô NHAP, phiếu về chờ chia', [pr.ok, added.every(r => r[2] === ''), pn({ action: 'ds_nhap' }).phieu[0].trang_thai], [true, true, 'cho_chia']);
+eq('bỏ phiếu nháp', pn({ action: 'bo_nhap', id: pid }).trang_thai, 'huy');
+eq('ds_nhap ẩn phiếu đã bỏ', pn({ action: 'ds_nhap' }).phieu.length, 0);
+eq('prompt có danh sách NCC', /Tuấn Phong/.test(ctx.receiptPrompt_(['Tuấn Phong', 'Chú Dũng'])), true);
 
 // ---- Báo web chép Sheet ----
 ctx.queueSyncHint_(['BAN']);

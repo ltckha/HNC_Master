@@ -95,7 +95,12 @@ function doPost(e) {
 
     const body = JSON.parse((e.postData && e.postData.contents) || '{}');
     const msg = body.message;
-    if (!msg || !msg.text || !msg.chat) return ok_();
+    if (!msg || !msg.chat) return ok_();
+    const isImage = body.event_name === 'message.image.received' || !!msg.photo_url;
+    if (!msg.text && !isImage) {
+      console.log('Zalo sự kiện chưa xử lý: ' + body.event_name + ' | khoá message: ' + Object.keys(msg).join(','));
+      return ok_();
+    }
 
     // Zalo có thể gửi lại cùng một tin → mỗi message_id chỉ xử lý 1 lần
     const cache = CacheService.getScriptCache();
@@ -114,6 +119,10 @@ function doPost(e) {
 
     const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true';
     const sellerName = msg.from && msg.from.display_name ? String(msg.from.display_name).slice(0, 50) : '';
+    if (isImage) {
+      sendMessage_(chatId, handleReceiptPhoto_(msg, sellerName, dryRun));
+      return ok_();
+    }
     sendMessage_(chatId, handleText_(msg.text, dryRun, chatId, sellerName));
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
@@ -885,8 +894,9 @@ function handleStock_(body, dryRun) {
   CTX = { seller: '', pending: {} };
   const action = String(body.action || '').trim().toLowerCase();
   const ticket = String(body.ticket_id || '').trim();
-  const seller = String(body.seller || '').trim().toLowerCase().slice(0, 80);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.join(', ') };
+  const seller = String(body.seller || body.nguoi || '').trim().toLowerCase().slice(0, 80);
+  if (PN_ACTIONS.indexOf(action) !== -1) return handleReceipt_(action, body, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -1017,6 +1027,356 @@ function stockUndo_(body, seller, ticket, dryRun, props) {
   }
   return { ok: r.ok, action: 'huy', ticket_id: ticket, undo_ticket_id: target, dry_run: dryRun,
     error: r.ok ? undefined : 'Không huỷ được vì dữ liệu đã thay đổi: ' + (r.problems || []).join('; '), _sync: r.touched || [] };
+}
+
+// =====================================================================
+// NHẬP TỪ PHIẾU NHÀ CUNG CẤP — đọc phiếu → nháp → (app chia size) → ghi NHAP
+// Gửi ảnh: app (cửa kho, action doc_phieu) hoặc bot Zalo (ảnh). Gemini 1 lượt / phiếu.
+// Phiếu lưu Drive riêng tư "Phiếu mua hàng" (theo ID, kéo thư mục vẫn chạy): chưa chia kho → "Chưa chia/<NCC>/";
+// xác nhận xong → "<hộ>/<NCC>/" (Hải Nancy = 15E, Yen Leather = Y3C; chia cả 2 kho thì mỗi hộ 1 bản). Chỉ mục: Script Properties pnx_<mã>.
+// Giá nhập / NCC chỉ HNC giữ: API trả cho web KHÔNG có đơn giá (trừ khi kem_gia: true, dùng cho HNC).
+// =====================================================================
+
+const PN_ACTIONS = ['doc_phieu', 'ds_nhap', 'xem_nhap', 'xac_nhan', 'huy_nhap', 'bo_nhap'];
+const PN_FOLDER_DEFAULT = '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD'; // "Phiếu mua hàng" (Thue2026 → HNC/Thue/2026), đổi bằng PN_FOLDER_ID
+const PN_UNSPLIT = 'Chưa chia';
+const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
+const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
+
+function handleReceipt_(action, body, dryRun) {
+  MEMO = {};
+  const nguoi = String(body.nguoi || body.seller || '').trim().toLowerCase().slice(0, 80);
+  if (action === 'ds_nhap') return receiptList_(body);
+  if (action === 'xem_nhap') return receiptView_(body);
+  if (!nguoi) return { ok: false, action, error: 'thiếu nguoi (email người dùng app)' };
+  if (action === 'doc_phieu') {
+    const b64 = String(body.anh_base64 || '').replace(/^data:[^,]+,/, '');
+    if (!b64) return { ok: false, action, error: 'thiếu anh_base64' };
+    const bytes = Utilities.base64Decode(b64);
+    if (bytes.length > 8 * 1024 * 1024) return { ok: false, action, error: 'ảnh quá lớn (> 8 MB), hãy nén trước' };
+    if (dryRun) return { ok: true, action, dry_run: true, note: 'chạy thử: đã nhận ảnh ' + bytes.length + ' byte, chưa đọc phiếu' };
+    return Object.assign({ action }, receiptCreate_(bytes, String(body.mime || 'image/jpeg'), String(body.nguon || 'app'), nguoi));
+  }
+  if (action === 'bo_nhap') return receiptDiscard_(body, nguoi);
+  if (action === 'huy_nhap') return receiptUndo_(body, nguoi, dryRun);
+  return receiptConfirm_(body, nguoi, dryRun);
+}
+
+/** Ảnh phiếu gửi vào bot Zalo → đọc → trả 1 tin ngắn + link mở app chia size. */
+function handleReceiptPhoto_(msg, sellerName, dryRun) {
+  try {
+    if (!msg.photo_url) return '⚠️ Không lấy được ảnh từ Zalo. Hãy gửi ảnh phiếu qua app (Kho → Nhập từ phiếu).';
+    const resp = UrlFetchApp.fetch(String(msg.photo_url), { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return '⚠️ Không tải được ảnh từ Zalo (HTTP ' + resp.getResponseCode() + ').';
+    if (dryRun) return '🧪 CHẠY THỬ — đã nhận ảnh, chưa đọc phiếu (DRY_RUN).';
+    MEMO = {};
+    const blob = resp.getBlob();
+    const r = receiptCreate_(blob.getBytes(), blob.getContentType() || 'image/jpeg', 'zalo', sellerName || 'zalo');
+    if (!r.ok) return '⚠️ Chưa đọc được phiếu: ' + r.error;
+    return '📄 Đã đọc phiếu ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ': ' + r.so_dong + ' dòng, ' + r.so_doi +
+      ' đôi → mở app chia size: ' + receiptAppLink_(r.id);
+  } catch (err) {
+    console.error(err && err.stack ? err.stack : err);
+    return '⚠️ Lỗi đọc phiếu: ' + (err && err.message ? err.message : err);
+  }
+}
+
+function receiptAppLink_(id) {
+  const props = PropertiesService.getScriptProperties();
+  let base = props.getProperty('APP_URL') || '';
+  if (!base) {
+    const m = String(props.getProperty('SYNC_HINT_URL') || '').match(/^(https?:\/\/[^/]+)/);
+    base = m ? m[1] + '/app' : '/app';
+  }
+  return base + '#phieu-' + id;
+}
+
+/** Câu lệnh cho Gemini đọc phiếu xuất kho NCC (phiếu in hoặc viết tay). */
+function receiptPrompt_(suppliers) {
+  return [
+    'Đây là ảnh phiếu xuất kho / phiếu giao hàng của nhà cung cấp giày dép cho Hiệu giày Hải Nancy (phiếu in hoặc viết tay).',
+    'Đọc và trả về JSON đúng dạng: {"ncc": "", "so_phieu": "", "ngay": "yyyy-mm-dd", "dong": [{"ma_ncc": "", "mo_ta": "", "sl": 0, "don_gia": 0}], "tong_sl": 0, "tong_tien": 0}.',
+    '- ncc: tên nhà cung cấp; nếu giống một tên trong danh sách sau thì dùng ĐÚNG tên đó: ' + suppliers.join(', ') + '.',
+    '- so_phieu: số phiếu / số chứng từ in trên phiếu (vd PX2898); không có thì "".',
+    '- dong: mỗi dòng hàng 1 phần tử. ma_ncc = mã hàng của nhà cung cấp nếu có (vd 32837), mo_ta = tên / mô tả hàng như ghi trên phiếu,',
+    '  sl = tổng số lượng (đôi / cái) của dòng, don_gia = đơn giá 1 đôi (số nguyên VND, bỏ dấu chấm). Bỏ dòng tổng cộng, công nợ, chữ ký.',
+    '- Không đoán: chữ không đọc được thì để "" hoặc 0. Chỉ trả JSON, không giải thích.',
+  ].join('\n');
+}
+
+function receiptGemini_(bytes, mime) {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('chưa cấu hình GEMINI_API_KEY trong Script Properties');
+  const payload = { contents: [{ parts: [{ inline_data: { mime_type: mime, data: Utilities.base64Encode(bytes) } },
+    { text: receiptPrompt_(Object.keys(supplierInfo_())) }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } };
+  let last = '';
+  for (const model of ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash']) {
+    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
+      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) { last = model + ' HTTP ' + res.getResponseCode(); continue; }
+    try {
+      const txt = JSON.parse(res.getContentText()).candidates[0].content.parts[0].text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+      let ans = JSON.parse(txt);
+      if (Array.isArray(ans)) ans = ans.find(x => x && typeof x === 'object') || {};
+      return { model, data: ans };
+    } catch (e) { last = model + ': ' + e.message; }
+  }
+  throw new Error('Gemini không đọc được phiếu (' + last + ')');
+}
+
+/** Ghép tên NCC đọc được với tên trong SUB (bỏ dấu; trùng, chứa nhau, hoặc khớp tên pháp lý). */
+function matchSupplier_(raw) {
+  const n = norm_(raw).replace(/\s+/g, ' ').trim();
+  if (!n) return '';
+  const info = supplierInfo_();
+  const names = Object.keys(info);
+  return names.find(x => norm_(x) === n) ||
+    names.find(x => { const k = norm_(x); return k && (n.indexOf(k) !== -1 || k.indexOf(n) !== -1); }) ||
+    names.find(x => info[x].legal && norm_(info[x].legal).indexOf(n) !== -1) || '';
+}
+
+function receiptRoot_() {
+  return DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('PN_FOLDER_ID') || PN_FOLDER_DEFAULT);
+}
+
+/** Thư mục con theo đường (tạo nếu chưa có), vd ["Chưa chia", "Tuấn Phong"]. */
+function receiptSubfolder_(names) {
+  let f = receiptRoot_();
+  names.forEach(n => { const it = f.getFoldersByName(n); f = it.hasNext() ? it.next() : f.createFolder(n); });
+  return f;
+}
+
+/** Xác nhận xong: chuyển ảnh + dữ liệu phiếu sang "<hộ>/<NCC>/" theo kho đã chia (2 kho → bản sao ảnh cho hộ thứ 2). */
+function receiptFileByHousehold_(d, khos) {
+  const ix = receiptIndex_(d.id);
+  const ncc = d.ncc || 'Chưa rõ NCC';
+  const list = uniq_(khos.filter(k => INVOICE_HKD_FOLDERS[k]));
+  if (!ix || !list.length) return;
+  const first = receiptSubfolder_([INVOICE_HKD_FOLDERS[list[0]], ncc]);
+  const img = DriveApp.getFileById(ix.img);
+  img.moveTo(first);
+  DriveApp.getFileById(ix.f).moveTo(first);
+  list.slice(1).forEach(k => img.makeCopy(img.getName(), receiptSubfolder_([INVOICE_HKD_FOLDERS[k], ncc])));
+}
+
+function receiptIndex_(id) {
+  if (!id || String(id).indexOf('PN') !== 0) return null;
+  if (!MEMO.__pnx) MEMO.__pnx = {};
+  if (MEMO.__pnx[id] === undefined) {
+    let v = null;
+    try { v = JSON.parse(PropertiesService.getScriptProperties().getProperty('pnx_' + id) || 'null'); } catch (e) { v = null; }
+    MEMO.__pnx[id] = v;
+  }
+  return MEMO.__pnx[id];
+}
+
+function receiptLoad_(id) {
+  const ix = receiptIndex_(id);
+  return ix ? JSON.parse(DriveApp.getFileById(ix.f).getBlob().getDataAsString()) : null;
+}
+
+function receiptSave_(d) {
+  const ix = receiptIndex_(d.id);
+  DriveApp.getFileById(ix.f).setContent(JSON.stringify(d, null, 1));
+  const nx = Object.assign({}, ix, { ncc: d.ncc, so: d.so_phieu, ngay: d.ngay, nd: d.dong.length, sl: d.tong_sl, st: d.trang_thai });
+  PropertiesService.getScriptProperties().setProperty('pnx_' + d.id, JSON.stringify(nx));
+  MEMO.__pnx[d.id] = nx;
+}
+
+function receiptCreate_(bytes, mime, nguon, nguoi) {
+  const r = receiptGemini_(bytes, mime);
+  const a = r.data || {};
+  const dong = (Array.isArray(a.dong) ? a.dong : []).map(x => ({
+    ma_ncc: String(x.ma_ncc || '').trim(), mo_ta: String(x.mo_ta || '').trim(),
+    sl: Math.max(0, Math.round(Number(x.sl) || 0)), don_gia: Math.max(0, Math.round(moneyValue_(x.don_gia))),
+  })).filter(x => x.ma_ncc || x.mo_ta || x.sl).map((x, i) => Object.assign({ dong: i + 1 }, x));
+  const ncc = matchSupplier_(a.ncc);
+  const ngay = /^\d{4}-\d{2}-\d{2}$/.test(String(a.ngay || '')) ? String(a.ngay) : '';
+  const id = 'PN' + Utilities.formatDate(new Date(), TZ, 'yyMMdd') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const d = { id, tao_luc: new Date().toISOString(), nguon, nguoi_gui: nguoi, model: r.model,
+    ncc, ncc_doc_duoc: String(a.ncc || '').trim(), so_phieu: String(a.so_phieu || '').trim(), ngay,
+    dong, tong_sl: dong.reduce((t, x) => t + x.sl, 0), tong_tien_phieu: Math.round(moneyValue_(a.tong_tien)), trang_thai: 'nhap' };
+  const sf = receiptSubfolder_([PN_UNSPLIT, ncc || 'Chưa rõ NCC']);
+  const ext = /png/.test(mime) ? 'png' : /webp/.test(mime) ? 'webp' : 'jpg';
+  const img = sf.createFile(Utilities.newBlob(bytes, mime, id + '.' + ext));
+  const json = sf.createFile(Utilities.newBlob(JSON.stringify(d, null, 1), 'application/json', id + '.json'));
+  const ix = { f: json.getId(), img: img.getId(), ncc, so: d.so_phieu, ngay, nd: dong.length, sl: d.tong_sl, st: 'nhap', t: Date.now() };
+  PropertiesService.getScriptProperties().setProperty('pnx_' + id, JSON.stringify(ix));
+  if (!MEMO.__pnx) MEMO.__pnx = {};
+  MEMO.__pnx[id] = ix;
+  return { ok: true, id, ncc_ten: ncc || d.ncc_doc_duoc, so_phieu: d.so_phieu, ngay, so_dong: dong.length, so_doi: d.tong_sl, trang_thai: 'cho_chia' };
+}
+
+function receiptList_(body) {
+  const all = PropertiesService.getScriptProperties().getProperties();
+  const rows = Object.keys(all).filter(k => k.indexOf('pnx_') === 0).map(k => {
+    let v = {};
+    try { v = JSON.parse(all[k]); } catch (e) { /* bỏ qua */ }
+    return { id: k.slice(4), ncc_ten: v.ncc || '', so_phieu: v.so || '', ngay: v.ngay || '', so_dong: v.nd || 0, so_doi: v.sl || 0,
+      trang_thai: PN_STATUS_LABEL[v.st] || v.st || '', _t: v.t || 0 };
+  }).filter(r => body.tat_ca === true || r.trang_thai !== 'huy').sort((a, b) => b._t - a._t).slice(0, Number(body.limit) || 50);
+  rows.forEach(r => delete r._t);
+  return { ok: true, action: 'ds_nhap', phieu: rows };
+}
+
+/** Gợi ý mã HNC theo bảng học dần (mỗi NCC: mã NCC / mô tả → mã HNC đã xác nhận trước đó). */
+function receiptMapKey_(line) { return norm_(line.ma_ncc || line.mo_ta).replace(/[^a-z0-9]+/g, ' ').trim(); }
+function receiptMapProp_(ncc) { return 'pnmap_' + norm_(ncc).replace(/[^a-z0-9]/g, ''); }
+function receiptMap_(ncc) {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(receiptMapProp_(ncc)) || '{}'); } catch (e) { return {}; }
+}
+
+function receiptView_(body) {
+  const id = String(body.id || '').trim();
+  const d = receiptLoad_(id);
+  if (!d) return { ok: false, action: 'xem_nhap', error: 'không có phiếu ' + id };
+  const map = receiptMap_(d.ncc);
+  const out = { ok: true, action: 'xem_nhap', id: d.id, ncc_ten: d.ncc || d.ncc_doc_duoc, so_phieu: d.so_phieu, ngay: d.ngay,
+    so_dong: d.dong.length, so_doi: d.tong_sl, trang_thai: PN_STATUS_LABEL[d.trang_thai] || d.trang_thai,
+    dong: d.dong.map(x => Object.assign({ dong: x.dong, ma_ncc: x.ma_ncc, mo_ta: x.mo_ta, sl_phieu: x.sl },
+      map[receiptMapKey_(x)] ? { goi_y_ma_hnc: map[receiptMapKey_(x)] } : {}, body.kem_gia === true ? { don_gia: x.don_gia } : {})) };
+  if (d.xac_nhan) out.da_ghi = { luc: d.xac_nhan.luc, nguoi: d.xac_nhan.nguoi, ticket_id: d.xac_nhan.ticket_id };
+  if (body.kem_anh === true) {
+    const blob = DriveApp.getFileById(receiptIndex_(id).img).getBlob();
+    out.anh_mime = blob.getContentType();
+    out.anh_base64 = Utilities.base64Encode(blob.getBytes());
+  }
+  return out;
+}
+
+function receiptDiscard_(body, nguoi) {
+  const d = receiptLoad_(String(body.id || '').trim());
+  if (!d) return { ok: false, action: 'bo_nhap', error: 'không có phiếu ' + body.id };
+  if (d.trang_thai !== 'nhap') return { ok: false, action: 'bo_nhap', id: d.id, error: 'phiếu đã ' + (d.trang_thai === 'da_ghi' ? 'ghi' : 'bỏ') + ', không bỏ được' };
+  d.trang_thai = 'huy';
+  d.bo = { luc: new Date().toISOString(), nguoi };
+  receiptSave_(d);
+  return { ok: true, action: 'bo_nhap', id: d.id, trang_thai: 'huy' };
+}
+
+/** Xác nhận phiếu: dong [{dong, ma_hnc, kho, sizes:{"39":2}, sl?, ly_do?, ghi_chu?}] → ghi NHAP bằng đúng hàm nhập sẵn có. */
+function receiptConfirm_(body, nguoi, dryRun) {
+  const id = String(body.id || '').trim();
+  const ticket = String(body.ticket_id || '').trim();
+  if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action: 'xac_nhan', error: 'ticket_id không hợp lệ' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty('stk_' + ticket)) return { ok: true, duplicate: true, action: 'xac_nhan', id, ticket_id: ticket };
+    const d = receiptLoad_(id);
+    if (!d) return { ok: false, action: 'xac_nhan', ticket_id: ticket, error: 'không có phiếu ' + id };
+    if (d.trang_thai !== 'nhap') return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'phiếu đã ' + (d.trang_thai === 'da_ghi' ? 'ghi' : 'bỏ') };
+    const input = Array.isArray(body.dong) ? body.dong : [];
+    if (!input.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'thiếu dong' };
+
+    // Kiểm từng dòng phiếu: tổng chia khớp SL phiếu; lệch thì bắt buộc lý do
+    const byLine = {};
+    input.forEach(x => { const k = Number(x.dong) || 0; (byLine[k] = byLine[k] || []).push(x); });
+    const lineErrors = [];
+    const canhBao = [];
+    const lines = [];
+    d.dong.forEach(pl => {
+      const parts = byLine[pl.dong] || [];
+      let total = 0;
+      parts.forEach(x => {
+        const sizes = Object.assign({}, x.sizes && typeof x.sizes === 'object' ? x.sizes : {});
+        if (!Object.keys(sizes).length && Number(x.sl) > 0) sizes[''] = Number(x.sl);
+        Object.keys(sizes).forEach(sz => {
+          const q = Number(sizes[sz]) || 0;
+          if (q <= 0) return;
+          total += q;
+          lines.push({ src: pl.dong, code: String(x.ma_hnc || '').trim().toUpperCase(), size: sz === '_' ? '' : sz, qty: q, warehouse: x.kho });
+        });
+      });
+      const reason = (parts.find(x => x.ly_do) || {}).ly_do || '';
+      if (total !== pl.sl) {
+        if (!reason) lineErrors.push({ dong: pl.dong, error: 'đã chia ' + total + ' / ' + pl.sl + ' — cần chọn lý do (thieu / du / loi_tra_lai / khac)' });
+        else if (!PN_REASONS[reason]) lineErrors.push({ dong: pl.dong, error: 'ly_do phải là: ' + Object.keys(PN_REASONS).join(', ') });
+        else canhBao.push('Dòng ' + pl.dong + ': chia ' + total + ' / ' + pl.sl + ' — ' + PN_REASONS[reason]);
+      }
+    });
+    Object.keys(byLine).forEach(k => { if (!d.dong.some(pl => pl.dong === Number(k))) lineErrors.push({ dong: Number(k), error: 'phiếu không có dòng này' }); });
+    if (lineErrors.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', loi_dong: lineErrors };
+    if (!lines.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'không có dòng nào để ghi', canh_bao: canhBao };
+
+    // Lượt 1: chạy thử bằng đúng hàm "nhap"
+    CTX = { seller: '', pending: {}, receiptId: d.id };
+    const checked = lines.map((ln, i) => stockLine_('nhap', {}, ln, i, true));
+    checked.forEach((r, i) => { r.result.dong_phieu = lines[i].src; });
+    if (checked.some(r => !r.ok)) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'Có dòng lỗi, chưa ghi dòng nào', results: checked.map(r => r.result), canh_bao: canhBao };
+    if (dryRun) return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: true, results: checked.map(r => r.result), canh_bao: canhBao };
+
+    // Lượt 2: ghi thật
+    MEMO = { __pnx: MEMO.__pnx };
+    CTX = { seller: '', pending: {}, receiptId: d.id };
+    const ops = [];
+    const out = [];
+    try {
+      lines.forEach((ln, i) => {
+        const r = stockLine_('nhap', {}, ln, i, false);
+        r.result.dong_phieu = ln.src;
+        out.push(r.result);
+        r.ops.forEach(o => ops.push(o));
+      });
+    } catch (err) {
+      props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), partial: true }));
+      return { ok: false, partial: true, action: 'xac_nhan', id, ticket_id: ticket, results: out, _sync: uniq_(ops.map(o => o.sheet)),
+        error: 'Ghi dở (' + (err && err.message ? err.message : err) + ') — KHÔNG gửi lại, kiểm tra Sheet' };
+    } finally {
+      CTX.receiptId = '';
+    }
+    d.trang_thai = 'da_ghi';
+    d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, canh_bao: canhBao, rows: ops.map(o => o.sheet + '!' + o.row) };
+    receiptSave_(d);
+    try { receiptFileByHousehold_(d, lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()])); }
+    catch (err) { console.error('Không chuyển được ảnh phiếu sang thư mục hộ: ' + (err && err.message ? err.message : err)); }
+    if (d.ncc) { // học bảng ghép mã NCC / mô tả → mã HNC cho lần sau
+      const map = receiptMap_(d.ncc);
+      input.forEach(x => {
+        const pl = d.dong.find(y => y.dong === Number(x.dong));
+        if (pl && x.ma_hnc && receiptMapKey_(pl)) map[receiptMapKey_(pl)] = String(x.ma_hnc).trim().toUpperCase();
+      });
+      const txt = JSON.stringify(map);
+      if (txt.length < 8500) props.setProperty(receiptMapProp_(d.ncc), txt);
+    }
+    props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
+    pruneTickets_(props, 'stk_');
+    CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'nhập phiếu ' + d.id, ops, pn: d.id }), UNDO_SECONDS);
+    return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao,
+      undo_until: new Date(Date.now() + UNDO_SECONDS * 1000).toISOString(), _sync: uniq_(ops.map(o => o.sheet)) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Huỷ lần xác nhận phiếu (ticket_id của xac_nhan), chỉ của chính người đó, ≤ 10 phút → phiếu về "chờ chia". */
+function receiptUndo_(body, nguoi, dryRun) {
+  const ticket = String(body.ticket_id || '').trim();
+  const cache = CacheService.getScriptCache();
+  const raw = cache.get('stkops_' + ticket);
+  if (!raw) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'không có thao tác để huỷ (quá 10 phút, đã huỷ, hoặc sai mã)' };
+  const rec = JSON.parse(raw);
+  if (rec.seller !== nguoi) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'chỉ huỷ được thao tác của chính mình' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const r = undoRecord_(rec, dryRun);
+    if (r.ok && !dryRun) {
+      cache.remove('stkops_' + ticket);
+      const d = rec.pn ? receiptLoad_(rec.pn) : null;
+      if (d && d.trang_thai === 'da_ghi') {
+        d.trang_thai = 'nhap';
+        d.lich_su_huy = (d.lich_su_huy || []).concat([{ luc: new Date().toISOString(), nguoi, xac_nhan: d.xac_nhan }]);
+        delete d.xac_nhan;
+        receiptSave_(d);
+      }
+    }
+    return { ok: r.ok, action: 'huy_nhap', ticket_id: ticket, id: rec.pn || '', dry_run: dryRun,
+      error: r.ok ? undefined : 'Không huỷ được vì dữ liệu đã thay đổi: ' + (r.problems || []).join('; '), _sync: r.touched || [] };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // =====================================================================
@@ -1356,9 +1716,11 @@ function invoiceTickets_() {
     const qty = Number(nh[r][col['Số lượng (*)']]) || 0;
     if (qty <= 0) continue;
     const p = prod[code] || { supplier: '', price: 0, name: '', parent: code.replace(/[A-Z]$/, '') };
-    const supplier = p.supplier || NO_SUPPLIER;
+    const pn = receiptIndex_(String(nh[r][col['Số chứng từ (*)']] || '').trim()); // nhập từ phiếu NCC → NCC / số phiếu theo phiếu
+    const supplier = (pn && pn.ncc) || p.supplier || NO_SUPPLIER;
     const key = date + '|' + supplier + '|' + kho;
-    const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {} });
+    const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {}, ncc_docs: [] });
+    if (pn && pn.so && t.ncc_docs.indexOf(pn.so) === -1) t.ncc_docs.push(pn.so);
     const line = t.lines[code] || (t.lines[code] = { code, parent: p.parent || code, name: p.name, price: p.price, qty: 0 });
     line.qty += qty;
     t.qty += qty;
@@ -1473,7 +1835,8 @@ function invoiceMessage_(t) {
   const d = t.date.split('-');
   const lines = [
     'Chào ' + (t.supplier === NO_SUPPLIER ? 'anh/chị' : t.supplier) + ',',
-    'Hiệu giày Hải Nancy nhờ anh/chị xuất hoá đơn cho hàng nhập ngày ' + d[2] + '/' + d[1] + '/' + d[0] + ' (kho ' + t.kho + '):',
+    'Hiệu giày Hải Nancy nhờ anh/chị xuất hoá đơn cho hàng nhập ngày ' + d[2] + '/' + d[1] + '/' + d[0] + ' (kho ' + t.kho + ')' +
+      (t.ncc_docs && t.ncc_docs.length ? ', theo phiếu xuất ' + t.ncc_docs.join(', ') : '') + ':',
   ];
   if (raw) {
     lines.push('• Đơn vị mua: ' + (parts[0] || ''));
@@ -1591,7 +1954,13 @@ function appendNhap_(code, color, size, qty, kho, isReturn) {
     'KHO': kho, 'item_size': sizeValue_(size), 'Số lượng (*)': qty,
   };
   if (isReturn) values['Số chứng từ (*)'] = 'TRA-' + Utilities.formatDate(new Date(), TZ, 'ddMMyy');
-  NHAP_MARK_COLUMNS.forEach(c => { values[c] = isReturn ? NHAP_RETURN_MARK : NHAP_ZALO_MARK; });
+  if (CTX.receiptId && !isReturn) {
+    // Nhập từ phiếu NCC: như nhập thường (anh Kha 16/10) — không đánh dấu, HNC in tem / đồng bộ kho / xuất MISA;
+    // Số chứng từ = mã phiếu nháp để nối NCC / số phiếu NCC / hoá đơn.
+    values['Số chứng từ (*)'] = CTX.receiptId;
+  } else {
+    NHAP_MARK_COLUMNS.forEach(c => { values[c] = isReturn ? NHAP_RETURN_MARK : NHAP_ZALO_MARK; });
+  }
   // FSKU của NHAP là công thức từng dòng: =CONCATENATE(KHO; product_code; item_size)
   return appendByHeader_('NHAP', values, (row, col) => {
     const a1 = c => columnLetter_(col[c] + 1) + row;
@@ -1857,7 +2226,7 @@ function testSale() {
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
-    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY'];
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY', 'GEMINI_API_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
