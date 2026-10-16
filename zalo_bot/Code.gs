@@ -534,6 +534,7 @@ function doMovement_(p, action, kho, dryRun) {
   const warnings = [];
   const written = [];
   const ops = [];
+  const kygui = [];
 
   for (const s of sizes) {
     const rows = findKhoRows_(kho, p.code, [s.size]);
@@ -549,31 +550,53 @@ function doMovement_(p, action, kho, dryRun) {
         }
       }
     }
-    if (!dryRun) {
-      // channel trống = bán tại cửa hàng theo KHO (quy ước 16/10); chỉ ghi khi bán ngoài cửa hàng
-      if (action === ACTIONS.SELL) ops.push(appendBan_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller));
-      else if (action === ACTIONS.OUT) ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
-      else ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, action === ACTIONS.IN && p.returnGoods));
+    // channel trống = bán tại cửa hàng theo KHO (quy ước 16/10); chỉ ghi khi bán ngoài cửa hàng. Bán: trừ hàng ký gửi trước.
+    if (action === ACTIONS.SELL) {
+      const sr = kyguiSale_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller, dryRun);
+      sr.ops.forEach(o => ops.push(o));
+      sr.phan.filter(x => x.chu_hang !== kho).forEach(x => kygui.push({ size: s.size, chu_hang: x.chu_hang, qty: x.qty, loai: 'ban_hang_ky_gui' }));
+    } else if (!dryRun && action === ACTIONS.OUT) {
+      ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
+    } else if (action === ACTIONS.IN) {
+      if (!dryRun) ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, p.returnGoods));
+      if (p.returnGoods) {
+        const rr = kyguiReturn_(p.code, s.size, s.qty, kho, p.owner, dryRun);
+        rr.ops.forEach(o => ops.push(o));
+        if (rr.chu_hang !== kho) kygui.push({ size: s.size, chu_hang: rr.chu_hang, qty: s.qty, loai: 'tra_ve_ky_gui' });
+      }
     }
     // Ghi nhớ số đã bán/xuất/nhập trong cùng lô để cảnh báo tồn của dòng sau tính đúng
     if (!CTX.pending) CTX.pending = {};
     const pk = kho + p.code + s.size;
     CTX.pending[pk] = (CTX.pending[pk] || 0) + (action === ACTIONS.IN ? -s.qty : s.qty);
     written.push((s.size ? 'size ' + s.size : 'không size') + ' × ' + s.qty);
+    if (action !== ACTIONS.IN) { const w = kyguiCheck_(p.code, s.size, kho); if (w) warnings.push(w); }
   }
+  const kyText = kygui.map(x => '  ↳ ' + (x.size ? 'size ' + x.size + ': ' : '') + x.qty + ' là hàng của hộ ' + x.chu_hang +
+    (x.loai === 'tra_ve_ky_gui' ? ' (trả về sổ ký gửi)' : ' (ký gửi, tiền / hoá đơn thuộc ' + x.chu_hang + ')'));
 
   const tab = action === ACTIONS.SELL ? 'BAN' : action === ACTIONS.OUT ? 'XUAT' : 'NHAP';
   const label = action + ' ' + p.code + ' (' + written.join(', ') + ') kho ' + kho;
   return {
-    ok: true, ops, label, warnings,
+    ok: true, ops, label, warnings, kygui,
     text: (action === ACTIONS.IN && p.returnGoods ? '↩️ TRẢ HÀNG: nhập lại ' + p.code : '✅ ' + action + ' ' + p.code) +
       (action === ACTIONS.SELL && p.channel ? ' (' + p.channel + ')' : '') +
       (color ? ' màu ' + color : '') + ' kho ' + kho +
       (action === ACTIONS.SELL && p.price ? ' giá ' + money_(p.price) : '') +
-      '\n  ' + written.join('\n  ') + '\n→ tab ' + tab +
+      '\n  ' + written.join('\n  ') + (kyText.length ? '\n' + kyText.join('\n') : '') + '\n→ tab ' + tab +
       (action === ACTIONS.IN && p.returnGoods ? '\n(Số chứng từ TRA-…, không xuất phiếu nhập MISA)' : '') +
       (warnings.length ? '\n' + warnings.join('\n') : ''),
   };
+}
+
+/** Sổ ký gửi cho 1 lệnh chuyển kho (mọi size của lệnh) → { ops, notes, text }. */
+function transferKygui_(p, from, to, dry) {
+  const sizes = p.sizes.length ? p.sizes : [{ size: '', qty: p.qty || 1 }];
+  const res = { ops: [], notes: [], text: '' };
+  sizes.forEach(s => { const r = kyguiTransfer_(p.code, s.size, s.qty, from, to, dry); res.ops = res.ops.concat(r.ops); res.notes = res.notes.concat(r.notes); });
+  res.text = res.notes.map(n => '  📒 ' + (n.size ? 'size ' + n.size + ': ' : '') + n.qty + (n.loai === 'tra_ve_chu' ? ' trả về hộ ' + n.chu_hang + ' (bớt ký gửi)' :
+    ' thành hàng ký gửi của hộ ' + n.chu_hang + ' ở ' + to)).join('\n');
+  return res;
 }
 
 /** Chuyển kho = XUẤT ở kho nguồn + NHẬP ở kho đích. */
@@ -585,11 +608,12 @@ function doTransfer_(p, dryRun) {
   const out = doMovement_(p, ACTIONS.OUT, p.khoFrom, dryRun);
   if (!out.ok) return out;
   const inn = doMovement_(p, ACTIONS.IN, p.khoTo, dryRun);
+  const ky = transferKygui_(p, p.khoFrom, p.khoTo, dryRun);
   return {
     ok: true,
-    ops: out.ops.concat(inn.ops || []),
+    ops: out.ops.concat(inn.ops || [], ky.ops),
     label: 'CHUYỂN KHO ' + p.code + ' ' + p.khoFrom + ' → ' + p.khoTo,
-    text: '🔁 CHUYỂN KHO ' + p.khoFrom + ' → ' + p.khoTo + '\n' + out.text + '\n' + inn.text,
+    text: '🔁 CHUYỂN KHO ' + p.khoFrom + ' → ' + p.khoTo + '\n' + out.text + '\n' + inn.text + (ky.text ? '\n' + ky.text : ''),
   };
 }
 
@@ -645,6 +669,12 @@ function undoRecord_(last, dryRun) {
   last.ops.forEach(op => {
     const sheet = getSheet_(op.sheet);
     if (op.guard) receiptUndoGuard_(op.guard, ownRows, tabCache).forEach(x => problems.push(x));
+    if (op.type === 'kygui') {
+      const col = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
+      const cur = Number(sheet.getRange(op.row, col.so_luong + 1).getValue()) || 0;
+      if (cur !== op.after) problems.push('KYGUI dòng ' + op.row + ' đã đổi (' + cur + ', lúc ghi ' + op.after + ')');
+      return;
+    }
     if (op.type === 'loc') {
       const col = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
       const cur = String(sheet.getRange(op.row, col.product_location + 1).getValue());
@@ -674,6 +704,12 @@ function undoRecord_(last, dryRun) {
       const col = headerMap_(sheet.getRange(op.hr || 1, 1, 1, sheet.getLastColumn()).getValues()[0]);
       if (op.type === 'loc') {
         sheet.getRange(op.row, col.product_location + 1).setValue(op.oldLoc);
+      } else if (op.type === 'kygui') {
+        if (op.created) op.created.forEach(n => sheet.getRange(op.row, col[n] + 1).clearContent()); // dòng bot vừa thêm → xoá
+        else {
+          sheet.getRange(op.row, col.so_luong + 1).setValue(op.before);
+          sheet.getRange(op.row, col.cap_nhat + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
+        }
       } else if (op.cols) {
         op.cols.forEach(c => sheet.getRange(op.row, c).clearContent()); // dòng SANPHAM tạo từ phiếu: xoá cả ô công thức đã chép
       } else {
@@ -778,6 +814,7 @@ function handleSaleRequest_(e) {
  */
 function handleSale_(body, dryRun) {
   MEMO = {};
+  CTX = { seller: '', pending: {} };
   const ticket = String(body.ticket_id || '').trim();
   const channel = String(body.channel || '').trim().toLowerCase();
   const seller = String(body.seller || '').trim().slice(0, 50);
@@ -800,6 +837,7 @@ function handleSale_(body, dryRun) {
 
     const results = [];
     const plan = [];
+    let touchedKygui = false;
     lines.forEach((ln, i) => {
       ln = ln || {};
       const code = String(ln.code || '').trim().toUpperCase();
@@ -830,7 +868,17 @@ function handleSale_(body, dryRun) {
         }
       }
       if (errs.length) { r.ok = false; r.error = errs.join('; '); }
-      else { r.ok = true; plan.push({ r, code, size, qty, kho, price }); }
+      else {
+        r.ok = true;
+        // Chủ hàng theo sổ ký gửi (chạy thử, chưa ghi): hàng của hộ kia đang ở kho này bán trước
+        const ph = kyguiSale_(code, '', price, size, qty, kho, '', '', true);
+        r.phan = ph.phan;
+        r.chu_hang = ph.phan.length === 1 ? ph.phan[0].chu_hang : '';
+        CTX.pending[kho + code + size] = (CTX.pending[kho + code + size] || 0) + qty;
+        const w = kyguiCheck_(code, size, kho);
+        if (w) r.warning = (r.warning ? r.warning + '; ' : '') + w.replace(/^⚠️ /, '');
+        plan.push({ r, code, size, qty, kho, price });
+      }
       results.push(r);
     });
     if (results.some(r => !r.ok)) {
@@ -839,10 +887,17 @@ function handleSale_(body, dryRun) {
 
     if (!dryRun) {
       let written = 0;
+      MEMO = {};
+      CTX = { seller: '', pending: {} };
       try {
         plan.forEach(x => {
-          const op = appendBan_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel === 'cua_hang' ? '' : channel, seller);
-          x.r.row = op.row;
+          const sr = kyguiSale_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel === 'cua_hang' ? '' : channel, seller, false);
+          const bans = sr.ops.filter(o => o.sheet === 'BAN');
+          x.r.row = bans.length ? bans[0].row : '';
+          if (bans.length > 1) x.r.rows = bans.map(o => o.row);
+          x.r.phan = sr.phan;
+          x.r.chu_hang = sr.phan.length === 1 ? sr.phan[0].chu_hang : '';
+          if (sr.ops.some(o => o.sheet === KYGUI_TAB)) touchedKygui = true;
           written++;
         });
       } catch (err) {
@@ -853,6 +908,7 @@ function handleSale_(body, dryRun) {
       }
       props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: written }));
       pruneTickets_(props, 'sale_');
+      if (touchedKygui) { try { queueSyncHint_([KYGUI_TAB]); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
     }
     return { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
   } finally {
@@ -999,7 +1055,7 @@ function stockLine_(action, body, ln, i, dry) {
   if (size && !/^\d{2}$/.test(size)) return fail('size không hợp lệ');
   if (action !== 'chuyen_vi_tri' && (!Number.isInteger(qty) || qty < 1 || qty > 99)) return fail('qty phải là số nguyên 1-99');
   const p = { code, sizes: size ? [{ size, qty }] : [], qty: size ? 0 : qty, color: '', price: '', sizeErrors: [],
-    returnGoods: action === 'tra_hang', kho: '', location: '' };
+    returnGoods: action === 'tra_hang', kho: '', location: '', owner: ln.chu_hang || '' };
   const done = r => (r.ok
     ? { ok: true, ops: r.ops || [], result: Object.assign(res, { ok: true, warnings: (r.warnings || []).map(clean), rows: (r.ops || []).map(o => o.sheet + '!' + o.row) }) }
     : fail(clean(r.text)));
@@ -1008,7 +1064,10 @@ function stockLine_(action, body, ln, i, dry) {
     const kho = KHO_ALIASES[String(ln.warehouse || body.warehouse || '').trim().toUpperCase()];
     if (!kho) return fail('warehouse phải là 15E hoặc Y3C');
     res.warehouse = kho;
-    return done(doMovement_(p, action === 'xuat' ? ACTIONS.OUT : ACTIONS.IN, kho, dry));
+    const mv = doMovement_(p, action === 'xuat' ? ACTIONS.OUT : ACTIONS.IN, kho, dry);
+    if (mv.kygui && mv.kygui.length) res.ky_gui = mv.kygui;
+    if (action === 'tra_hang') res.chu_hang = mv.kygui && mv.kygui.length ? mv.kygui[0].chu_hang : kho;
+    return done(mv);
   }
   if (action === 'chuyen_kho') {
     const from = KHO_ALIASES[String(ln.from || body.from || '').trim().toUpperCase()];
@@ -1020,7 +1079,9 @@ function stockLine_(action, body, ln, i, dry) {
     if (!out.ok) return fail(clean(out.text));
     const inn = doMovement_(p, ACTIONS.IN, to, dry);
     if (!inn.ok) return fail(clean(inn.text));
-    return done({ ok: true, ops: (out.ops || []).concat(inn.ops || []), warnings: (out.warnings || []).concat(inn.warnings || []) });
+    const ky = transferKygui_(p, from, to, dry);
+    res.ky_gui = ky.notes;
+    return done({ ok: true, ops: (out.ops || []).concat(inn.ops || [], ky.ops), warnings: (out.warnings || []).concat(inn.warnings || []) });
   }
   // chuyen_vi_tri
   const kho = KHO_ALIASES[String(ln.warehouse || body.warehouse || '').trim().toUpperCase()];
@@ -1839,7 +1900,7 @@ function handleNotify_(body, owner, props) {
 // Web trả 202 ok · 403 sai khoá · 503 web chưa đặt khoá · 429 quá 60 lần/giờ. Lỗi chỉ ghi log, không gửi dồn lại.
 // =====================================================================
 
-const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META'];
+const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI'];
 const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
 const SYNC_MIN_INTERVAL_MS = 60 * 1000;
 const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder'];
@@ -2337,17 +2398,155 @@ function testInvoice() {
 }
 
 // =====================================================================
+// SỔ KÝ GỬI GIỮA 2 HỘ (tab KYGUI, anh Kha "làm" 17/10)
+// Hàng của hộ này đang nằm ở kho hộ kia (chuyển kho giữa 2 hộ không xuất hoá đơn).
+// Chuyển A → B: trả trước hàng của B đang ký gửi ở A (trừ KYGUI chủ B ở A), phần còn lại thành ký gửi của A ở B.
+// Bán / xuất ở kho K: trừ hàng ký gửi của hộ kia ở K trước → BAN.chu_hang = hộ kia; còn lại chu_hang = K.
+// Trả hàng: về đúng chủ (chu_hang gửi kèm, hoặc dòng BAN gần nhất cùng mã / size / kho). Chưa có tab KYGUI → tắt, chủ hàng = kho.
+// =====================================================================
+
+const KYGUI_TAB = 'KYGUI';
+const KYGUI_COLS = ['product_code', 'item_size', 'chu_hang', 'kho_dang_o', 'so_luong', 'cap_nhat'];
+
+function kyguiOn_() {
+  if (MEMO.__kyOn === undefined) MEMO.__kyOn = !!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(KYGUI_TAB);
+  return MEMO.__kyOn;
+}
+
+/** Các dòng KYGUI → [{row, code, size, chu, at, qty}] (theo tên cột hàng 1). */
+function kyguiRows_() {
+  if (!MEMO.__ky) {
+    const data = sheetValues_(KYGUI_TAB);
+    const col = headerMap_(data[0] || []);
+    requireColumns_(KYGUI_TAB, col, KYGUI_COLS);
+    MEMO.__ky = [];
+    for (let r = 1; r < data.length; r++) {
+      const code = String(data[r][col.product_code] || '').trim().toUpperCase();
+      if (!code) continue;
+      MEMO.__ky.push({ row: r + 1, code, size: normSize_(data[r][col.item_size]), chu: KHO_ALIASES[String(data[r][col.chu_hang] || '').trim().toUpperCase()] || '',
+        at: KHO_ALIASES[String(data[r][col.kho_dang_o] || '').trim().toUpperCase()] || '', qty: Number(data[r][col.so_luong]) || 0 });
+    }
+  }
+  return MEMO.__ky;
+}
+
+/** Số đang ký gửi: hàng của `chu` đang ở `at` (CTX.kyPending: thay đổi chưa ghi trong lô chạy thử). */
+function kyguiQty_(chu, at, code, size) {
+  if (!kyguiOn_()) return 0;
+  const k = chu + '|' + at + '|' + code + '|' + size;
+  const row = kyguiRows_().find(x => x.chu === chu && x.at === at && x.code === code && x.size === size);
+  return Math.max(0, (row ? row.qty : 0) + (((CTX.kyPending || {})[k]) || 0));
+}
+
+/** Cộng / trừ KYGUI 1 ô (chủ × kho đang ở × mã × size). Chạy thật → trả op để huỷ được. */
+function kyguiAdjust_(chu, at, code, size, delta, dry) {
+  const k = chu + '|' + at + '|' + code + '|' + size;
+  if (!CTX.kyPending) CTX.kyPending = {};
+  if (dry) { CTX.kyPending[k] = (CTX.kyPending[k] || 0) + delta; return null; }
+  const sheet = getSheet_(KYGUI_TAB);
+  const data = sheetValues_(KYGUI_TAB);
+  const col = headerMap_(data[0]);
+  const rows = kyguiRows_();
+  let row = rows.find(x => x.chu === chu && x.at === at && x.code === code && x.size === size);
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  if (row) {
+    const before = row.qty;
+    row.qty = before + delta;
+    sheet.getRange(row.row, col.so_luong + 1).setValue(row.qty);
+    sheet.getRange(row.row, col.cap_nhat + 1).setValue(now);
+    return { type: 'kygui', sheet: KYGUI_TAB, row: row.row, before, after: row.qty };
+  }
+  let last = data.length;
+  while (last > 1 && String(data[last - 1][col.product_code] || '').trim() === '') last--;
+  const r = last + 1;
+  if (r > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
+  const arr = new Array(data[0].length).fill('');
+  arr[col.product_code] = code; arr[col.item_size] = sizeValue_(size); arr[col.chu_hang] = chu; arr[col.kho_dang_o] = at; arr[col.so_luong] = delta; arr[col.cap_nhat] = now;
+  sheet.getRange(r, 1, 1, arr.length).setValues([arr]);
+  while (data.length < r - 1) data.push(new Array(arr.length).fill(''));
+  data[r - 1] = arr;
+  rows.push({ row: r, code, size, chu, at, qty: delta });
+  return { type: 'kygui', sheet: KYGUI_TAB, row: r, before: null, after: delta, created: KYGUI_COLS.slice() };
+}
+
+/** Chuyển kho from → to: trả hàng của `to` đang ký gửi ở `from` trước, phần còn lại thành ký gửi của `from` ở `to`. */
+function kyguiTransfer_(code, size, qty, from, to, dry) {
+  const out = { ops: [], notes: [] };
+  if (!kyguiOn_()) return out;
+  const back = Math.min(qty, kyguiQty_(to, from, code, size));
+  if (back > 0) {
+    const op = kyguiAdjust_(to, from, code, size, -back, dry);
+    if (op) out.ops.push(op);
+    out.notes.push({ size, chu_hang: to, qty: back, loai: 'tra_ve_chu' });
+  }
+  if (qty - back > 0) {
+    const op = kyguiAdjust_(from, to, code, size, qty - back, dry);
+    if (op) out.ops.push(op);
+    out.notes.push({ size, chu_hang: from, qty: qty - back, loai: 'thanh_ky_gui' });
+  }
+  return out;
+}
+
+/** Bán ở kho `kho`: tách theo chủ hàng (ký gửi của hộ kia trước) → [{chu_hang, qty}]; chạy thật thì ghi BAN + trừ KYGUI. */
+function kyguiSale_(code, color, price, size, qty, kho, channel, seller, dry) {
+  const other = kho === 'Y3C' ? '15E' : 'Y3C';
+  const cons = Math.min(qty, kyguiQty_(other, kho, code, size));
+  const phan = [];
+  if (cons > 0) phan.push({ chu_hang: other, qty: cons });
+  if (qty - cons > 0) phan.push({ chu_hang: kho, qty: qty - cons });
+  const ops = [];
+  phan.forEach(ph => {
+    if (ph.chu_hang !== kho) { const op = kyguiAdjust_(ph.chu_hang, kho, code, size, -ph.qty, dry); if (op) ops.push(op); }
+    if (!dry) ops.push(appendBan_(code, color, price, size, ph.qty, kho, channel, seller, ph.chu_hang));
+  });
+  return { ops, phan };
+}
+
+/** Trả hàng về đúng chủ: chủ gửi kèm, không có thì theo dòng BAN gần nhất cùng mã / size / kho có chu_hang. */
+function kyguiReturn_(code, size, qty, kho, hint, dry) {
+  const out = { ops: [], chu_hang: kho };
+  if (!kyguiOn_()) return out;
+  let chu = KHO_ALIASES[String(hint || '').trim().toUpperCase()] || '';
+  if (!chu) {
+    const ban = sheetValues_('BAN');
+    const c = headerMap_(ban[0]);
+    if (c.chu_hang !== undefined) {
+      for (let r = ban.length - 1; r >= 1; r--) {
+        if (String(ban[r][c.product_code] || '').trim().toUpperCase() !== code) continue;
+        if (normSize_(ban[r][c.item_size]) !== size || KHO_ALIASES[String(ban[r][c.KHO] || '').trim().toUpperCase()] !== kho) continue;
+        chu = KHO_ALIASES[String(ban[r][c.chu_hang] || '').trim().toUpperCase()] || '';
+        if (chu) break;
+      }
+    }
+  }
+  out.chu_hang = chu || kho;
+  if (out.chu_hang !== kho) { const op = kyguiAdjust_(out.chu_hang, kho, code, size, qty, dry); if (op) out.ops.push(op); }
+  return out;
+}
+
+/** Cảnh báo (không chặn): tổng ký gửi đang ở kho > tồn kho đó. pendingStock: số đã trừ / cộng trong lô chưa ghi. */
+function kyguiCheck_(code, size, kho) {
+  if (!kyguiOn_()) return '';
+  const other = kho === 'Y3C' ? '15E' : 'Y3C';
+  const ky = kyguiQty_(other, kho, code, size);
+  if (ky <= 0) return '';
+  const rows = findKhoRows_(kho, code, [size]);
+  const stock = (rows.length ? Number(rows[0].current_quantity) || 0 : 0) - (((CTX.pending || {})[kho + code + size]) || 0);
+  return ky > stock ? '⚠️ Sổ ký gửi: ' + code + (size ? ' size ' + size : '') + ' kho ' + kho + ' ghi ' + ky + ' của ' + other + ' nhưng tồn chỉ ' + stock + ' — kiểm lại sổ / kho' : '';
+}
+
+// =====================================================================
 // GHI SHEET
 // =====================================================================
 
-function appendBan_(code, color, price, size, qty, kho, channel, seller) {
+function appendBan_(code, color, price, size, qty, kho, channel, seller, chuHang) {
   // FSKU của BAN tự tính bằng ARRAYFORMULA → không ghi cột FSKU.
   // channel / seller chỉ ghi khi tab BAN đã có 2 cột đó (cột thêm cuối hàng tiêu đề).
   return appendByHeader_('BAN', {
     'Ngày': today_(), 'product_code': code, 'product_color': color,
     'Giá': price ? Number(price) : '', 'item_size': sizeValue_(size), 'item_quantity': qty, 'KHO': kho,
   }, null, { product_code: code, item_size: size, item_quantity: qty, KHO: kho },
-  { 'channel': channel || '', 'seller': seller || '' });
+  { 'channel': channel || '', 'seller': seller || '', 'chu_hang': chuHang || '' });
 }
 
 function appendXuat_(code, color, size, qty, kho) {

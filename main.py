@@ -85,7 +85,7 @@ EXPORT_DIR = os.path.join(GDRIVE_DIR, "HNC_Exported_Files")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
 # Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
-SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META']
+SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
 
 # Media Ingestion & Asset Management Paths

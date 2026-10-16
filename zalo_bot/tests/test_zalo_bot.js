@@ -483,5 +483,49 @@ eq('đủ 60s → gửi 1 lần gộp', [HINTS.length, HINTS[1] && HINTS[1].body
 ctx.flushSyncHints();
 eq('hàng chờ trống → không gửi', HINTS.length, 2);
 
+// ---- Sổ ký gửi (tab KYGUI) ----
+delete PROPS.SYNC_HINT_URL;
+const kyStk = (b, dry) => ctx.handleStock_(Object.assign({ seller: 'nv@hn.vn' }, b), !!dry);
+const tf = (t, from, to, size, qty, dry) => kyStk({ action: 'chuyen_kho', ticket_id: t, from, to, lines: [{ code: 'TH2040D', size, qty }] }, dry);
+let kr = tf('K0', '15E', 'Y3C', 41, 1, true);
+eq('chưa có tab KYGUI → tắt sổ ký gửi', [kr.ok, kr.results[0].ky_gui], [true, []]);
+DATA.KYGUI = [['product_code', 'item_size', 'chu_hang', 'kho_dang_o', 'so_luong', 'cap_nhat']];
+if (DATA.BAN[0].indexOf('chu_hang') === -1) DATA.BAN[0].push('chu_hang');
+const kyRow = (chu, at, size) => DATA.KYGUI.slice(1).find(r => r[0] === 'TH2040D' && String(r[1]) === String(size) && r[2] === chu && r[3] === at);
+kr = tf('K1', '15E', 'Y3C', 41, 1, true);
+eq('chạy thử: 15E → Y3C thành ký gửi của 15E ở Y3C, chưa ghi', [kr.ok, kr.results[0].ky_gui, DATA.KYGUI.length], [true, [{ size: '41', chu_hang: '15E', qty: 1, loai: 'thanh_ky_gui' }], 1]);
+kr = tf('K1', '15E', 'Y3C', 41, 1);
+eq('ghi: KYGUI có dòng 15E ở Y3C × 1 + gửi web tab KYGUI', [kr.ok, kyRow('15E', 'Y3C', 41) && kyRow('15E', 'Y3C', 41)[4], kr._sync.indexOf('KYGUI') !== -1], [true, 1, true]);
+// Bán ở Y3C 2 đôi size 41: 1 đôi ký gửi của 15E + 1 đôi của Y3C
+let ks = ctx.handleSale_({ ticket_id: 'KS1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }] }, true);
+eq('bán chạy thử: tách chủ hàng (ký gửi trước)', [ks.ok, ks.results[0].phan, ks.results[0].chu_hang], [true, [{ chu_hang: '15E', qty: 1 }, { chu_hang: 'Y3C', qty: 1 }], '']);
+const banLen = DATA.BAN.length;
+ks = ctx.handleSale_({ ticket_id: 'KS1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }] }, false);
+const chuCol = DATA.BAN[0].indexOf('chu_hang'), qCol = DATA.BAN[0].indexOf('item_quantity');
+eq('bán ghi: 2 dòng BAN theo chủ hàng, KYGUI về 0', [ks.ok, DATA.BAN.slice(banLen).map(r => [r[chuCol], r[qCol]]), kyRow('15E', 'Y3C', 41)[4]], [true, [['15E', 1], ['Y3C', 1]], 0]);
+ks = ctx.handleSale_({ ticket_id: 'KS2', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C' }] }, true);
+eq('bán món không ký gửi → chủ hàng = kho', [ks.results[0].chu_hang, ks.results[0].phan], ['Y3C', [{ chu_hang: 'Y3C', qty: 1 }]]);
+// Chuyển ngược Y3C → 15E: trả hàng của 15E đang ký gửi ở Y3C trước, phần còn lại thành ký gửi của Y3C ở 15E
+tf('K2', '15E', 'Y3C', 40, 1);
+kr = tf('K3', 'Y3C', '15E', 40, 2, true);
+eq('Y3C → 15E: trả về chủ trước, dư thành ký gửi của Y3C', kr.results[0].ky_gui, [{ size: '40', chu_hang: '15E', qty: 1, loai: 'tra_ve_chu' }, { size: '40', chu_hang: 'Y3C', qty: 1, loai: 'thanh_ky_gui' }]);
+kr = tf('K3', 'Y3C', '15E', 40, 2);
+eq('ghi: KYGUI 15E ở Y3C = 0, Y3C ở 15E = 1', [kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [0, 1]);
+kr = kyStk({ action: 'huy', ticket_id: 'K4', undo_ticket_id: 'K3' });
+eq('huỷ chuyển kho → KYGUI trả lại như trước (dòng mới thêm thì xoá)', [kr.ok, kyRow('15E', 'Y3C', 40)[4], !kyRow('Y3C', '15E', 40)], [true, 1, true]);
+// Trả hàng về đúng chủ
+kr = kyStk({ action: 'tra_hang', ticket_id: 'K5', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] });
+eq('trả hàng không kèm chủ → theo dòng BAN gần nhất (Y3C)', [kr.ok, kr.results[0].chu_hang, kyRow('15E', 'Y3C', 41)[4]], [true, 'Y3C', 0]);
+kr = kyStk({ action: 'tra_hang', ticket_id: 'K6', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C', chu_hang: '15E' }] });
+eq('trả hàng kèm chu_hang 15E ở Y3C → cộng lại ký gửi', [kr.ok, kr.results[0].chu_hang, kyRow('15E', 'Y3C', 41)[4]], [true, '15E', 1]);
+// Lệch sổ: ký gửi > tồn → cảnh báo, không chặn
+kyRow('15E', 'Y3C', 41)[4] = 50;
+ctx.MEMO = {};
+ks = ctx.handleSale_({ ticket_id: 'KS3', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] }, true);
+eq('ký gửi > tồn → cảnh báo, vẫn ok', [ks.ok, /Sổ ký gửi/.test(ks.results[0].warning || '')], [true, true]);
+// Lệnh Zalo "ban" cũng trừ ký gửi
+const zt = ctx.handleText_('ban TH2040D 41 YEN 800k', true, 'c1', 'Kris');
+eq('Zalo bán: báo phần hàng ký gửi', /là hàng của hộ 15E/.test(zt), true);
+
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
