@@ -37,7 +37,8 @@ MEDIA_DIR = "/Volumes/Media/HNC_Master"
 sys.path.insert(0, ROOT)
 from hnc_paths import find_system_dir  # noqa: E402  (đường dẫn Drive khai 1 chỗ)
 EXPORT_DIR = os.path.join(find_system_dir(), "HNC_Exported_Files")
-GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+# 2 mô hình (16/10): mỗi lần lỗi thử ít mô hình để khỏi tốn hạn mức miễn phí của nhiều mô hình
+GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"]
 
 # (cột SANPHAM hàng 2, cột mặc định ở SUB hàng 1) — so khớp sau khi bỏ khoảng trắng 2 đầu
 SPEC_COLUMNS = [
@@ -268,7 +269,7 @@ def gemini_call(api_key, images, prompt):
 
 def cmd_ai(args):
     env = load_env()
-    api_key = env.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+    api_key = env.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")  # .env của HNC trước biến môi trường chung
     if not api_key:
         sys.exit("DỪNG: thiếu GEMINI_API_KEY trong .env")
     ss = open_sheet()

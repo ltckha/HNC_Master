@@ -51,7 +51,8 @@ except ImportError:
 # Dotenv & Gemini Multimodal AI Setup
 try:
     from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+    # override=True: khoá trong .env của HNC thắng biến môi trường chung (~/.zshrc có GEMINI_API_KEY dùng chung các repo) — mỗi repo 1 khoá riêng (anh Kha 16/10)
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 except ImportError:
     pass
 

@@ -321,7 +321,8 @@ eq('ảnh + dữ liệu vào "Chưa chia/Tuấn Phong"', [!!unsplit, unsplit && 
 eq('ds_nhap', pn({ action: 'ds_nhap' }).phieu.map(x => [x.id, x.ncc_ten, x.so_doi, x.trang_thai]), [[pid, 'Tuấn Phong', 5, 'cho_chia']]);
 let pv = pn({ action: 'xem_nhap', id: pid });
 eq('xem_nhap không trả giá', [pv.dong.length, pv.dong[0].sl_phieu, 'don_gia' in pv.dong[0], JSON.stringify(pv).indexOf('445000')], [2, 3, false, -1]);
-eq('xem_nhap kem_gia (HNC)', pn({ action: 'xem_nhap', id: pid, kem_gia: true }).dong[0].don_gia, 445000);
+eq('xem_nhap kem_gia: nhân viên → không có giá', ['don_gia' in pn({ action: 'xem_nhap', id: pid, kem_gia: true }).dong[0]], [false]);
+eq('xem_nhap kem_gia: Chủ → có giá', pn({ action: 'xem_nhap', id: pid, kem_gia: true, nguoi: 'LTCKha@gmail.com' }).dong[0].don_gia, 445000);
 eq('xem_nhap kem_anh', !!pn({ action: 'xem_nhap', id: pid, kem_anh: true }).anh_base64, true);
 pr = pn({ action: 'xac_nhan', id: pid, ticket_id: 'X1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '40': 2 } }, { dong: 2, ma_hnc: 'TH2040N', kho: '15E', sizes: { '41': 2 } }] }, true);
 eq('lệch SL không lý do → lỗi', [pr.ok, pr.loi_dong && pr.loi_dong[0].dong], [false, 1]);

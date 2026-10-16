@@ -1059,12 +1059,14 @@ function stockUndo_(body, seller, ticket, dryRun, props) {
 // Gemini 1 lượt / phiếu. Mã mới (chưa có SANPHAM): xác nhận kèm ma_moi → tạo dòng SANPHAM tối thiểu + dòng 2 kho rồi ghi NHAP (V2 16/10).
 // Phiếu lưu Drive riêng tư "Phiếu mua hàng" (theo ID, kéo thư mục vẫn chạy): chưa chia kho → "Chưa chia/<NCC>/";
 // xác nhận xong → "<hộ>/<NCC>/" (Hải Nancy = 15E, Yen Leather = Y3C; chia cả 2 kho thì mỗi hộ 1 bản). Chỉ mục: Script Properties pnx_<mã>.
-// Giá nhập / NCC chỉ HNC giữ: API trả cho web KHÔNG có đơn giá (trừ khi kem_gia: true, dùng cho HNC).
+// Giá nhập / NCC chỉ HNC giữ: API trả cho web KHÔNG có đơn giá. Riêng Chủ: xem_nhap kem_gia: true + nguoi thuộc OWNER_EMAILS thì trả don_gia.
 // =====================================================================
 
 const PN_ACTIONS = ['doc_phieu', 'ds_nhap', 'xem_nhap', 'xac_nhan', 'huy_nhap', 'bo_nhap'];
 const PN_FOLDER_DEFAULT = '1uE5qpQLtXPYiHpRlpRsNVv8ddT0pyTrD'; // "Phiếu mua hàng" (Thue2026 → HNC/Thue/2026), đổi bằng PN_FOLDER_ID
 const PN_UNSPLIT = 'Chưa chia';
+// Email Chủ được xem giá nhập (xem_nhap kem_gia); đổi bằng Script Property OWNER_EMAILS (cách nhau dấu phẩy)
+const OWNER_EMAILS_DEFAULT = ['ltckha@gmail.com', 'giayhainancy@gmail.com'];
 const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
 const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
@@ -1265,10 +1267,14 @@ function receiptView_(body) {
   const d = receiptLoad_(id);
   if (!d) return { ok: false, action: 'xem_nhap', error: 'không có phiếu ' + id };
   const map = receiptMap_(d.ncc);
+  const owners = String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(','))
+    .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  const withPrice = body.kem_gia === true && owners.indexOf(String(body.nguoi || body.seller || '').trim().toLowerCase()) !== -1;
   const out = { ok: true, action: 'xem_nhap', id: d.id, ncc_ten: d.ncc || d.ncc_doc_duoc, so_phieu: d.so_phieu, ngay: d.ngay,
     so_dong: d.dong.length, so_doi: d.tong_sl, trang_thai: PN_STATUS_LABEL[d.trang_thai] || d.trang_thai,
     dong: d.dong.map(x => Object.assign({ dong: x.dong, ma_ncc: x.ma_ncc, mo_ta: x.mo_ta, sl_phieu: x.sl },
-      map[receiptMapKey_(x)] ? { goi_y_ma_hnc: map[receiptMapKey_(x)] } : {}, body.kem_gia === true ? { don_gia: x.don_gia } : {})) };
+      map[receiptMapKey_(x)] ? { goi_y_ma_hnc: map[receiptMapKey_(x)] } : {}, withPrice ? { don_gia: x.don_gia } : {})) };
+  if (body.kem_gia === true && !withPrice) out.canh_bao = ['không phải Chủ → không trả giá nhập'];
   if (d.xac_nhan) out.da_ghi = { luc: d.xac_nhan.luc, nguoi: d.xac_nhan.nguoi, ticket_id: d.xac_nhan.ticket_id };
   if (body.kem_anh === true) {
     const blob = DriveApp.getFileById(receiptIndex_(id).img).getBlob();

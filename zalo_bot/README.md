@@ -121,7 +121,7 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
   - Chưa chia kho: `Chưa chia/<NCC>/<mã>.jpg + <mã>.json`.
   - Xác nhận xong: chuyển sang `<hộ>/<NCC>/` (Hải Nancy = 15E, Yen Leather = Y3C; chia cả 2 kho thì hộ thứ 2 có bản sao ảnh).
   - Chỉ mục ở Script Properties `pnx_<mã>`.
-- **Giá / NCC chỉ HNC giữ:** mọi trả về cho web KHÔNG có đơn giá. Riêng `xem_nhap` có `kem_gia: true` thì trả giá (chỉ dùng cho HNC).
+- **Giá / NCC chỉ HNC giữ:** mọi trả về cho web KHÔNG có đơn giá. Riêng `xem_nhap` có `kem_gia: true` **và** `nguoi` là Chủ (Script Property `OWNER_EMAILS`, mặc định ltckha@gmail.com, giayhainancy@gmail.com) thì trả `dong[].don_gia` (đồng); người khác nhận `canh_bao` và không có giá. Web chỉ gửi `kem_gia` cho Chủ, không lưu / log / cache.
 
 | action | Gửi | Trả |
 |---|---|---|
