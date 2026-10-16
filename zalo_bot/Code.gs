@@ -1785,12 +1785,17 @@ function handleExport_(body, dryRun) {
       codes.forEach(c => { want[c] = true; });
       const found = {};
       const cells = [];
+      const pending = []; // mã tạo từ phiếu còn "CẦN BỔ SUNG" → không đánh dấu đã đăng
       for (let r = headerRow + 1; r < data.length; r++) {
         const c = String(data[r][col.product_code]).trim().toUpperCase();
-        if (want[c]) { found[c] = true; cells.push(columnLetter_(col[statusName] + 1) + (r + 1)); }
+        if (!want[c]) continue;
+        found[c] = true;
+        if (col.product_name !== undefined && String(data[r][col.product_name]).indexOf(PN_NEW_FLAG.trim()) === 0) { pending.push(c); continue; }
+        cells.push(columnLetter_(col[statusName] + 1) + (r + 1));
       }
       if (!dryRun && cells.length) getSheet_('SANPHAM').getRangeList(cells).setValue('Done - ' + stamp);
-      result = { ok: true, kind, column: statusName, value: 'Done - ' + stamp, written: cells.length, not_found: codes.filter(c => !found[c]) };
+      result = { ok: true, kind, column: statusName, value: 'Done - ' + stamp, written: cells.length, not_found: codes.filter(c => !found[c]),
+        chua_bo_sung: uniq_(pending) };
     } else {
       const meta = writeMeta_(channel + '_last_update', stamp, dryRun);
       if (!meta.ok) return { ok: false, error: meta.error };

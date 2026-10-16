@@ -408,6 +408,8 @@ DATA.XUAT.push(['16/10/2026', '32837D', 'Đen', '15E', 38, 1, '']);
 pr = pn({ action: 'huy_nhap', ticket_id: 'V2B' });
 eq('V2 mã mới đã xuất → không huỷ', [pr.ok, /32837D size 38 kho 15E đã có giao dịch khác \(XUAT/.test(pr.error)], [false, true]);
 DATA.XUAT.pop();
+r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['32837D', 'TH2040D'], at: '2026-10-16T03:05:00Z' }, true);
+eq('mark_exported bỏ qua mã CẦN BỔ SUNG', [r2.ok, r2.written, r2.chua_bo_sung], [true, 1, ['32837D']]);
 // Gemini hết lượt
 const realFetch = ctx.UrlFetchApp.fetch;
 ctx.UrlFetchApp.fetch = (url, opt) => (url.indexOf('generativelanguage') !== -1 ? { getResponseCode: () => 429, getContentText: () => '' } : realFetch(url, opt));
