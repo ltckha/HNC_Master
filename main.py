@@ -84,6 +84,8 @@ EXPORT_DIR = os.path.join(GDRIVE_DIR, "HNC_Exported_Files")
 
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
+# Mở theo ID (tên file Sheet đã đổi thành "HNC_Master" 17/10/2026 → mở theo tên bị lỗi SpreadsheetNotFound)
+SPREADSHEET_ID = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"
 # Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
 SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
@@ -390,7 +392,7 @@ class EngineDataLoader:
             ]
             creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scopes)
             self.gc = gspread.authorize(creds)
-            self.spreadsheet = self.gc.open(SPREADSHEET_NAME)
+            self.spreadsheet = self.gc.open_by_key(SPREADSHEET_ID)
             self.is_google_api = True
         except Exception as e:
             self.is_google_api = False
