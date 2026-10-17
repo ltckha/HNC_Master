@@ -94,6 +94,16 @@ Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký g
 - **Còn lại**: trigger `dailyMisaSummary` 21:00 gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
 - Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập MISA cuối ngày: chờ mẫu nhập khẩu bán hàng từ MISA eShop.
 
+## Xuất file MISA qua bot (web /admin/san, anh Kha "làm" 17/10)
+
+`POST ?stock_key=` `{action:"xuat_misa", loai, nguoi, dry_run?}`, giống menu HNC mục 4 (web không giữ giá nhập / thuế nên chạy qua bot).
+- `loai`: `danh_muc` (TASK 4: mã cha mới → `MISA_PRODUCTS_…` theo `tpl_misa_upload`, mã cha đã lên MISA / thêm màu → `MISA_PRODUCTS_UPDATE_…` theo `tpl_misa_update`) · `nhap_kho_15e` / `nhap_kho_3c` (TASK 8: `MISA_STOCK_15E_…` / `MISA_STOCK_3C_…` theo `tpl_misa_stock_15e` / `_y3c`).
+- Lấy dòng chưa có cờ (`misa_upload` ở SANPHAM; `misa_stock` ở NHAP), bỏ mã "cần bổ sung" (`bo_qua`), dòng `TRA-…` ghi "Bỏ qua - trả hàng". Kiểm thiếu dữ liệu như menu (dòng thiếu → ghi lý do vào cờ, trả `canh_bao`). Nhập kho chỉ lấy dòng của kho đã chọn; dòng kho kia để nguyên.
+- Đơn giá nhập kho = `invoice_price`, trống thì `purchase_price` (anh Kha 17/10; menu Mac cũng vậy). Hoá đơn NCC (`hoadon`) cũng tính như vậy.
+- File: điền vào mẫu gốc trong `HNC/He_thong/HNC_Templates` bằng cách sửa XML của xlsx (giữ nguyên định dạng, danh sách chọn của MISA), lưu `HNC/He_thong/HNC_Exported_Files` (theo ID thư mục `He_thong`, đổi bằng `SYSTEM_FOLDER_ID`).
+- Trả `{ok, files:[{ten, url, so_dong}], so_hop_le, so_loi, canh_bao:[…], bo_qua:[mã]}`. `dry_run`: chỉ đếm, không tạo file, không ghi cờ. Ghi thật thì gửi sync-hint SANPHAM / NHAP.
+- Thử trong trình soạn thảo: `thuXuatMisa` tạo 3 file **không ghi cờ**, link ở Nhật ký.
+
 ## Cửa "kho" cho app điện thoại (API)
 
 Các thao tác kho từ app đi qua bot, dùng lại đúng hàm của lệnh Zalo: cùng kiểm tra, cùng cảnh báo tồn âm, cùng cách ghi Sheet theo tên cột.

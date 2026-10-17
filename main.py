@@ -2448,6 +2448,10 @@ def process_export_task(choice, loader):
             unit = sp_info.get('unit', '')
             raw_inv = sp_info.get('invoice_price', '')
             inv_num = parse_number(raw_inv)
+            if inv_num <= 0 and parse_number(sp_info.get('purchase_price')) > 0:
+                # invoice_price trống → lấy giá nhập (purchase_price, vd mã tạo từ phiếu NCC) — anh Kha chốt 17/10
+                inv_num = parse_number(sp_info.get('purchase_price'))
+                raw_inv = str(inv_num)
             qty = parse_number(rec.get('Số lượng (*)') or rec.get('item_quantity', 0))
 
             kho_raw = str(rec.get('KHO', '')).strip().upper()

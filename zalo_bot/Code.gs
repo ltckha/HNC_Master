@@ -985,7 +985,8 @@ function handleStock_(body, dryRun) {
   const seller = String(body.seller || body.nguoi || '').trim().toLowerCase().slice(0, 80);
   if (PN_ACTIONS.indexOf(action) !== -1) return handleReceipt_(action, body, dryRun);
   if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp']).join(', ') };
+  if (action === 'xuat_misa') return handleMisaExport_(body, seller, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -2172,6 +2173,340 @@ function testSyncHint() {
 }
 
 // =====================================================================
+// XUẤT FILE MISA QUA BOT (web /admin/san gọi, anh Kha "làm" 17/10) — giống menu HNC mục 4 (TASK 4 danh mục, TASK 8 nhập kho).
+// POST ?stock_key  { action:"xuat_misa", loai: danh_muc | nhap_kho_15e | nhap_kho_3c, nguoi, dry_run? }
+// File điền vào mẫu gốc trong HNC/He_thong/HNC_Templates (sửa XML của xlsx, giữ nguyên định dạng / danh sách chọn của MISA),
+// lưu HNC/He_thong/HNC_Exported_Files; ghi cờ misa_upload (SANPHAM) / misa_stock (NHAP) như menu. Bỏ mã "cần bổ sung", dòng TRA-…
+// dry_run: chỉ đếm, không tạo file, không ghi cờ.
+// =====================================================================
+
+const MISA_LOAI = ['danh_muc', 'nhap_kho_15e', 'nhap_kho_3c'];
+const SYSTEM_FOLDER_DEFAULT = '1rZ_ynNNKLXfviqXBlnQyMYQcJYPPeok4'; // My Drive/HNC/He_thong (theo ID; đổi bằng SYSTEM_FOLDER_ID)
+const MISA_STOCK_STATUS_COLS = ['misa_stock', 'misa_stock_y3c', 'misa_stock_15e']; // như main.py STATUS_COLUMNS[8]
+const MISA_CAREER_NEW = '101-Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);';
+const MISA_CAREER_UPDATE = '101 - Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);';
+const MISA_STOCK_KHO = { '15E': { tpl: 'tpl_misa_stock_15e.xlsx', misa: '15ETBH', out: 'MISA_STOCK_15E_' },
+  '3C': { tpl: 'tpl_misa_stock_y3c.xlsx', misa: '3CTBH', out: 'MISA_STOCK_3C_' } };
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function handleMisaExport_(body, nguoi, dryRun) {
+  const loai = String(body.loai || '').trim().toLowerCase();
+  if (MISA_LOAI.indexOf(loai) === -1) return { ok: false, action: 'xuat_misa', error: 'loai phải là: ' + MISA_LOAI.join(', ') };
+  if (!nguoi) return { ok: false, action: 'xuat_misa', loai, error: 'thiếu nguoi (email người dùng app)' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    MEMO = {};
+    const flags = body.ghi_co !== false; // ghi_co:false = tạo file để thử, không ghi cờ (hàm thuXuatMisa)
+    const r = loai === 'danh_muc' ? misaCatalogExport_(dryRun, flags) : misaStockExport_(loai === 'nhap_kho_15e' ? '15E' : '3C', dryRun, flags);
+    if (!flags) { r.khong_ghi_co = true; r._sync = []; }
+    console.log('xuat_misa ' + loai + ' bởi ' + nguoi + (dryRun ? ' (chạy thử)' : '') + ': ' + r.files.map(f => f.ten + ' ' + f.so_dong).join(', '));
+    return Object.assign({ ok: true, action: 'xuat_misa', loai, dry_run: dryRun }, r);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Thư mục con của HNC/He_thong theo tên (HNC_Templates, HNC_Exported_Files). */
+function systemSubfolder_(name) {
+  const root = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('SYSTEM_FOLDER_ID') || SYSTEM_FOLDER_DEFAULT);
+  const it = root.getFoldersByName(name);
+  if (!it.hasNext()) throw new Error('Không thấy thư mục ' + name + ' trong HNC/He_thong');
+  return it.next();
+}
+
+/** Điền rows vào mẫu → lưu file xuất. dry → chỉ trả tên + số dòng. */
+function misaWriteFile_(tplName, sheetName, startRow, rows, outName, dry) {
+  if (dry) return { ten: outName, url: '', so_dong: rows.length };
+  const it = systemSubfolder_('HNC_Templates').getFilesByName(tplName);
+  if (!it.hasNext()) throw new Error('Thiếu mẫu ' + tplName + ' trong HNC_Templates');
+  const blob = xlsxFill_(it.next().getBlob(), sheetName, startRow, rows).setName(outName);
+  const f = systemSubfolder_('HNC_Exported_Files').createFile(blob);
+  return { ten: outName, url: f.getUrl(), so_dong: rows.length };
+}
+
+function misaStamp_() { return Utilities.formatDate(new Date(), TZ, 'yyyyMMdd_HHmmss'); }
+function misaNow_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'); }
+
+/** '38,39 40' → ['38','39','40'] (như unroll_sizes của main.py); trống → ['']. */
+function unrollSizes_(v) {
+  const parts = String(v === null || v === undefined ? '' : v).trim().split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  return parts.length ? parts : [''];
+}
+
+/** '8%', '0,60%', '0.05', '0' → 0.08, 0.006, 0.05, 0 (như parse_percent_rate). */
+function parsePercent_(v) {
+  const raw = String(v === null || v === undefined ? '' : v).trim();
+  if (!raw) return 0;
+  const f = Number(raw.replace('%', '').replace(',', '.'));
+  if (!isFinite(f)) return 0;
+  return f > 1 || raw.indexOf('%') !== -1 ? f / 100 : f;
+}
+
+/** Ngành SUB → {cat (Mã nhóm hàng hóa), weight (Cân nặng)}. */
+function subCategories_() {
+  const sub = sheetValues_('SUB');
+  const c = headerMap_(sub[0] || []);
+  const out = {};
+  for (let r = 1; r < sub.length; r++) {
+    const name = c['Tên Ngành Hàng'] !== undefined ? String(sub[r][c['Tên Ngành Hàng']] || '').trim() : '';
+    if (name) out[name.toLowerCase()] = { cat: c['Mã nhóm hàng hóa'] !== undefined ? String(sub[r][c['Mã nhóm hàng hóa']] || '').trim() : '',
+      weight: c['Cân nặng'] !== undefined && sub[r][c['Cân nặng']] !== '' ? sub[r][c['Cân nặng']] : 1500 };
+  }
+  return out;
+}
+
+/** NCC SUB → {ma_dt, ten_dt, ck, vat} theo tên supplier (chữ thường). */
+function subSuppliers_() {
+  const sub = sheetValues_('SUB');
+  const c = headerMap_(sub[0] || []);
+  const out = {};
+  if (c.supplier === undefined) return out;
+  for (let r = 1; r < sub.length; r++) {
+    const name = String(sub[r][c.supplier] || '').trim();
+    if (name) out[name.toLowerCase()] = { ma_dt: c['Mã đối tượng'] !== undefined ? String(sub[r][c['Mã đối tượng']] || '').trim() : '',
+      ten_dt: c['Tên đối tượng'] !== undefined ? String(sub[r][c['Tên đối tượng']] || '').trim() : '',
+      ck: c['% chiết khấu'] !== undefined ? sub[r][c['% chiết khấu']] : '0', vat: c['Thuế suất'] !== undefined ? sub[r][c['Thuế suất']] : '0' };
+  }
+  return out;
+}
+
+/** Ghi cờ trạng thái từng dòng (row 1-based, cột 0-based). */
+function misaWriteStatus_(sheetName, colIdx, statuses) {
+  const sheet = getSheet_(sheetName);
+  statuses.forEach(st => sheet.getRange(st.row, colIdx + 1).setValue(st.value));
+}
+
+/** Danh mục hàng hoá MISA (TASK 4): mã cha mới → tpl_misa_upload; mã cha đã lên MISA (thêm màu) → tpl_misa_update. */
+function misaCatalogExport_(dry, flags) {
+  const sp = sheetValues_('SANPHAM');
+  let hr = 0;
+  for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+  const c = headerMap_(sp[hr]);
+  requireColumns_('SANPHAM', c, ['product_code', 'misa_upload']);
+  const v = (row, n) => (c[n] === undefined ? '' : row[c[n]]);
+  const cats = subCategories_();
+  const now = misaNow_();
+  const statuses = [], canhBao = [], boQua = [], valid = [];
+  const uploadedParents = {};
+  for (let r = hr + 1; r < sp.length; r++) {
+    const parent = String(v(sp[r], 'parent_product_code') || v(sp[r], 'Mã hàng hóa cha') || '').trim();
+    if (parent && String(v(sp[r], 'misa_upload')).toLowerCase().indexOf('done') !== -1) uploadedParents[parent] = true;
+  }
+  for (let r = hr + 1; r < sp.length; r++) {
+    const row = sp[r];
+    const code = String(v(row, 'product_code') || '').trim();
+    if (!code && !String(v(row, 'FSKU') || '').trim()) continue;
+    if (String(v(row, 'misa_upload') || '').trim()) continue;
+    if (needsInfo_(row, c)) { boQua.push(code.toUpperCase()); continue; }
+    const parent = String(v(row, 'parent_product_code') || v(row, 'Mã hàng hóa cha') || '').trim();
+    const name = String(v(row, 'product_name') || '').trim();
+    const price = moneyValue_(v(row, 'product_price'));
+    const unit = String(v(row, 'product_unit') || v(row, 'ĐVT') || '').trim();
+    const nganh = String(v(row, 'Tên nhóm hàng hóa') || v(row, 'Tên Ngành Hàng') || '').trim();
+    const sub = cats[nganh.toLowerCase()] || {};
+    const reasons = [];
+    if (!parent) reasons.push('Thiếu mã cha');
+    if (!code) reasons.push('Thiếu mã SP');
+    if (!name) reasons.push('Thiếu tên');
+    if (!(price > 0)) reasons.push('Thiếu giá');
+    if (!unit) reasons.push('Thiếu ĐVT');
+    if (!sub.cat) reasons.push('Thiếu nhóm hàng');
+    if (reasons.length) { statuses.push({ row: r + 1, value: reasons.join(', ') }); canhBao.push('Dòng ' + (r + 1) + ' ' + code + ': ' + reasons.join(', ')); continue; }
+    statuses.push({ row: r + 1, value: 'Done - ' + now });
+    valid.push({ parent, code, name, price, unit, color: String(v(row, 'product_color') || '').trim(), brand: String(v(row, 'Thương hiệu') || 'Hải Nancy').trim(),
+      cat: sub.cat, weight: sub.weight, desc: String(v(row, 'product_description') || v(row, 'CON_DES') || '').trim(),
+      sizes: unrollSizes_(v(row, 'Size')).filter(Boolean) });
+  }
+  const group = list => { const g = {}; list.forEach(x => (g[x.parent] = g[x.parent] || []).push(x)); return g; };
+  const newRecs = valid.filter(x => !uploadedParents[x.parent]);
+  const upRecs = valid.filter(x => uploadedParents[x.parent]);
+  const stamp = misaStamp_();
+  const files = [];
+  if (newRecs.length) {
+    const rows = [], seen = {};
+    const g = group(newRecs);
+    Object.keys(g).forEach(p => {
+      const f = g[p][0];
+      const pr = {}; pr[3] = 'Hàng hóa cha '; pr[4] = p; pr[7] = f.name; pr[8] = f.price; pr[9] = f.unit; pr[11] = 'Không'; pr[12] = f.brand;
+      pr[13] = f.cat; pr[15] = f.weight; pr[19] = 1; pr[20] = 0.5; pr[22] = MISA_CAREER_NEW; pr[45] = f.desc;
+      rows.push(pr);
+      g[p].forEach(x => (x.sizes.length ? x.sizes : ['']).forEach(sz => {
+        const sku = x.code + sz;
+        if (seen[sku]) return;
+        seen[sku] = true;
+        const cr = {}; cr[3] = 'Hàng hóa con theo thuộc tính'; cr[4] = sku; cr[5] = sku; cr[6] = p; cr[7] = x.name; cr[8] = x.price; cr[9] = x.unit;
+        const attrs = (x.color ? [['Màu sắc', x.color]] : []).concat(sz ? [['Size', sz]] : []);
+        attrs.forEach((a, k) => { cr[32 + 2 * k] = a[0]; cr[33 + 2 * k] = a[1]; });
+        rows.push(cr);
+      }));
+    });
+    files.push(misaWriteFile_('tpl_misa_upload.xlsx', 'Tep nhap khau', 6, rows,
+      (upRecs.length ? 'MISA_PRODUCTS_NEW_' : 'MISA_PRODUCTS_') + stamp + '.xlsx', dry));
+  }
+  if (upRecs.length) {
+    const rows = [], seen = {};
+    const g = group(upRecs);
+    Object.keys(g).forEach(p => {
+      const f = g[p][0];
+      const pr = {}; pr[1] = p; pr[7] = f.name; pr[8] = f.cat; pr[9] = f.unit; pr[10] = f.price; pr[11] = 1; pr[12] = f.brand || 'Hải nancy';
+      pr[13] = f.weight; pr[16] = 1; pr[17] = 0.5; pr[18] = MISA_CAREER_UPDATE;
+      rows.push(pr);
+      g[p].forEach(x => (x.sizes.length ? x.sizes : ['']).forEach(sz => {
+        const sku = x.code + sz;
+        if (seen[sku]) return;
+        seen[sku] = true;
+        const cr = {}; cr[1] = sku; cr[2] = p; cr[3] = sku;
+        cr[7] = sz ? (x.color ? x.name + ' (' + x.color + '/' + sz + ')' : x.name + ' (Size ' + sz + ')') : (x.color ? x.name + ' (' + x.color + ')' : x.name);
+        cr[9] = x.unit; cr[10] = x.price; cr[11] = 1; cr[16] = 1; cr[17] = 0.5; cr[18] = MISA_CAREER_UPDATE;
+        const attrs = (x.color ? [['Màu sắc', x.color]] : []).concat(sz ? [['Size', sz]] : []);
+        attrs.forEach((a, k) => { cr[24 + 2 * k] = a[0]; cr[25 + 2 * k] = a[1]; });
+        rows.push(cr);
+      }));
+    });
+    files.push(misaWriteFile_('tpl_misa_update.xlsx', 'Nhap_khau_cap_nhat_thong_tin', 3, rows, 'MISA_PRODUCTS_UPDATE_' + stamp + '.xlsx', dry));
+  }
+  if (!dry && flags !== false && statuses.length) misaWriteStatus_('SANPHAM', c.misa_upload, statuses);
+  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: valid.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['SANPHAM'] : [] };
+}
+
+/** Phiếu nhập kho MISA (TASK 8) cho 1 kho: dòng NHAP chưa có cờ misa_stock. Đơn giá = invoice_price, trống thì purchase_price (anh Kha 17/10). */
+function misaStockExport_(kho, dry, flags) {
+  const nh = sheetValues_('NHAP');
+  const c = headerMap_(nh[0]);
+  const stCol = MISA_STOCK_STATUS_COLS.map(n => c[n]).find(x => x !== undefined);
+  if (stCol === undefined) throw new Error('Tab NHAP thiếu cột ' + MISA_STOCK_STATUS_COLS.join(' / '));
+  const sp = sheetValues_('SANPHAM');
+  let hr = 0;
+  for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+  const sc = headerMap_(sp[hr]);
+  const prod = {};
+  for (let r = hr + 1; r < sp.length; r++) {
+    const code = String(sp[r][sc.product_code] || '').trim().toUpperCase();
+    if (code) prod[code] = { row: sp[r], supplier: sc.supplier !== undefined ? String(sp[r][sc.supplier] || '').trim() : '',
+      unit: sc.product_unit !== undefined ? String(sp[r][sc.product_unit] || '').trim() : '',
+      inv: sc.invoice_price !== undefined ? moneyValue_(sp[r][sc.invoice_price]) : 0, pur: sc.purchase_price !== undefined ? moneyValue_(sp[r][sc.purchase_price]) : 0 };
+  }
+  const sups = subSuppliers_();
+  const now = misaNow_();
+  const statuses = [], canhBao = [], boQua = [], rows = [];
+  const v = (row, n) => (c[n] === undefined ? '' : row[c[n]]);
+  for (let r = 1; r < nh.length; r++) {
+    const row = nh[r];
+    const code = String(v(row, 'product_code') || '').trim();
+    if (!code && !String(v(row, 'FSKU') || '').trim()) continue;
+    if (code === 'product_code') continue; // hàng 2 tiêu đề kỹ thuật
+    if (String(row[stCol] || '').trim()) continue;
+    const kRaw = String(v(row, 'KHO') || '').trim().toUpperCase();
+    const rowKho = ['15E', '15ETBH'].indexOf(kRaw) !== -1 ? '15E' : ['Y3C', '3C', '3CTBH'].indexOf(kRaw) !== -1 ? '3C' : '';
+    if (rowKho && rowKho !== kho) continue; // kho kia: để lần xuất kho đó
+    const docNo = String(v(row, 'Số chứng từ (*)') || '').trim();
+    if (docNo.toUpperCase().indexOf('TRA-') === 0) { if (rowKho) statuses.push({ row: r + 1, value: 'Bỏ qua - trả hàng' }); continue; }
+    const p = prod[code.toUpperCase()];
+    if (p && needsInfo_(p.row, sc)) { boQua.push(code.toUpperCase()); continue; }
+    const size = normSize_(v(row, 'item_size'));
+    const sku = code + size;
+    const d = v(row, 'Ngày chứng từ (*)') || v(row, 'Ngày');
+    const docDate = d instanceof Date ? Utilities.formatDate(d, TZ, 'dd/MM/yyyy') : String(d || '').trim();
+    const qty = Number(String(v(row, 'Số lượng (*)') || v(row, 'item_quantity') || 0).replace(',', '.')) || 0;
+    const price = p ? (p.inv > 0 ? p.inv : p.pur) : 0;
+    const sup = p && p.supplier ? sups[p.supplier.toLowerCase()] : null;
+    const reasons = [];
+    if (!docNo) reasons.push('Thiếu số chứng từ');
+    if (!(p && p.unit)) reasons.push('Thiếu ĐVT');
+    if (!docDate) reasons.push('Thiếu ngày');
+    if (!(qty > 0)) reasons.push('Thiếu số lượng');
+    if (!(price > 0)) reasons.push('Thiếu đơn giá');
+    if (!sup) reasons.push('Thiếu NCC');
+    if (!rowKho) reasons.push('Thiếu kho');
+    if (reasons.length) { statuses.push({ row: r + 1, value: reasons.join(', ') }); canhBao.push('Dòng ' + (r + 1) + ' ' + sku + ': ' + reasons.join(', ')); continue; }
+    statuses.push({ row: r + 1, value: 'Done - ' + now });
+    const amount = qty * price;
+    const ckRate = parsePercent_(sup.ck);
+    const ck = Math.round(amount * ckRate * 100) / 100;
+    const vatRate = parsePercent_(sup.vat);
+    const tax = Math.round((amount - ck) * vatRate * 100) / 100;
+    const o = {};
+    o[1] = 'Nhập kho mua hàng'; o[2] = docDate; o[3] = docNo; o[4] = sup.ma_dt; o[5] = sup.ten_dt;
+    o[6] = sup.ten_dt ? 'Nhập kho mua hàng từ ' + sup.ten_dt : 'Nhập kho mua hàng'; o[7] = 'Chưa thanh toán'; o[8] = sku;
+    o[12] = MISA_STOCK_KHO[kho].misa; o[14] = p.unit; o[15] = qty; o[16] = price; o[17] = amount; o[18] = ckRate; o[19] = ck;
+    o[20] = vatRate; o[21] = tax; o[22] = amount - ck + tax;
+    rows.push(o);
+  }
+  const files = rows.length ? [misaWriteFile_(MISA_STOCK_KHO[kho].tpl, 'Nhap kho', 9, rows, MISA_STOCK_KHO[kho].out + misaStamp_() + '.xlsx', dry)] : [];
+  if (!dry && flags !== false && statuses.length) misaWriteStatus_('NHAP', stCol, statuses);
+  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: rows.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['NHAP'] : [] };
+}
+
+// ---- Sửa xlsx bằng XML (Apps Script không có openpyxl): giữ nguyên mẫu, xoá dòng mẫu từ startRow, chèn dòng mới ----
+
+/** Điền rows ([{cột 1-based: giá trị}]) vào sheetName của file mẫu, từ startRow; dòng cũ từ startRow trở xuống bị xoá (như openpyxl delete_rows). */
+function xlsxFill_(tplBlob, sheetName, startRow, rows) {
+  const files = Utilities.unzip(tplBlob.setContentType('application/zip'));
+  const get = n => files.find(f => f.getName() === n);
+  const target = xlsxSheetPath_(get('xl/workbook.xml').getDataAsString('UTF-8'), get('xl/_rels/workbook.xml.rels').getDataAsString('UTF-8'), sheetName);
+  const sheetFile = get(target);
+  if (!sheetFile) throw new Error('Không thấy ' + target + ' trong mẫu');
+  const xml = xlsxReplaceRows_(sheetFile.getDataAsString('UTF-8'), startRow, rows);
+  const blobs = files.map(f => (f.getName() === target ? Utilities.newBlob(xml, 'application/xml', target) : f));
+  return Utilities.zip(blobs, 'misa.xlsx').setContentType(XLSX_MIME);
+}
+
+/** Đường file XML của sheet theo tên (workbook.xml + rels). */
+function xlsxSheetPath_(workbookXml, relsXml, sheetName) {
+  const esc = sheetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sh = new RegExp('<sheet\\b[^>]*\\bname="' + esc + '"[^>]*>').exec(workbookXml);
+  if (!sh) throw new Error('Mẫu không có sheet "' + sheetName + '"');
+  const rid = /\br:id="([^"]+)"/.exec(sh[0])[1];
+  const rel = new RegExp('<Relationship\\b[^>]*\\bId="' + rid + '"[^>]*>').exec(relsXml);
+  if (!rel) throw new Error('Mẫu thiếu liên kết sheet ' + rid);
+  const t = /\bTarget="([^"]+)"/.exec(rel[0])[1];
+  return t.charAt(0) === '/' ? t.slice(1) : 'xl/' + t;
+}
+
+function xlsxEsc_(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/** Thay phần dữ liệu của sheet: giữ dòng < startRow, xoá phần còn lại, chèn rows; bỏ ô gộp nằm ở vùng đã xoá, sửa dimension. */
+function xlsxReplaceRows_(xml, startRow, rows) {
+  const open = xml.search(/<sheetData\b/);
+  if (open === -1) throw new Error('sheet không có sheetData');
+  const selfClose = /^<sheetData\b[^>]*\/>/.exec(xml.slice(open));
+  let head, body, tail;
+  if (selfClose) { head = xml.slice(0, open) + '<sheetData>'; body = ''; tail = '</sheetData>' + xml.slice(open + selfClose[0].length); }
+  else {
+    const gt = xml.indexOf('>', open) + 1;
+    const close = xml.indexOf('</sheetData>', gt);
+    head = xml.slice(0, gt); body = xml.slice(gt, close); tail = xml.slice(close);
+  }
+  const kept = (body.match(/<row\b[^>]*\/>|<row\b[^>]*>[\s\S]*?<\/row>/g) || []).filter(rw => Number((/\br="(\d+)"/.exec(rw) || [0, 0])[1]) < startRow);
+  let maxCol = 1;
+  const added = rows.map((cells, i) => {
+    const r = startRow + i;
+    const cols = Object.keys(cells).map(Number).sort((a, b) => a - b);
+    const cx = cols.map(cn => {
+      const val = cells[cn];
+      if (val === '' || val === null || val === undefined) return '';
+      maxCol = Math.max(maxCol, cn);
+      const ref = columnLetter_(cn) + r;
+      return typeof val === 'number' && isFinite(val) ? '<c r="' + ref + '"><v>' + val + '</v></c>'
+        : '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + xlsxEsc_(val) + '</t></is></c>';
+    }).join('');
+    return '<row r="' + r + '">' + cx + '</row>';
+  });
+  let out = head + kept.join('') + added.join('') + tail;
+  // ô gộp ở vùng đã xoá → bỏ (tránh Excel báo lỗi khi mở)
+  out = out.replace(/<mergeCells\b[^>]*>([\s\S]*?)<\/mergeCells>/, (m, inner) => {
+    const keep = (inner.match(/<mergeCell\b[^>]*\/>/g) || []).filter(mc => Number(/[A-Z]+(\d+)/.exec(/\bref="([^"]+)"/.exec(mc)[1])[1]) < startRow);
+    return keep.length ? '<mergeCells count="' + keep.length + '">' + keep.join('') + '</mergeCells>' : '';
+  });
+  const lastRow = Math.max(startRow - 1 + rows.length, 1);
+  const colNum = l => l.split('').reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0);
+  out = out.replace(/<dimension\b[^>]*\bref="([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?"[^>]*\/>/, (m, c1, r1, c2) =>
+    '<dimension ref="' + c1 + r1 + ':' + columnLetter_(Math.max(colNum(c2 || c1), maxCol)) + lastRow + '"/>');
+  return out;
+}
+
+// =====================================================================
 // CỬA "ĐÁNH DẤU ĐÃ XUẤT FILE SÀN" (web xuất file Shopee / TikTok song song menu HNC)
 // POST {WEBAPP_URL}?export_key=<EXPORT_KEY>
 // Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", stock_included?, dry_run? }
@@ -2339,7 +2674,8 @@ function invoiceTickets_() {
     const c = String(sp[r][sc.product_code] || '').trim().toUpperCase();
     if (c) prod[c] = { supplier: sc.supplier !== undefined ? String(sp[r][sc.supplier] || '').trim() : '',
       parent: (sc.parent_product_code !== undefined ? String(sp[r][sc.parent_product_code] || '').trim().toUpperCase() : '') || c.replace(/[A-Z]$/, ''),
-      price: sc.invoice_price !== undefined ? moneyValue_(sp[r][sc.invoice_price]) : 0,
+      price: (sc.invoice_price !== undefined ? moneyValue_(sp[r][sc.invoice_price]) : 0) ||
+        (sc.purchase_price !== undefined ? moneyValue_(sp[r][sc.purchase_price]) : 0), // invoice_price trống → giá nhập (anh Kha 17/10)
       name: nameCol !== undefined ? String(sp[r][nameCol] || '').trim() : '' };
   }
 
@@ -3001,6 +3337,14 @@ function testSale() {
 }
 
 /** Kiểm cấu hình Script Properties: chỉ in tên, độ dài, các khoá có khác nhau không — KHÔNG in giá trị. */
+/** Chạy trong trình soạn thảo: tạo thử 3 file MISA (danh mục, nhập kho 15E, 3C) KHÔNG ghi cờ — mở / nhập thử vào MISA. Xem link ở Nhật ký. */
+function thuXuatMisa() {
+  ['danh_muc', 'nhap_kho_15e', 'nhap_kho_3c'].forEach(loai => {
+    const r = handleMisaExport_({ loai, ghi_co: false }, 'thu@editor', false);
+    console.log(loai + ': ' + JSON.stringify({ files: r.files, so_hop_le: r.so_hop_le, so_loi: r.so_loi, bo_qua: r.bo_qua, canh_bao: (r.canh_bao || []).slice(0, 10) }));
+  });
+}
+
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',

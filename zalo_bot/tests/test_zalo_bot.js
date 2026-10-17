@@ -551,5 +551,53 @@ const sumMsgs = ctx.dailyMisaSummary(true);
 eq('tin cuối ngày: theo hộ chủ hàng, bỏ dòng đã gửi riêng', [sumMsgs.every(m => !/M1/.test(m)), /Đã gửi riêng 2 dòng lấy hoá đơn/.test(sumMsgs[sumMsgs.length - 1]), sumMsgs.some(m => /^📒 MISA CUỐI NGÀY .* – Yen Leather \(Y3C\)/.test(m))], [true, true, true]);
 eq('tin cuối ngày ghi hàng ký gửi theo chủ', sumMsgs.some(m => /Hải Nancy \(15E\)[\s\S]*ký gửi ở Y3C/.test(m)), true);
 
+// ---- Xuất file MISA qua bot ----
+vm.runInContext('this.xlsxReplaceRows_=xlsxReplaceRows_;this.xlsxSheetPath_=xlsxSheetPath_;', ctx);
+const xm = ctx.xlsxReplaceRows_('<worksheet><dimension ref="A1:V15"/><sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="2"/><row r="3"><c r="A3"><v>9</v></c></row></sheetData><mergeCells count="2"><mergeCell ref="A1:B1"/><mergeCell ref="A3:B3"/></mergeCells></worksheet>',
+  3, [{ 1: 'Tên <&>', 3: 5, 2: '' }]);
+eq('xlsx: giữ dòng trên, xoá dòng mẫu, chèn dòng mới, bỏ ô gộp vùng xoá, sửa dimension', xm,
+  '<worksheet><dimension ref="A1:V3"/><sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="2"/><row r="3"><c r="A3" t="inlineStr"><is><t xml:space="preserve">Tên &lt;&amp;&gt;</t></is></c><c r="C3"><v>5</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>');
+eq('xlsx: tìm file sheet theo tên', ctx.xlsxSheetPath_('<sheets><sheet name="A" sheetId="1" r:id="rId3"/><sheet name="Tep nhap khau" sheetId="2" r:id="rId4"/></sheets>',
+  '<Relationship Id="rId3" Target="worksheets/sheet1.xml"/><Relationship Id="rId4" Type="x" Target="worksheets/sheet2.xml"/>', 'Tep nhap khau'), 'xl/worksheets/sheet2.xml');
+DATA.SANPHAM[1].push('misa_upload');                     // cột 18
+DATA.SUB[0].push('Mã nhóm hàng hóa', '% chiết khấu', 'Cân nặng');
+DATA.SUB[1].push('6', '0', 1200); DATA.SUB[2].push('7', '10%', 1500);
+const spIx = c => DATA.SANPHAM.findIndex(r => r[1] === c);
+DATA.SANPHAM[spIx('TH2040N')][18] = 'Done - 2026-10-01 10:00';
+DATA.SANPHAM[spIx('TH2040X')][13] = '38,39';
+DATA.SANPHAM[spIx('TH2040X')][8] = 'Giày tây TH2040X'; // Sheet thật trả giá trị đã tính của công thức
+DATA.SANPHAM.push(['MS1', 'MS1D', '', '', 'Chú Dũng', '', '', 'Đen', 'Giày MS1 đen', 'Giày mọi nam', 'Đôi', 900000, 400000, '39,40', 'male', '7', '', 'Việt Nam', '']);
+const xm2 = (b, dry) => ctx.handleStock_(Object.assign({ action: 'xuat_misa', nguoi: 'kha@hn.vn' }, b), !!dry);
+let xr = xm2({ loai: 'abc' }, true);
+eq('xuat_misa: loai sai → lỗi', [xr.ok, /loai phải là/.test(xr.error)], [false, true]);
+xr = xm2({ loai: 'danh_muc' }, true);
+eq('danh mục chạy thử: mã cha mới → file NEW, mã cha đã lên MISA → file UPDATE, bỏ mã cần bổ sung, không ghi cờ',
+  [xr.ok, xr.files.map(f => f.ten.replace(/\d{8}_\d{4}(\d\d|ss)/, 'T') + ':' + f.so_dong), xr.bo_qua.sort(), DATA.SANPHAM[spIx('MS1D')][18]],
+  [true, ['MISA_PRODUCTS_NEW_T.xlsx:3', 'MISA_PRODUCTS_UPDATE_T.xlsx:3'], ['CXED', 'TH2040D'], '']);
+const realWrite = ctx.misaWriteFile_;
+const WROTE = [];
+ctx.misaWriteFile_ = (tpl, sheet, start, rows, out, dry) => { WROTE.push({ tpl, sheet, start, rows, out }); return { ten: out, url: 'https://drive/x', so_dong: rows.length }; };
+xr = xm2({ loai: 'danh_muc' });
+const nw = WROTE[0], up = WROTE[1];
+eq('danh mục ghi: cột MISA như menu (cha / con, thuộc tính màu + size, thuế 1% / 0,5%)',
+  [nw.tpl, nw.sheet, nw.start, nw.rows[0][3], nw.rows[0][4], nw.rows[0][13], nw.rows[0][15], nw.rows[0][19], nw.rows[0][20], nw.rows[1][4], nw.rows[1][6], nw.rows[1][32], nw.rows[1][33], nw.rows[1][34], nw.rows[1][35]],
+  ['tpl_misa_upload.xlsx', 'Tep nhap khau', 6, 'Hàng hóa cha ', 'MS1', '7', 1500, 1, 0.5, 'MS1D39', 'MS1', 'Màu sắc', 'Đen', 'Size', '39']);
+eq('danh mục ghi: file cập nhật thêm màu', [up.tpl, up.sheet, up.start, up.rows[0][1], up.rows[1][1], up.rows[1][7]], ['tpl_misa_update.xlsx', 'Nhap_khau_cap_nhat_thong_tin', 3, 'TH2040', 'TH2040X38', 'Giày tây TH2040X (Xám/38)']);
+eq('danh mục ghi cờ misa_upload, gửi web SANPHAM', [/^Done - /.test(DATA.SANPHAM[spIx('MS1D')][18]), /^Done - /.test(DATA.SANPHAM[spIx('TH2040X')][18]), xr._sync], [true, true, ['SANPHAM']]);
+// Nhập kho 15E
+const nhBase = DATA.NHAP.length;
+DATA.NHAP.push(['17/10/2026', 'NK000009', 'MS1D', 'Đen', '15E', 39, 2, '', '', '', '', ''],
+  ['17/10/2026', 'NK000015', 'MS1D', 'Đen', 'Y3C', 40, 1, '', '', '', '', ''],
+  ['17/10/2026', 'TRA-171026', 'MS1D', 'Đen', '15E', 39, 1, '', '', '', '', '']);
+WROTE.length = 0;
+xr = xm2({ loai: 'nhap_kho_15e' });
+const st = WROTE[0];
+const msRow = st.rows.find(r => r[8] === 'MS1D39');
+eq('nhập kho 15E: mẫu, mã kho MISA, đơn giá = giá nhập khi invoice_price trống, NCC + chiết khấu theo SUB',
+  [st.tpl, st.sheet, st.start, msRow && msRow[3], msRow && msRow[4], msRow && msRow[12], msRow && msRow[15], msRow && msRow[16], msRow && msRow[17], msRow && msRow[18], msRow && msRow[19], msRow && msRow[22]],
+  ['tpl_misa_stock_15e.xlsx', 'Nhap kho', 9, 'NK000009', 'NCCQT', '15ETBH', 2, 400000, 800000, 0.1, 80000, 720000]);
+eq('nhập kho 15E: dòng TRA- → "Bỏ qua - trả hàng", dòng Y3C để nguyên', [DATA.NHAP[nhBase + 2][10], DATA.NHAP[nhBase + 1][10], /^Done - /.test(DATA.NHAP[nhBase][10])], ['Bỏ qua - trả hàng', '', true]);
+ctx.misaWriteFile_ = realWrite;
+
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
