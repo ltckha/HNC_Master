@@ -75,6 +75,12 @@ Content-Type: application/json   (hoặc text/plain)
 
 **Ghi vào BAN:** mỗi dòng phiếu = 1 dòng BAN (Ngày, product_code, product_color tự lấy, Giá, item_size, item_quantity, KHO, `channel`, `seller`). **Quy ước kênh (anh Kha chốt 16/10):** ô `channel` **trống** = bán tại cửa hàng theo KHO (Y3C = cửa hàng 3C, 15E = cửa hàng 15E). Chỉ ghi `channel` khi bán ngoài cửa hàng: `web`, `shopee`, `tiktok`. Dữ liệu cũ ghi `cua_hang` vẫn được hiểu là cửa hàng. Lệnh `ban` qua Zalo: bán tại quầy để trống `channel`; thêm chữ `shopee` / `tiktok` (`tt`) / `web` / `lazada` / `zalo` / `facebook` (`fb`) trong tin (vd `ban BT01D 40 YEN shopee`) thì ghi kênh đó. Cửa ghi bán của app nhận `cua_hang` nhưng ghi ô trống. `seller` = tên Zalo người nhắn. Nếu tab BAN chưa có cột `channel` / `seller` thì bot bỏ qua 2 cột đó, phần còn lại ghi bình thường.
 
+**Huỷ phiếu bán:** `POST ?sale_key=` `{action:"huy_ban", ticket_id, nguoi, chu?, dry_run?}`.
+- Người ghi phiếu (`seller` lúc bán = `nguoi`) huỷ được trong 10 phút; Chủ (`chu: true` và `nguoi` thuộc `OWNER_EMAILS`) huỷ được tới 2 ngày.
+- Xoá ô các dòng BAN của phiếu (tồn KHO tự cộng lại theo công thức), trả sổ ký gửi về như trước. Dòng đã xoá không vào tin MISA cuối ngày; phiếu đã gửi tin hoá đơn MISA thì bot gửi thêm tin "❌ HUỶ phiếu …".
+- Chặn khi dòng BAN đã bị sửa hoặc sổ ký gửi đã có giao dịch khác sau phiếu (`loi:[…]`).
+- Trả `{ok, ticket_id, so_dong, kho:[…], chu, misa_huy?}`; phiếu ghi trước bản 17 không huỷ được bằng cửa này.
+
 **Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
 
 ## Sổ ký gửi giữa 2 hộ (tab KYGUI, anh Kha "làm" 17/10)

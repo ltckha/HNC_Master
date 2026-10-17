@@ -796,8 +796,11 @@ function handleSaleRequest_(e) {
     } else {
       const body = JSON.parse((e.postData && e.postData.contents) || '{}');
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
-      out = handleSale_(body, dryRun);
-      if (!dryRun && (out.rows || out.partial) && !out.duplicate) {
+      out = body.action === 'huy_ban' ? saleUndo_(body, dryRun) : handleSale_(body, dryRun);
+      if (body.action === 'huy_ban') {
+        if (!dryRun && out.ok) { try { queueSyncHint_(['BAN'].concat(out._ky ? [KYGUI_TAB] : [])); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
+        delete out._ky;
+      } else if (!dryRun && (out.rows || out.partial) && !out.duplicate) {
         try { queueSyncHint_(['BAN']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
       }
     }
@@ -841,6 +844,7 @@ function handleSale_(body, dryRun) {
     const plan = [];
     let touchedKygui = false;
     let misaSent = 0;
+    const saleOps = [];
     lines.forEach((ln, i) => {
       ln = ln || {};
       const code = String(ln.code || '').trim().toUpperCase();
@@ -895,6 +899,7 @@ function handleSale_(body, dryRun) {
       try {
         plan.forEach(x => {
           const sr = kyguiSale_(x.code, lookupColor_(x.code), x.price, x.size, x.qty, x.kho, channel === 'cua_hang' ? '' : channel, seller, false);
+          sr.ops.forEach(o => saleOps.push(o));
           const bans = sr.ops.filter(o => o.sheet === 'BAN');
           x.r.row = bans.length ? bans[0].row : '';
           if (bans.length > 1) x.r.rows = bans.map(o => o.row);
@@ -911,6 +916,7 @@ function handleSale_(body, dryRun) {
       }
       props.setProperty(ticketKey, JSON.stringify({ t: Date.now(), rows: written }));
       pruneTickets_(props, 'sale_');
+      saleRecordOps_(props, ticket, seller, saleOps, !!inv.hd);
       if (inv.hd) {
         try { misaSent = misaInvoiceSend_(ticket, channel, seller, inv, plan); }
         catch (err) { console.error('Không gửi được tin MISA: ' + (err && err.stack ? err.stack : err)); misaSent = 0; }
@@ -919,6 +925,87 @@ function handleSale_(body, dryRun) {
     }
     const out = { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
     if (inv.hd) out.misa = dryRun ? { se_gui: uniq_([].concat.apply([], plan.map(x => (x.r.phan || [{ chu_hang: x.kho }]).map(ph => ph.chu_hang)))).sort() } : { da_gui: misaSent };
+    return out;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---- Huỷ phiếu bán (huy_ban): người bán ≤ 10 phút, Chủ sau hạn (giữ 2 ngày) ----
+const SALE_UNDO_KEEP_MS = 2 * 86400000;
+const BAN_WRITE_COLS = ['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'channel', 'seller', 'chu_hang'];
+
+/** Lưu gọn thao tác của 1 phiếu bán để huỷ được: BAN [hàng, mã, size, sl, kho, chủ] · KYGUI [hàng, trước, sau]. */
+function saleRecordOps_(props, ticket, seller, ops, hd) {
+  const rec = { t: Date.now(), s: String(seller || '').toLowerCase(), hd: hd ? 1 : 0,
+    b: ops.filter(o => o.sheet === 'BAN').map(o => [o.row, o.check.product_code, normSize_(o.check.item_size), o.check.item_quantity, o.check.KHO]),
+    k: ops.filter(o => o.type === 'kygui').map(o => [o.row, o.before, o.after, o.created ? 1 : 0]) };
+  try { props.setProperty('saleops_' + ticket, JSON.stringify(rec)); } catch (err) { console.error('Không lưu được thao tác phiếu ' + ticket + ': ' + err); }
+  const cutoff = Date.now() - SALE_UNDO_KEEP_MS;
+  Object.keys(props.getProperties()).forEach(k => {
+    if (k.indexOf('saleops_') !== 0) return;
+    try { if (JSON.parse(props.getProperty(k)).t < cutoff) props.deleteProperty(k); } catch (e) { /* bỏ qua */ }
+  });
+}
+
+/** Huỷ phiếu bán: xoá ô các dòng BAN của phiếu (tồn KHO tự cộng lại theo công thức), trả KYGUI về như trước. */
+function saleUndo_(body, dryRun) {
+  const ticket = String(body.ticket_id || '').trim();
+  const nguoi = String(body.nguoi || body.seller || '').trim().toLowerCase();
+  const fail = msg => ({ ok: false, action: 'huy_ban', ticket_id: ticket, error: msg });
+  if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return fail('ticket_id không hợp lệ');
+  if (!nguoi) return fail('thiếu nguoi (email người dùng app)');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    MEMO = {};
+    const props = PropertiesService.getScriptProperties();
+    let rec = null;
+    try { rec = JSON.parse(props.getProperty('saleops_' + ticket) || 'null'); } catch (e) { rec = null; }
+    if (!rec) return fail('không có phiếu ' + ticket + ' để huỷ (sai mã, quá 2 ngày, hoặc phiếu ghi trước khi có tính năng huỷ)');
+    if (rec.huy) return Object.assign(fail('phiếu đã huỷ lúc ' + new Date(rec.huy).toISOString()), { da_huy: true });
+    const owners = String(props.getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(',')).split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+    const isOwner = body.chu === true && owners.indexOf(nguoi) !== -1;
+    if (body.chu === true && !isOwner) return fail('chỉ Chủ được huỷ sau 10 phút');
+    if (!isOwner) {
+      if (rec.s !== nguoi) return fail('chỉ huỷ được phiếu của chính mình (hoặc Chủ)');
+      if (Date.now() - rec.t > UNDO_SECONDS * 1000) return fail('quá 10 phút — nhờ Chủ huỷ');
+    }
+    // Kiểm hết trước: dòng BAN còn đúng như lúc ghi, sổ ký gửi chưa đổi
+    const ban = getSheet_('BAN');
+    const bh = ban.getRange(1, 1, 1, ban.getLastColumn()).getValues()[0];
+    const bc = headerMap_(bh);
+    const problems = [];
+    rec.b.forEach(x => {
+      const vals = ban.getRange(x[0], 1, 1, bh.length).getValues()[0];
+      const same = String(vals[bc.product_code] || '').trim().toUpperCase() === x[1] && normSize_(vals[bc.item_size]) === x[2] &&
+        Number(vals[bc.item_quantity]) === Number(x[3]) && String(vals[bc.KHO] || '').trim() === x[4];
+      if (!same) problems.push('BAN dòng ' + x[0] + ' đã đổi');
+    });
+    let ky = null, kc = null;
+    if (rec.k.length) {
+      ky = getSheet_(KYGUI_TAB);
+      kc = headerMap_(ky.getRange(1, 1, 1, ky.getLastColumn()).getValues()[0]);
+      rec.k.forEach(x => { const cur = Number(ky.getRange(x[0], kc.so_luong + 1).getValue()) || 0; if (cur !== x[2]) problems.push('Sổ ký gửi dòng ' + x[0] + ' đã có giao dịch khác (' + cur + ', lúc bán ' + x[2] + ')'); });
+    }
+    if (problems.length) return Object.assign(fail('Không huỷ được, đã có thay đổi sau phiếu: ' + uniq_(problems).join('; ')), { loi: uniq_(problems) });
+    const khos = uniq_(rec.b.map(x => x[4]));
+    const out = { ok: true, action: 'huy_ban', ticket_id: ticket, dry_run: dryRun, so_dong: rec.b.length, kho: khos, chu: isOwner };
+    if (dryRun) return out;
+    rec.b.forEach(x => BAN_WRITE_COLS.forEach(n => { if (bc[n] !== undefined) ban.getRange(x[0], bc[n] + 1).clearContent(); }));
+    rec.k.forEach(x => {
+      if (x[3]) KYGUI_COLS.forEach(n => ky.getRange(x[0], kc[n] + 1).clearContent());
+      else { ky.getRange(x[0], kc.so_luong + 1).setValue(x[1]); ky.getRange(x[0], kc.cap_nhat + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm')); }
+    });
+    rec.huy = Date.now();
+    rec.huy_boi = nguoi;
+    props.setProperty('saleops_' + ticket, JSON.stringify(rec));
+    if (rec.hd) { // đã gửi tin hoá đơn MISA → báo huỷ
+      const text = '❌ HUỶ phiếu ' + ticket + ' (đã gửi tin hoá đơn MISA) · ' + rec.b.length + ' dòng · ' + khos.join(', ') + ' · bởi ' + nguoi + ' — bỏ / xoá chứng từ này trên MISA nếu đã nhập.';
+      misaChats_().forEach(c => { try { sendMessage_(c, text); } catch (err) { console.error(err); } });
+      out.misa_huy = true;
+    }
+    out._ky = rec.k.length > 0;
     return out;
   } finally {
     lock.releaseLock();

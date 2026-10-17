@@ -599,5 +599,34 @@ eq('nhập kho 15E: mẫu, mã kho MISA, đơn giá = giá nhập khi invoice_pr
 eq('nhập kho 15E: dòng TRA- → "Bỏ qua - trả hàng", dòng Y3C để nguyên', [DATA.NHAP[nhBase + 2][10], DATA.NHAP[nhBase + 1][10], /^Done - /.test(DATA.NHAP[nhBase][10])], ['Bỏ qua - trả hàng', '', true]);
 ctx.misaWriteFile_ = realWrite;
 
+// ---- Huỷ phiếu bán (huy_ban) ----
+vm.runInContext('this.saleUndo_=saleUndo_;', ctx);
+const kyR = kyRow('15E', 'Y3C', 41); kyR[4] = 1; ctx.MEMO = {};
+const bLen = DATA.BAN.length;
+let hb = ctx.handleSale_({ ticket_id: 'HB1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }] }, false);
+const hbRows = DATA.BAN.slice(bLen);
+eq('bán để thử huỷ: 2 dòng BAN, ký gửi về 0', [hb.ok, hbRows.length, kyR[4]], [true, 2, 0]);
+const hu = (b, dry) => ctx.saleUndo_(Object.assign({ ticket_id: 'HB1' }, b), !!dry);
+eq('người khác huỷ → chặn', /chính mình/.test(hu({ nguoi: 'khac@hn.vn' }).error), true);
+eq('nhân viên tự nhận là Chủ → chặn', /chỉ Chủ/.test(hu({ nguoi: 'nv@hn.vn', chu: true }).error), true);
+hb = hu({ nguoi: 'nv@hn.vn' }, true);
+eq('huỷ chạy thử: báo số dòng + kho, chưa xoá', [hb.ok, hb.so_dong, hb.kho, hbRows[0][1]], [true, 2, ['Y3C'], 'TH2040D']);
+hb = hu({ nguoi: 'NV@hn.vn' });
+eq('huỷ: xoá ô dòng BAN, trả ký gửi', [hb.ok, hbRows.every(r => r[1] === '' && r[5] === ''), kyR[4]], [true, true, 1]);
+eq('huỷ lần 2 → báo đã huỷ', [hu({ nguoi: 'nv@hn.vn' }).ok, !!hu({ nguoi: 'nv@hn.vn' }).da_huy], [false, true]);
+// Quá 10 phút: chỉ Chủ; sổ ký gửi đổi sau phiếu → chặn
+ctx.MEMO = {};
+ctx.handleSale_({ ticket_id: 'HB2', channel: 'web', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C', price: 800000 }],
+  lay_hoa_don: { ten_cty: 'Cty A', mst: '0312345678' } }, false);
+const hbRec = JSON.parse(PROPS.saleops_HB2); hbRec.t -= 11 * 60000; PROPS.saleops_HB2 = JSON.stringify(hbRec);
+eq('quá 10 phút, nhân viên → nhờ Chủ', /quá 10 phút/.test(ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'nv@hn.vn' }).error), true);
+kyR[4] = 5;
+eq('sổ ký gửi đổi sau phiếu → không huỷ', /Sổ ký gửi/.test(ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true }).error), true);
+kyR[4] = 0;
+const s3 = SENT.length;
+hb = ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true });
+eq('Chủ huỷ sau hạn + đã gửi tin hoá đơn → gửi tin HUỶ', [hb.ok, hb.chu, hb.misa_huy, /❌ HUỶ phiếu HB2/.test((SENT[s3] || {}).text || '')], [true, true, true, true]);
+eq('phiếu không có / cũ → báo rõ', /không có phiếu/.test(ctx.saleUndo_({ ticket_id: 'ZZZ', nguoi: 'nv@hn.vn' }).error), true);
+
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
