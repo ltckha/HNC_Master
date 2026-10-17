@@ -72,7 +72,7 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 ## Cửa của bot (doPost)
 | Tham số URL | Ai gọi | Việc |
 |---|---|---|
-| `?key=WEBHOOK_KEY` | Zalo | Lệnh chat: kiểm hàng, bán, nhập, xuất, chuyển kho / vị trí, huỷ, `bc`, `hoadon` |
+| `?key=WEBHOOK_KEY` | Zalo | Menu số (`menu`, tin 1 chữ số theo câu hỏi đang mở) + lệnh chat: kiểm hàng, bán, nhập, xuất, chuyển kho / vị trí, huỷ, `bc`, `hoadon` |
 | `?sale_key=` | Web / app | Ghi BAN theo phiếu (chủ hàng theo ký gửi, tin MISA), chống trùng 30 ngày; `huy_ban` huỷ phiếu (10 phút / Chủ 2 ngày) |
 | `?stock_key=` | Web / app | `nhap`, `tra_hang`, `xuat`, `chuyen_kho`, `chuyen_vi_tri`, `huy`; nhập từ phiếu `doc_phieu`, `ds_nhap`, `xem_nhap`, `xac_nhan`, `huy_nhap`, `bo_nhap`; `bo_sung_sp`; `xuat_misa` (file MISA danh mục / nhập kho vào HNC_Exported_Files) |
 | `?export_key=` | Web | `mark_exported`: cờ `*_upload` SANPHAM hoặc mốc META |

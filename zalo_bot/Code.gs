@@ -147,6 +147,8 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
   try {
     let res, isWrite;
     try {
+      const nav = navHandle_(text, chatId, dryRun); // menu / tin số (điều khiển bằng số, anh Kha 17/10)
+      if (nav) return { reply: nav.text, syncTabs: nav.touched || [] };
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
       const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const cmdLines = lines.filter(isBatchCommandLine_);
@@ -180,8 +182,8 @@ function runOne_(text, dryRun, chatId) {
   const p = parseMessage_(text, knownCodes_());
   let res;
   switch (p.action) {
-    case ACTIONS.HELP: res = { text: HELP_TEXT }; break;
-    case ACTIONS.CHECK: res = doCheck_(p); break;
+    case ACTIONS.HELP: res = { text: HELP_TEXT + '\n\nNhắn số: 9 Menu' }; break;
+    case ACTIONS.CHECK: res = !p.code && !p.baseCode ? { text: '🤔 Mình chưa hiểu tin này.\n\n' + navMenu_(chatId) } : doCheck_(p); break;
     case ACTIONS.REPORT: res = doReport_(p); break;
     case ACTIONS.INVOICE: res = doInvoice_(p.text, dryRun); break;
     case ACTIONS.UNDO: res = doUndo_(chatId, dryRun); break;
@@ -257,7 +259,7 @@ function parseMessage_(textRaw, known) {
 
   // ---- Lệnh ----
   let action = ACTIONS.CHECK;
-  if ((toks.length <= 3 && (/^(hd|hdsd|help|\?|menu)$/.test(toks[0] || ''))) || /^huong\s*dan/.test(n)) action = ACTIONS.HELP;
+  if ((toks.length <= 3 && (/^(hd|hdsd|help|\?)$/.test(toks[0] || ''))) || /^huong\s*dan/.test(n)) action = ACTIONS.HELP;
   else if (/^(huỷ|hủy|huy|undo)$/.test((rawToks[0] || '').replace(/[.!]+$/, '')) || /^hoan\s*tac/.test(n)) action = ACTIONS.UNDO;
   else if (toks[0] === 'bc' || /^bao\s*cao/.test(n)) action = ACTIONS.REPORT;
   else if (/^hoa\s*don(\s|$)/.test(n)) action = ACTIONS.INVOICE;
@@ -457,6 +459,234 @@ function parseReportDate_(n) {
     return new Date(y, Number(m[2]) - 1, Number(m[1]));
   }
   return today;
+}
+
+// =====================================================================
+// ĐIỀU KHIỂN BẰNG SỐ (anh Kha "làm" 17/10, như bot xưởng)
+// Mỗi người 1 câu hỏi đang mở (Script Property ask_<chat_id>, hạn 720 phút); tin số trả lời câu gửi sau cùng.
+// "menu" / "m" / chữ không hiểu → menu số kèm số việc chờ. "0" để sau, "9" về menu. Lệnh chữ cũ giữ nguyên.
+// Nhân viên thấy 1 Kiểm hàng · 2 Báo cáo · 6 Huỷ · 9 Hướng dẫn; Chủ (OWNER_CHAT_ID) thấy thêm 3 · 4 · 5.
+// =====================================================================
+
+const ASK_TTL_MS = 720 * 60000;
+const NAV_FOOT = '0 Để sau · 9 Menu';
+
+function navIsOwner_(chatId) {
+  const o = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID') || '';
+  return !!chatId && String(chatId) === o;
+}
+
+function navSetAsk_(chatId, k, d) {
+  if (!chatId) return;
+  PropertiesService.getScriptProperties().setProperty('ask_' + chatId, JSON.stringify({ k, d: d || {}, t: Date.now() }));
+}
+
+function navGetAsk_(chatId) {
+  if (!chatId) return null;
+  let a = null;
+  try { a = JSON.parse(PropertiesService.getScriptProperties().getProperty('ask_' + chatId) || 'null'); } catch (e) { a = null; }
+  return a && Date.now() - a.t <= ASK_TTL_MS ? a : null;
+}
+
+function navClearAsk_(chatId) { if (chatId) PropertiesService.getScriptProperties().deleteProperty('ask_' + chatId); }
+
+/** Số việc chờ cho menu Chủ (đệm 10 phút vì đếm hoá đơn phải đọc Drive). */
+function navCounts_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('nav_counts');
+  if (hit) return JSON.parse(hit);
+  const c = { pn: navPendingReceipts_().length, hd: navDueInvoices_().length, bs: navNeedsInfoCodes_().length };
+  cache.put('nav_counts', JSON.stringify(c), 600);
+  return c;
+}
+
+function navPendingReceipts_() {
+  const all = PropertiesService.getScriptProperties().getProperties();
+  return Object.keys(all).filter(k => k.indexOf('pnx_') === 0).map(k => {
+    let v = {};
+    try { v = JSON.parse(all[k]); } catch (e) { /* bỏ qua */ }
+    return { id: k.slice(4), v };
+  }).filter(x => x.v.st === 'nhap').sort((a, b) => (a.v.t || 0) - (b.v.t || 0));
+}
+
+function navDueInvoices_() {
+  return invoiceStatus_(invoiceTickets_()).tickets
+    .filter(t => t.date >= INVOICE_START && t.status === 'chua' && invoiceAgeDays_(t) >= INVOICE_REMIND_DAYS)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+function navNeedsInfoCodes_() {
+  const sp = sheetValues_('SANPHAM');
+  let hr = 0;
+  for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
+  const c = headerMap_(sp[hr]);
+  const out = [];
+  for (let r = hr + 1; r < sp.length; r++) {
+    const code = String(sp[r][c.product_code] || '').trim().toUpperCase();
+    if (code && needsInfo_(sp[r], c)) out.push(code);
+  }
+  return out;
+}
+
+/** Menu số; đặt câu hỏi đang mở = menu. */
+function navMenu_(chatId) {
+  const owner = navIsOwner_(chatId);
+  const lines = ['📋 MENU HNC — nhắn số', '1 Kiểm hàng', '2 Báo cáo bán'];
+  if (owner) {
+    let c = { pn: '?', hd: '?', bs: '?' };
+    try { c = navCounts_(); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+    lines.push('3 Phiếu nhập chờ chia (' + c.pn + ')', '4 Hoá đơn NCC chưa có (' + c.hd + ')', '5 Mã cần bổ sung (' + c.bs + ')');
+  }
+  lines.push('6 Huỷ thao tác vừa rồi', '9 Hướng dẫn lệnh chữ', '0 Để sau', '(Lệnh chữ cũ vẫn dùng được: ban / nhap / xuat / chuyen kho / bc / hoadon…)');
+  navSetAsk_(chatId, 'menu', {});
+  return lines.join('\n');
+}
+
+function webOrigin_() {
+  const m = String(PropertiesService.getScriptProperties().getProperty('SYNC_HINT_URL') || '').match(/^(https?:\/\/[^/]+)/);
+  return m ? m[1] : '';
+}
+
+/** Xử lý "menu" / tin 1 chữ số. Trả null nếu không phải → chạy lệnh chữ như cũ. */
+function navHandle_(text, chatId, dryRun) {
+  const t = String(text || '').trim().toLowerCase();
+  if (t === 'menu' || t === 'm') return { text: navMenu_(chatId) };
+  if (!/^\d$/.test(t)) {
+    const a = navGetAsk_(chatId);
+    if (a && a.k === 'check') navClearAsk_(chatId); // gõ mã sau "1 Kiểm hàng" → chạy kiểm hàng như thường
+    return null;
+  }
+  const n = Number(t);
+  const a = navGetAsk_(chatId);
+  if (!a) return { text: navMenu_(chatId) }; // số không có câu hỏi đang mở → menu, không đoán
+  if (n === 0) { navClearAsk_(chatId); return { text: '👌 Để sau. Nhắn "menu" khi cần.' }; }
+  if (n === 9 && a.k !== 'menu') return { text: navMenu_(chatId) };
+  const owner = navIsOwner_(chatId);
+  switch (a.k) {
+    case 'menu': return navMenuPick_(n, chatId, owner);
+    case 'report': return navReport_(n, chatId);
+    case 'pn': return navReceiptStep_(n, chatId, a.d);
+    case 'hd': return navInvoiceStep_(n, chatId, a.d, dryRun);
+    case 'bs': return n === 1 ? { text: '🔗 Bổ sung trên web: ' + webOrigin_() + '/admin (Tổng quan → Mã cần bổ sung thông tin)\nNhắn số: 9 Menu' } : { text: navMenu_(chatId) };
+    case 'undo':
+      if (n !== 6) return { text: navMenu_(chatId) };
+      navClearAsk_(chatId);
+      { const r = doUndo_(chatId, dryRun); return { text: r.text + '\nNhắn số: 9 Menu', touched: r.touched || [] }; }
+    default: return { text: navMenu_(chatId) };
+  }
+}
+
+function navMenuPick_(n, chatId, owner) {
+  if ([3, 4, 5].indexOf(n) !== -1 && !owner) return { text: '🔒 Mục này chỉ Chủ dùng.\n\n' + navMenu_(chatId) };
+  switch (n) {
+    case 1: navSetAsk_(chatId, 'check', {}); return { text: '🔎 Gõ mã cần kiểm (vd TH2040D, hoặc TH2040 để xem mọi màu). Kèm size nếu cần: TH2040D 40\nNhắn số: ' + NAV_FOOT };
+    case 2: navSetAsk_(chatId, 'report', {}); return { text: '📊 Báo cáo bán:\nNhắn số: 1 Hôm nay · 2 Hôm qua · 3 Tuần này · ' + NAV_FOOT };
+    case 3: {
+      const list = navPendingReceipts_();
+      if (!list.length) { navClearAsk_(chatId); return { text: '📄 Không có phiếu nhập nào chờ chia.\nNhắn số: 9 Menu' }; }
+      return navReceiptShow_(chatId, list.map(x => x.id), 0);
+    }
+    case 4: {
+      const list = navDueInvoices_();
+      if (!list.length) { navClearAsk_(chatId); return { text: '🧾 Không còn phiếu nào quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn.\nNhắn số: 9 Menu' }; }
+      return navInvoiceShow_(chatId, list.map(x => x.id), 0);
+    }
+    case 5: {
+      const list = navNeedsInfoCodes_();
+      if (!list.length) { navClearAsk_(chatId); return { text: '✅ Không có mã nào cần bổ sung.\nNhắn số: 9 Menu' }; }
+      navSetAsk_(chatId, 'bs', {});
+      return { text: '🧩 ' + list.length + ' mã cần bổ sung (trống ngành hoặc giá bán), chưa lên sàn / MISA:\n' + list.slice(0, 40).join(', ') +
+        (list.length > 40 ? ' … +' + (list.length - 40) : '') + '\nNhắn số: 1 Mở web bổ sung · ' + NAV_FOOT };
+    }
+    case 6: {
+      const raw = chatId ? CacheService.getScriptCache().get('last_' + chatId) : null;
+      if (!raw) { navClearAsk_(chatId); return { text: 'ℹ️ Không có thao tác nào của bạn trong 10 phút qua để huỷ.\nNhắn số: 9 Menu' }; }
+      navSetAsk_(chatId, 'undo', {});
+      return { text: '↩️ Thao tác vừa rồi: ' + (JSON.parse(raw).label || '(không rõ)') + '\nNhắn 6 lần nữa để HUỶ (trong 10 phút) · ' + NAV_FOOT };
+    }
+    case 9: navClearAsk_(chatId); return { text: HELP_TEXT + '\n\nNhắn số: 9 Menu' };
+    default: return { text: navMenu_(chatId) };
+  }
+}
+
+function navReport_(n, chatId) {
+  const today = today_();
+  if (n === 1 || n === 2) {
+    navClearAsk_(chatId);
+    const d = n === 1 ? today : new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    return { text: doReport_({ reportDate: d }).text + '\nNhắn số: 9 Menu' };
+  }
+  if (n === 3) {
+    navClearAsk_(chatId);
+    const dow = (today.getDay() + 6) % 7; // thứ Hai = 0
+    return { text: doReportRange_(new Date(today.getFullYear(), today.getMonth(), today.getDate() - dow), today).text + '\nNhắn số: 9 Menu' };
+  }
+  return { text: navMenu_(chatId) };
+}
+
+/** Báo cáo bán nhiều ngày (vd tuần này), theo kho. */
+function doReportRange_(from, to) {
+  const k1 = Utilities.formatDate(from, TZ, 'yyyy-MM-dd'), k2 = Utilities.formatDate(to, TZ, 'yyyy-MM-dd');
+  const data = sheetValues_('BAN');
+  const col = headerMap_(data[0]);
+  requireColumns_('BAN', col, ['Ngày', 'Giá', 'item_quantity', 'KHO']);
+  const byKho = {};
+  for (let r = 1; r < data.length; r++) {
+    const dk = dateKey_(data[r][col['Ngày']]);
+    if (!dk || dk < k1 || dk > k2) continue;
+    const kho = String(data[r][col.KHO]).trim() || '?';
+    const qty = Number(data[r][col.item_quantity]) || 0;
+    byKho[kho] = byKho[kho] || { qty: 0, revenue: 0 };
+    byKho[kho].qty += qty;
+    byKho[kho].revenue += moneyValue_(data[r][col['Giá']]) * qty;
+  }
+  const label = Utilities.formatDate(from, TZ, 'dd/MM') + '–' + Utilities.formatDate(to, TZ, 'dd/MM/yyyy');
+  const khos = Object.keys(byKho).sort();
+  if (!khos.length) return { text: '📊 Tuần ' + label + ': chưa có dòng bán nào trong tab BAN.' };
+  let q = 0, rev = 0;
+  const lines = ['📊 BÁN TUẦN ' + label];
+  khos.forEach(k => { lines.push('  Kho ' + k + ': ' + byKho[k].qty + ' đôi — ' + money_(byKho[k].revenue)); q += byKho[k].qty; rev += byKho[k].revenue; });
+  lines.push('  Tổng: ' + q + ' đôi — ' + money_(rev));
+  return { text: lines.join('\n') };
+}
+
+function navReceiptShow_(chatId, ids, i) {
+  if (i >= ids.length) { navClearAsk_(chatId); return { text: '✅ Hết phiếu chờ chia.\nNhắn số: 9 Menu' }; }
+  const ix = receiptIndex_(ids[i]) || {};
+  navSetAsk_(chatId, 'pn', { ids, i });
+  return { text: '📄 Phiếu ' + (i + 1) + '/' + ids.length + ': ' + (ix.ncc || 'chưa rõ NCC') + (ix.so ? ' ' + ix.so : '') + (ix.ngay ? ' · ' + ix.ngay : '') +
+    ' · ' + (ix.nd || 0) + ' dòng · ' + (ix.sl || 0) + ' đôi\nNhắn số: 1 Mở app chia size · 0 Để sau · 9 Menu' };
+}
+
+function navReceiptStep_(n, chatId, d) {
+  const ids = d.ids || [], i = d.i || 0;
+  if (n === 1 && ids[i]) {
+    const next = navReceiptShow_(chatId, ids, i + 1);
+    return { text: '🔗 Chia size phiếu ' + ids[i] + ': ' + receiptAppLink_(ids[i]) + '\n\n' + next.text };
+  }
+  return { text: navMenu_(chatId) };
+}
+
+function navInvoiceShow_(chatId, ids, i) {
+  if (i >= ids.length) { navClearAsk_(chatId); return { text: '✅ Đã duyệt hết phiếu chưa có hoá đơn.\nNhắn số: 9 Menu' }; }
+  const t = invoiceStatus_(invoiceTickets_()).tickets.find(x => x.id === ids[i]);
+  if (!t) return navInvoiceShow_(chatId, ids, i + 1);
+  navSetAsk_(chatId, 'hd', { ids, i });
+  return { text: '🧾 Phiếu ' + (i + 1) + '/' + ids.length + ': ' + t.id + ' · ' + t.supplier + ' · ' + t.qty + ' sp · ' + invoiceAgeDays_(t) + ' ngày\n\n' +
+    invoiceMessage_(t) + '\n\nNhắn số: 1 Đã có hoá đơn · 2 Không lấy · 3 Chưa (nhắc lại) · 0 Để sau · 9 Menu' };
+}
+
+function navInvoiceStep_(n, chatId, d, dryRun) {
+  const ids = d.ids || [], i = d.i || 0, id = ids[i];
+  if ([1, 2, 3].indexOf(n) === -1 || !id) return { text: navMenu_(chatId) };
+  const st = { 1: 'da', 2: 'khong', 3: 'chua' }[n];
+  if (!dryRun && st !== 'chua') { // 3 = chưa: không ghi gì (ghi tay "chua" sẽ chặn tự nhận hoá đơn từ thư mục Drive)
+    PropertiesService.getScriptProperties().setProperty('hdon_' + id, JSON.stringify({ s: st, at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') }));
+    CacheService.getScriptCache().remove('nav_counts');
+  }
+  MEMO = {};
+  const next = navInvoiceShow_(chatId, ids, i + 1);
+  return { text: '🧾 ' + id + ': ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không lấy hoá đơn', chua: '⏳ chưa có, tuần sau nhắc lại' })[st] + '\n\n' + next.text };
 }
 
 // =====================================================================
@@ -1398,7 +1628,8 @@ function receiptNotify_(r) {
   if (!owner || !r || !r.ok) return;
   try {
     sendMessage_(owner, '📄 Có phiếu chờ chia: ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ' · ' + r.so_dong + ' dòng · ' +
-      r.so_doi + ' đôi → ' + receiptAppLink_(r.id));
+      r.so_doi + ' đôi → ' + receiptAppLink_(r.id) + '\nNhắn số: 1 Mở app chia size · 0 Để sau · 9 Menu');
+    navSetAsk_(owner, 'pn', { ids: [r.id], i: 0 });
   } catch (err) { console.error('Không báo được phiếu mới: ' + (err && err.message ? err.message : err)); }
 }
 
@@ -2048,6 +2279,7 @@ function dailyMisaSummary(dryRun) {
   try { skip = JSON.parse(props.getProperty('misa_hd_' + todayKey) || '[]'); } catch (e) { skip = []; }
   const msgs = misaSummaryMessages_(today_(), skip);
   const chats = misaChats_();
+  if (msgs.length) msgs[msgs.length - 1] += '\nNhắn số: 9 Menu';
   msgs.forEach(m => { if (dryRun) console.log(m); else chats.forEach(c => sendMessage_(c, m)); });
   // dọn khoá misa_hd_ cũ hơn 7 ngày
   Object.keys(props.getProperties()).filter(k => k.indexOf('misa_hd_') === 0 && k.slice(8) < Utilities.formatDate(new Date(Date.now() - 7 * 86400000), TZ, 'yyyyMMdd'))
@@ -2137,7 +2369,7 @@ function handleNotify_(body, owner, props) {
     const key = 'notify_' + orderId;
     if (props.getProperty(key)) return { ok: true, duplicate: true, order_id: orderId };
     const truncated = text.length > NOTIFY_MAX_CHARS;
-    const msg = truncated ? text.slice(0, NOTIFY_MAX_CHARS) + '\n…(đã cắt bớt)' : text;
+    const msg = (truncated ? text.slice(0, NOTIFY_MAX_CHARS) + '\n…(đã cắt bớt)' : text) + '\nNhắn số: 9 Menu';
     if (!sendMessage_(owner, msg)) return { ok: false, order_id: orderId, error: 'Zalo không nhận tin (xem Nhật ký thực thi)' };
     props.setProperty(key, JSON.stringify({ t: Date.now() }));
     pruneTickets_(props, 'notify_');
@@ -2968,6 +3200,7 @@ function weeklyInvoiceReminder() {
     const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
     if (!owner) return;
     invoiceReminderMessages_().forEach(m => sendMessage_(owner, m));
+    navSetAsk_(owner, 'menu', {});
   } catch (err) { console.error(err && err.stack ? err.stack : err); }
 }
 
@@ -2975,11 +3208,12 @@ function invoiceReminderMessages_() {
   const due = invoiceStatus_(invoiceTickets_()).tickets
     .filter(t => t.date >= INVOICE_START && t.status === 'chua' && invoiceAgeDays_(t) >= INVOICE_REMIND_DAYS);
   if (!due.length) return [];
-  const msgs = ['⏰ ' + due.length + ' phiếu nhập quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn. Câu nhắn soạn sẵn bên dưới — chép gửi nhà cung cấp.\n' +
-    'Đã nhận thì nhắn: hoadon <mã phiếu> da · Không cần: hoadon <mã phiếu> khong'];
-  due.slice(0, 10).forEach(t => msgs.push('🧾 ' + t.id + ' (' + invoiceAgeDays_(t) + ' ngày)\n\n' + invoiceMessage_(t)));
-  if (due.length > 10) msgs.push('… còn ' + (due.length - 10) + ' phiếu nữa — nhắn "hoadon" để xem hết.');
-  return msgs;
+  // Gộp 1 tin (anh Kha 17/10): danh sách ngắn; câu nhắn gửi NCC xem khi duyệt từng phiếu (menu 4)
+  const lines = ['⏰ ' + due.length + ' phiếu nhập quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn:'];
+  due.slice(0, 25).forEach(t => lines.push('• ' + t.id + ' · ' + t.supplier + ' · ' + t.qty + ' sp · ' + invoiceAgeDays_(t) + ' ngày'));
+  if (due.length > 25) lines.push('… còn ' + (due.length - 25) + ' phiếu nữa');
+  lines.push('Nhắn số: 4 Duyệt từng phiếu (kèm câu nhắn gửi NCC) · 9 Menu');
+  return [lines.join('\n')];
 }
 
 /** Chạy thử trong trình soạn thảo: in danh sách phiếu + tin nhắc tuần (KHÔNG gửi Zalo). */

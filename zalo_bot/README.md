@@ -6,6 +6,13 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 - Dùng lại bot Zalo cũ: chỉ đổi webhook, không tạo bot mới.
 - Mọi đọc/ghi đều theo **tên cột hàng 1**.
 
+## Điều khiển bằng số (anh Kha "làm" 17/10, như bot xưởng)
+
+- Nhắn `menu` / `m` (hoặc chữ bot không hiểu) → menu số kèm số việc chờ (N). Tin 1 chữ số trả lời câu hỏi bot gửi sau cùng cho người đó (nhớ 720 phút, Script Property `ask_<chat_id>`). Không có câu hỏi đang mở → bot gửi menu, không đoán. `0` = để sau, `9` = về menu.
+- Menu: 1 Kiểm hàng (bot hỏi mã) · 2 Báo cáo bán (1 hôm nay · 2 hôm qua · 3 tuần này) · 3 Phiếu nhập chờ chia (duyệt lần lượt, 1 = gửi link app chia size) · 4 Hoá đơn NCC chưa có quá 7 ngày (duyệt lần lượt kèm câu nhắn gửi NCC: 1 đã có · 2 không lấy · 3 chưa, tuần sau nhắc · 0 để sau) · 5 Mã cần bổ sung (danh sách + link web) · 6 Huỷ thao tác vừa rồi (nhắn 6 hai lần trong 10 phút) · 9 Hướng dẫn lệnh chữ.
+- Nhân viên thấy 1, 2, 6, 9; Chủ (`OWNER_CHAT_ID`) thấy thêm 3, 4, 5. Lệnh chữ cũ giữ nguyên (`hd` vẫn là hướng dẫn).
+- Tin tự gửi kết bằng dòng "Nhắn số: …": phiếu chờ chia (1 mở app), nhắc hoá đơn thứ Hai (gộp 1 tin, 4 duyệt từng phiếu), MISA cuối ngày và đơn web (9 menu).
+
 ## Bot hiểu những tin gì
 
 | Nhắn | Bot làm |

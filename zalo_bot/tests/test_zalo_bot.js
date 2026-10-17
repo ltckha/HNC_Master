@@ -103,7 +103,7 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.receiptPrompt_=receiptPrompt_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.receiptPrompt_=receiptPrompt_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.invoiceReminderMessages_=invoiceReminderMessages_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -627,6 +627,44 @@ const s3 = SENT.length;
 hb = ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true });
 eq('Chủ huỷ sau hạn + đã gửi tin hoá đơn → gửi tin HUỶ', [hb.ok, hb.chu, hb.misa_huy, /❌ HUỶ phiếu HB2/.test((SENT[s3] || {}).text || '')], [true, true, true, true]);
 eq('phiếu không có / cũ → báo rõ', /không có phiếu/.test(ctx.saleUndo_({ ticket_id: 'ZZZ', nguoi: 'nv@hn.vn' }).error), true);
+
+// ---- Điều khiển bằng số ----
+PROPS.OWNER_CHAT_ID = 'owner1';
+const z = (txt, chat) => ctx.handleText_(txt, false, chat || 'owner1', 'Kha');
+let zr = z('menu');
+eq('Chủ: menu đủ mục + số việc chờ', [/^📋 MENU HNC/.test(zr), /3 Phiếu nhập chờ chia \(\d+\)/.test(zr), /4 Hoá đơn NCC chưa có \(\d+\)/.test(zr), /5 Mã cần bổ sung \(\d+\)/.test(zr), /6 Huỷ/.test(zr)], [true, true, true, true, true]);
+zr = z('m', 'nv1');
+eq('Nhân viên: chỉ 1 2 6 9', [/1 Kiểm hàng/.test(zr), /3 Phiếu/.test(zr), /4 Hoá đơn/.test(zr), /6 Huỷ/.test(zr), /9 Hướng dẫn/.test(zr)], [true, false, false, true, true]);
+eq('nhân viên chọn 3 → chỉ Chủ', /chỉ Chủ/.test(z('3', 'nv1')), true);
+delete PROPS.ask_nv2;
+eq('tin số không có câu hỏi → menu', /^📋 MENU HNC/.test(z('2', 'nv2')), true);
+eq('chữ không hiểu → menu', /Mình chưa hiểu[\s\S]*MENU HNC/.test(z('xin chào cả nhà', 'nv3')), true);
+eq('"hd" vẫn là hướng dẫn lệnh chữ', /HƯỚNG DẪN BOT KHO HNC/.test(z('hd', 'nv3')), true);
+z('menu', 'nv1');
+eq('1 → hỏi mã; gõ mã → kiểm hàng', [/Gõ mã cần kiểm/.test(z('1', 'nv1')), /TH2040D/.test(z('TH2040D', 'nv1')), !PROPS.ask_nv1], [true, true, true]);
+z('menu', 'nv1'); z('2', 'nv1');
+eq('2 → 3 báo cáo tuần này', /BÁN TUẦN/.test(z('3', 'nv1')) || /Tuần .*chưa có dòng bán/.test(z('3', 'nv1')), true);
+z('menu', 'nv1');
+eq('0 → để sau, xoá câu hỏi', [/Để sau/.test(z('0', 'nv1')), !PROPS.ask_nv1], [true, true]);
+// 6 huỷ: phải nhắn 6 hai lần
+z('nhap TH2040D 40 TBH', 'nv4');
+z('menu', 'nv4');
+eq('6 lần 1 → nhắc thao tác, chưa huỷ', /Nhắn 6 lần nữa để HUỶ/.test(z('6', 'nv4')), true);
+eq('6 lần 2 → huỷ', /Đã huỷ/.test(z('6', 'nv4')), true);
+// 4 duyệt hoá đơn
+ctx.MEMO = {};
+const dueIds = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets.filter(t => t.status === 'chua').map(t => t.id);
+vm.runInContext('this.navInvoiceShow_=navInvoiceShow_;', ctx);
+if (dueIds.length) {
+  ctx.navInvoiceShow_('owner1', dueIds, 0);
+  zr = z('1');
+  eq('4: nhắn 1 → ghi đã có hoá đơn, sang phiếu kế', [/đã có hoá đơn/.test(zr), JSON.parse(PROPS['hdon_' + dueIds[0]]).s], [true, 'da']);
+  delete PROPS['hdon_' + dueIds[0]];
+} else eq('4: có phiếu để duyệt', dueIds.length > 0, true);
+const s4 = SENT.length;
+PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
+eq('nhắc hoá đơn thứ Hai gộp 1 tin + "4 Duyệt từng phiếu"', ctx.invoiceReminderMessages_().length <= 1 && (ctx.invoiceReminderMessages_()[0] || 'Nhắn số: 4').indexOf('Nhắn số: 4') !== -1, true);
+delete PROPS.SYNC_HINT_URL;
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
