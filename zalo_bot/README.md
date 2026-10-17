@@ -13,6 +13,14 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 - Nhân viên thấy 1, 2, 6, 9; Chủ (`OWNER_CHAT_ID`) thấy thêm 3, 4, 5. Lệnh chữ cũ giữ nguyên (`hd` vẫn là hướng dẫn).
 - Tin tự gửi kết bằng dòng "Nhắn số: …": phiếu chờ chia (1 mở app), nhắc hoá đơn thứ Hai (gộp 1 tin, 4 duyệt từng phiếu), MISA cuối ngày và đơn web (9 menu).
 
+## Dự phòng khi web / app lỗi (anh Kha "làm" 17/10)
+
+- **Báo web gửi lại:** sync-hint lỗi thì bot giữ hàng chờ, thử lại sau 5′ / 15′ / rồi mỗi 1 giờ (Script Property `sync_retry`). Lỗi lần 2 → nhắn Chủ kèm bảng dự phòng; web chạy lại → nhắn "✅ Web chạy lại".
+- **Nhập có số chứng từ:** `nhap TH2040D 38/2 TBH NK000045` (hoặc chữ `misa` để bot lấy số NK theo kho, cùng kho + NCC + ngày thì dùng chung) → dòng NHAP như phiếu thường (không đánh dấu `Zalo_Update`) → vào tem + file nhập kho MISA. Không có số → `Zalo_Update` như cũ. App: dòng / phiếu `nhap` nhận `so_chung_tu` hoặc `misa: true`.
+- **Bán qua Zalo:** thêm `tm` (mặc định) / `ck` / `the` và `sdt 09…` (hoặc số điện thoại trần). Ghi BAN cột `payment_method` (Tiền mặt / Chuyển khoản / Thẻ — trùng danh sách MISA) và `customer_phone`. Cửa ghi bán của app cũng ghi 2 cột này (từ `thanh_toan`, `khach.sdt`).
+- **Chủ huỷ dòng bán** (2 ngày, Zalo của Chủ): `huy TH2040D 40 [kho] [17/10]` → bot liệt kê dòng khớp → nhắn số dòng để huỷ (xoá ô BAN, tồn tự cộng, trả sổ ký gửi nếu là hàng ký gửi). `huy` không kèm mã vẫn là huỷ lệnh vừa gõ (10 phút).
+- **`du phong`** (hoặc menu 8): bảng cú pháp ngắn bán / tra / nhập / trả / huỷ / bc.
+
 ## Bot hiểu những tin gì
 
 | Nhắn | Bot làm |

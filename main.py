@@ -3790,6 +3790,7 @@ def print_main_menu():
     """Hiển thị Giao diện Menu Chính theo 6 Nền Tảng với Màu Sáng Cao Cấp"""
     menu_text = """===================================================================
              🚀 [bold white]HNC CONTROL CENTER - MAC MINI M4 ENGINE[/bold white]
+  [yellow]Dự phòng — không chạy cùng lúc với nút trên web (/admin/san, Xuất MISA)[/yellow]
 ===================================================================
   [1] [bold #FFD700]🏷️ TEM & KHO (in tem, đồng bộ SKU vào kho)[/bold #FFD700]
   [2] [bold #FF6E40]🛍️  SHOPEE[/bold #FF6E40]
