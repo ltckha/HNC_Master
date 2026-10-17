@@ -235,6 +235,14 @@ Content-Type: application/json
 - Trả về: `{"ok":true,"order_id":…}`. Lỗi: `unauthorized`, `chưa cấu hình …`, `Zalo không nhận tin` (khi Zalo từ chối, lần sau gửi lại được).
 - Gợi ý: để sẵn các dòng `ban …` trong `text`. Anh xác nhận với khách xong thì **chuyển tiếp nguyên tin** cho bot, bot ghi BAN từng dòng.
 
+## Giá nhập theo lô + hoá đơn NCC (anh Kha "làm" 17/10)
+
+- **NHAP thêm cột** `don_gia_phieu` (bot ghi lúc `xac_nhan` phiếu NCC, đơn giá dòng phiếu đã đọc), `don_gia_hd`, `so_hd`, `ngay_hd`.
+- **Cửa `?stock_key` `hoa_don`** (chỉ Chủ, `nguoi` thuộc `OWNER_EMAILS`): `che_do: "ds"` danh sách phiếu (theo ngày × NCC × kho) · `"xem"` + `phieu` → dòng kèm giá phiếu / HĐ · `"ghi"` + `phieu` (1 mã hoặc mảng — 1 HĐ nhiều phiếu), `so_hd`, `ngay_hd?` (dd/mm/yyyy, trống = hôm nay), `dung_nhu_phieu: true` hoặc `dong: [{dong, don_gia_hd}]`. Ghi xong: phiếu = đã có HĐ, `SANPHAM.invoice_price` = giá HĐ gần nhất, lệch giá phiếu / đã xuất MISA giá tạm → nhắn Chủ. Trả `{ok, so_dong, so_hd, ngay_hd, lech_gia}`; dòng chưa có giá phiếu mà không gửi giá → `loi`.
+- **Menu 4 bot:** 1 Có HĐ, giá đúng như phiếu → gõ số HĐ (kèm ngày nếu khác hôm nay) · 2 Không lấy · 3 Chưa · 4 Giá khác → mở app.
+- **File nhập kho MISA (bot `xuat_misa` + menu Mac [4]):** đơn giá `don_gia_hd` → `don_gia_phieu` → giá theo mã (`invoice_price`, rồi `purchase_price`, ghi "giá cũ theo mã"). Dòng chưa có `so_hd` chờ 3 ngày (`cho_hd` trong kết quả), quá hạn xuất "giá tạm". Số / ngày HĐ ghi vào cột Diễn giải (mẫu MISA không có cột Số hoá đơn); cờ `misa_stock` thêm "· giá tạm" / "· giá cũ theo mã".
+- **`hoadon`:** chỉ Chủ; đổi trạng thái phải đúng mã phiếu (nhiều mã trước chữ trạng thái = 1 HĐ nhiều phiếu); `hoadon <mã> tudong` bỏ trạng thái đặt tay; dòng nhập Zalo_Update không số NK không bị đòi HĐ; thiếu MST hộ (`HKD_<kho>`) thì không soạn tin xin HĐ. Kho nhận thêm `15ETBH` / `3CTBH`.
+
 ## Theo dõi hoá đơn nhà cung cấp (lệnh `hoadon`)
 
 Không thêm tab hay cột nào vào Sheet; bot tự tính từ dữ liệu sẵn có.

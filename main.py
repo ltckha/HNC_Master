@@ -118,6 +118,8 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 PENDING_INFO_COLUMNS = ("Tên Ngành Hàng", "product_price")
 # Tác vụ bỏ qua mã chưa bổ sung: 1 web đăng mới, 2 Shopee đăng mới, 3 TikTok đăng mới, 4 MISA danh mục, 5 web tồn, 8 MISA phiếu nhập
 PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8}
+# MISA nhập kho: dòng chưa có số hoá đơn (so_hd) chờ 3 ngày rồi mới xuất "giá tạm" — giống bot (MISA_WAIT_DAYS, anh Kha 17/10)
+MISA_WAIT_DAYS = 3
 
 
 def clean_code(value):
@@ -2430,6 +2432,7 @@ def process_export_task(choice, loader):
         product_map = get_product_info_map(loader)
 
         records_by_kho = {'15E': [], '3C': []}
+        waiting_hd = set()
         row_status_list = []
         warning_rows = []
         valid_count = 0
@@ -2448,12 +2451,18 @@ def process_export_task(choice, loader):
             doc_no = str(rec.get('Số chứng từ (*)') or '').strip()
 
             unit = sp_info.get('unit', '')
+            # Giá theo lô (anh Kha 17/10, giống bot): don_gia_hd → don_gia_phieu → giá theo mã (invoice_price, rồi purchase_price) = "giá cũ"
+            so_hd = str(rec.get('so_hd', '') or '').strip()
+            lot_price = parse_number(rec.get('don_gia_hd')) or parse_number(rec.get('don_gia_phieu'))
             raw_inv = sp_info.get('invoice_price', '')
             inv_num = parse_number(raw_inv)
             if inv_num <= 0 and parse_number(sp_info.get('purchase_price')) > 0:
                 # invoice_price trống → lấy giá nhập (purchase_price, vd mã tạo từ phiếu NCC) — anh Kha chốt 17/10
                 inv_num = parse_number(sp_info.get('purchase_price'))
                 raw_inv = str(inv_num)
+            if lot_price > 0:
+                inv_num = lot_price
+                raw_inv = str(lot_price)
             qty = parse_number(rec.get('Số lượng (*)') or rec.get('item_quantity', 0))
 
             kho_raw = str(rec.get('KHO', '')).strip().upper()
@@ -2462,6 +2471,18 @@ def process_export_task(choice, loader):
             if doc_no.upper().startswith('TRA-'):
                 row_status_list.append("Bỏ qua - trả hàng")
                 continue
+
+            # Chờ hoá đơn: chưa có số HĐ thì đợi MISA_WAIT_DAYS ngày, quá hạn mới xuất "giá tạm" (giống bot)
+            age_days = 99
+            try:
+                age_days = (datetime.now().date() - datetime.strptime(doc_date[:10], '%d/%m/%Y').date()).days
+            except ValueError:
+                pass
+            if not so_hd and age_days <= MISA_WAIT_DAYS:
+                row_status_list.append("")
+                waiting_hd.add(f"{doc_no} {doc_date}")
+                continue
+            price_tags = [t for t in ('' if so_hd else 'giá tạm', '' if lot_price > 0 else 'giá cũ theo mã') if t]
 
             # DANH SÁCH KIỂM TRA LỖI THIẾU DỮ LIỆU
             missing_reasons = []
@@ -2507,7 +2528,7 @@ def process_export_task(choice, loader):
                 continue
 
             # DÒNG ĐẦY ĐỦ THÔNG TIN HỢP LỆ 100%
-            row_status_list.append(f"Done - {now_str}")
+            row_status_list.append(f"Done - {now_str}" + (" · " + " · ".join(price_tags) if price_tags else ""))
             valid_count += 1
 
             if kho_key not in records_by_kho:
@@ -2523,8 +2544,12 @@ def process_export_task(choice, loader):
             rec_valid['_doc_no'] = doc_no
             rec_valid['_doc_date'] = doc_date
             rec_valid['_unit'] = unit
+            rec_valid['_note'] = ((f" · HĐ {so_hd}" + (f" ngày {rec.get('ngay_hd')}" if str(rec.get('ngay_hd', '') or '').strip() else "")) if so_hd else "") + \
+                (f" ({', '.join(price_tags)})" if price_tags else "")
             records_by_kho[kho_key].append(rec_valid)
 
+        if waiting_hd:
+            print(f"⏳ Chờ hoá đơn (≤ {MISA_WAIT_DAYS} ngày, chưa xuất): {', '.join(sorted(waiting_hd))}")
         if warning_rows:
             warn_msg = "\n".join(warning_rows)
             if HAS_RICH:
@@ -2584,7 +2609,7 @@ def process_export_task(choice, loader):
                 safe_write_cell(ws_tpl, row_num, 3, doc_no)                    # Cột C (3): Số chứng từ (*)
                 safe_write_cell(ws_tpl, row_num, 4, ma_dt)                    # Cột D (4): Mã đối tượng
                 safe_write_cell(ws_tpl, row_num, 5, ten_dt)                   # Cột E (5): Tên đối tượng
-                safe_write_cell(ws_tpl, row_num, 6, f"Nhập kho mua hàng từ {ten_dt}" if ten_dt else "Nhập kho mua hàng") # Cột F (6): Diễn giải
+                safe_write_cell(ws_tpl, row_num, 6, (f"Nhập kho mua hàng từ {ten_dt}" if ten_dt else "Nhập kho mua hàng") + rec.get('_note', ''))  # Cột F (6): Diễn giải (+ số HĐ / giá tạm; mẫu MISA không có cột Số HĐ)
                 safe_write_cell(ws_tpl, row_num, 7, "Chưa thanh toán")         # Cột G (7): Hình thức thanh toán
                 safe_write_cell(ws_tpl, row_num, 8, sku)                       # Cột H (8): Mã hàng (*)
                 safe_write_cell(ws_tpl, row_num, 9, "")                        # Cột I (9): Tên hàng (bỏ trống)

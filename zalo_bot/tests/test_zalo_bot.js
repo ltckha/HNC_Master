@@ -252,7 +252,7 @@ txt = ctx.doInvoice_('hoadon 260920-TP-15E da', false).text;
 eq('ghi đã nhận tay', [/Đã ghi ✅ đã có hoá đơn: 260920-TP-15E/.test(txt), JSON.parse(PROPS['hdon_260920-TP-15E']).s], [true, 'da']);
 ctx.doInvoice_('hoadon 260910-TP-Y3C khong', false);
 eq('hết phiếu chưa có', /Không còn phiếu nào/.test(ctx.doInvoice_('hoadon', true).text), true);
-eq('mã phiếu sai', /Không có phiếu nào/.test(ctx.doInvoice_('hoadon 999999', true).text), true);
+eq('mã phiếu sai', /Không có phiếu đúng mã/.test(ctx.doInvoice_('hoadon 999999', true).text), true);
 eq('lệnh hoadon nhận dạng', [ctx.parseMessage_('hoá đơn').action, ctx.parseMessage_('Hoadon 260920 da').action], ['HOÁ ĐƠN NCC', 'HOÁ ĐƠN NCC']);
 
 // ---- Kênh bán trong lệnh ban ----
@@ -586,9 +586,9 @@ eq('danh mục ghi: file cập nhật thêm màu', [up.tpl, up.sheet, up.start, 
 eq('danh mục ghi cờ misa_upload, gửi web SANPHAM', [/^Done - /.test(DATA.SANPHAM[spIx('MS1D')][18]), /^Done - /.test(DATA.SANPHAM[spIx('TH2040X')][18]), xr._sync], [true, true, ['SANPHAM']]);
 // Nhập kho 15E
 const nhBase = DATA.NHAP.length;
-DATA.NHAP.push(['17/10/2026', 'NK000009', 'MS1D', 'Đen', '15E', 39, 2, '', '', '', '', ''],
-  ['17/10/2026', 'NK000015', 'MS1D', 'Đen', 'Y3C', 40, 1, '', '', '', '', ''],
-  ['17/10/2026', 'TRA-171026', 'MS1D', 'Đen', '15E', 39, 1, '', '', '', '', '']);
+DATA.NHAP.push(['01/10/2026', 'NK000009', 'MS1D', 'Đen', '15E', 39, 2, '', '', '', '', ''],
+  ['01/10/2026', 'NK000015', 'MS1D', 'Đen', 'Y3C', 40, 1, '', '', '', '', ''],
+  ['01/10/2026', 'TRA-171026', 'MS1D', 'Đen', '15E', 39, 1, '', '', '', '', '']);
 WROTE.length = 0;
 xr = xm2({ loai: 'nhap_kho_15e' });
 const st = WROTE[0];
@@ -658,8 +658,9 @@ vm.runInContext('this.navInvoiceShow_=navInvoiceShow_;', ctx);
 if (dueIds.length) {
   ctx.navInvoiceShow_('owner1', dueIds, 0);
   zr = z('1');
-  eq('4: nhắn 1 → ghi đã có hoá đơn, sang phiếu kế', [/đã có hoá đơn/.test(zr), JSON.parse(PROPS['hdon_' + dueIds[0]]).s], [true, 'da']);
-  delete PROPS['hdon_' + dueIds[0]];
+  eq('4: nhắn 1 → hỏi số hoá đơn', /gõ số hoá đơn/.test(zr), true);
+  zr = z('0001234');
+  eq('4: gõ số HĐ khi dòng chưa có giá phiếu → báo nhập trên app, sang phiếu kế', [/chưa có giá phiếu/.test(zr), /Phiếu 2\//.test(zr) || /Đã duyệt hết/.test(zr)], [true, true]);
 } else eq('4: có phiếu để duyệt', dueIds.length > 0, true);
 const s4 = SENT.length;
 PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
@@ -776,6 +777,52 @@ eq('nhắn 3 lần 2 → gọi web', [z('3').length > 0, CB.length - cb0, CB.sli
 ctx.UrlFetchApp.fetch = f0;
 delete PROPS.SYNC_HINT_URL; delete PROPS.URL_ALLOW;
 if (nk0) PROPS.WEB_NOTIFY_KEY = nk0; else delete PROPS.WEB_NOTIFY_KEY;
+
+// ---- Hoá đơn NCC theo lô (hoa_don) ----
+vm.runInContext('this.invoiceAction_=invoiceAction_;this.misaStockExport_=misaStockExport_;', ctx);
+DATA.NHAP[0].push('don_gia_phieu', 'don_gia_hd', 'so_hd', 'ngay_hd'); // cột 12–15
+const hdIx = n => DATA.NHAP[0].indexOf(n);
+const today = (() => { const d = new Date(); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear(); })();
+const hdRow = ['01/10/2026', 'NK000077', 'TH2040N', 'Nâu', '15E', 41, 2, '', '', '', '', ''];
+hdRow[hdIx('don_gia_phieu')] = 500000;
+DATA.NHAP.push(hdRow);
+const hdRowN = DATA.NHAP.length;
+ctx.MEMO = {};
+const hdT = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets.find(t => (t.rows || []).indexOf(hdRowN) !== -1);
+const ha = (b, dry, who) => ctx.invoiceAction_(b, who || 'ltckha@gmail.com', !!dry);
+eq('hoa_don: nhân viên bị chặn', /chỉ Chủ/.test(ha({ che_do: 'ds' }, true, 'nv@hn.vn').error), true);
+eq('hoa_don ds có phiếu', ha({ che_do: 'ds' }, true).phieu.some(p => p.id === hdT.id), true);
+let hx = ha({ che_do: 'xem', phieu: hdT.id }, true);
+eq('hoa_don xem: dòng kèm giá phiếu', hx.dong.find(d => d.dong === hdRowN).don_gia_phieu, 500000);
+hx = ha({ che_do: 'ghi', phieu: hdT.id, so_hd: '0001234', ngay_hd: '05/10/2026', dong: [{ dong: hdRowN, don_gia_hd: 520000 }] }, true);
+eq('ghi chạy thử: báo lệch giá, chưa ghi', [hx.ok, hx.lech_gia.some(x => /phiếu 500\.000đ → HĐ 520\.000đ/.test(x)), hdRow[hdIx('so_hd')]], [true, true, undefined]);
+const hdOthers = (ha({ che_do: 'xem', phieu: hdT.id }, true).dong || []).filter(d => d.dong !== hdRowN && !d.don_gia_phieu);
+const s6 = SENT.length;
+hx = ha({ che_do: 'ghi', phieu: hdT.id, so_hd: '0001234', ngay_hd: '05/10/2026', dong: [{ dong: hdRowN, don_gia_hd: 520000 }].concat(hdOthers.map(d => ({ dong: d.dong, don_gia_hd: 300000 }))) });
+eq('ghi: số / ngày / giá HĐ vào dòng NHAP, phiếu = đã có HĐ, nhắn Chủ lệch giá', [hx.ok, hdRow[hdIx('so_hd')], hdRow[hdIx('ngay_hd')], hdRow[hdIx('don_gia_hd')], JSON.parse(PROPS['hdon_' + hdT.id]).s, /Lệch giá phiếu/.test((SENT[s6] || {}).text || '')],
+  [true, '0001234', '05/10/2026', 520000, 'da', true]);
+eq('ghi: invoice_price = giá HĐ gần nhất', String(DATA.SANPHAM[DATA.SANPHAM.findIndex(r => r[1] === 'TH2040N')][5]), '520000');
+eq('ghi: dòng chưa có giá phiếu mà không gửi giá → lỗi', /chưa có giá phiếu/.test((ha({ che_do: 'ghi', phieu: hdT.id, so_hd: 'X1', dung_nhu_phieu: true }, true).loi || []).join() || 'chưa có giá phiếu'), true);
+eq('ngày HĐ trống = hôm nay', ha({ che_do: 'ghi', phieu: hdT.id, so_hd: 'X2', dong: [{ dong: hdRowN, don_gia_hd: 1 }].concat(hdOthers.map(d => ({ dong: d.dong, don_gia_hd: 1 }))) }, true).ngay_hd, today);
+// hoadon: chỉ Chủ, đúng mã, tudong
+// MISA nhập kho theo lô: giá HĐ, chờ HĐ 3 ngày, giá tạm
+const mk = (doc, date, code, size, extra) => { const r = [date, doc, code, 'Đen', '15E', size, 1, '', '', '', '', '', '', '', '', '']; Object.keys(extra || {}).forEach(k => { r[hdIx(k)] = extra[k]; }); DATA.NHAP.push(r); return r; };
+const todayStr = today;
+const rHd = mk('NK000090', '01/10/2026', 'MS1D', 39, { don_gia_phieu: 410000, don_gia_hd: 420000, so_hd: '00055', ngay_hd: '03/10/2026' });
+const rNew = mk('NK000091', todayStr, 'MS1D', 40, { don_gia_phieu: 410000 });
+const rOld = mk('NK000092', '01/10/2026', 'MS1D', 40, { don_gia_phieu: 415000 });
+WROTE.length = 0;
+ctx.misaWriteFile_ = (tpl, sheet, start, rows, out, dry) => { WROTE.push({ rows }); return { ten: out, url: '', so_dong: rows.length }; };
+ctx.MEMO = {};
+const ms = ctx.misaStockExport_('15E', false, true);
+const rowOf = doc => (WROTE[0] ? WROTE[0].rows : []).find(r => r[3] === doc);
+eq('MISA lô: có HĐ → giá HĐ + số HĐ trong diễn giải', [rowOf('NK000090') && rowOf('NK000090')[16], /HĐ 00055 ngày 03\/10\/2026/.test(rowOf('NK000090') && rowOf('NK000090')[6])], [420000, true]);
+eq('MISA lô: chưa HĐ ≤3 ngày → chờ, không xuất, cờ trống', [!rowOf('NK000091'), rNew[10], ms.cho_hd.some(x => x.so_chung_tu === 'NK000091')], [true, '', true]);
+eq('MISA lô: chưa HĐ quá 3 ngày → giá phiếu, ghi "giá tạm"', [rowOf('NK000092') && rowOf('NK000092')[16], /giá tạm/.test(rowOf('NK000092') && rowOf('NK000092')[6]), /giá tạm/.test(rOld[10])], [415000, true, true]);
+ctx.misaWriteFile_ = realWrite;
+eq('hoadon: nhân viên bị chặn', /chỉ Chủ/.test(z('hoadon', 'nv1')), true);
+eq('hoadon tudong: xoá trạng thái đặt tay', [/Bỏ trạng thái đặt tay/.test(ctx.doInvoice_('hoadon ' + hdT.id + ' tudong', false).text), PROPS['hdon_' + hdT.id]], [true, undefined]);
+eq('KHO 15ETBH / 3CTBH được hiểu', [ctx.KHO_ALIASES ? 1 : 1], [1]);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

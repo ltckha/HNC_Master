@@ -16,7 +16,7 @@ const ZALO_API = 'https://bot-api.zapps.me/bot';
 const TZ = 'Asia/Ho_Chi_Minh';
 
 // Bí danh kho trong tin nhắn → mã kho của HNC_Control_Center
-const KHO_ALIASES = { 'YEN': 'Y3C', 'Y3C': 'Y3C', '3C': 'Y3C', 'TBH': '15E', '15E': '15E' };
+const KHO_ALIASES = { 'YEN': 'Y3C', 'Y3C': 'Y3C', '3C': 'Y3C', '3CTBH': 'Y3C', 'TBH': '15E', '15E': '15E', '15ETBH': '15E' };
 const KHO_SHEETS = { 'Y3C': 'KHOY3C', '15E': 'KHO15E' };
 
 // Dòng NHAP từ Zalo: đánh dấu để HNC bỏ qua khi xuất web / tem / MISA; kho_sync để trống
@@ -189,7 +189,7 @@ function runOne_(text, dryRun, chatId) {
     case ACTIONS.HELP: res = { text: HELP_TEXT + '\n\nNhắn số: 9 Menu' }; break;
     case ACTIONS.CHECK: res = !p.code && !p.baseCode ? { text: '🤔 Mình chưa hiểu tin này.\n\n' + navMenu_(chatId) } : doCheck_(p); break;
     case ACTIONS.REPORT: res = doReport_(p); break;
-    case ACTIONS.INVOICE: res = doInvoice_(p.text, dryRun); break;
+    case ACTIONS.INVOICE: res = navIsOwner_(chatId) ? doInvoice_(p.text, dryRun) : { text: '🔒 Hoá đơn NCC chỉ Chủ xem / ghi.' }; break;
     case ACTIONS.UNDO: res = String(text || '').trim().split(/\s+/).length > 1 ? saleLineCancelAsk_(text, chatId) : doUndo_(chatId, dryRun); break;
     case ACTIONS.MOVE_LOC: res = doMoveLocation_(p, dryRun); break;
     case ACTIONS.TRANSFER: res = doTransfer_(p, dryRun); break;
@@ -594,6 +594,7 @@ function navHandle_(text, chatId, dryRun) {
   if (!/^\d$/.test(t)) {
     const a = navGetAsk_(chatId);
     if (a && a.k === 'check') navClearAsk_(chatId); // gõ mã sau "1 Kiểm hàng" → chạy kiểm hàng như thường
+    if (a && a.k === 'hdso') return navInvoiceNumber_(text, chatId, a.d, dryRun); // số hoá đơn sau menu 4 → 1
     return null;
   }
   const n = Number(t);
@@ -607,6 +608,7 @@ function navHandle_(text, chatId, dryRun) {
     case 'report': return navReport_(n, chatId);
     case 'pn': return navReceiptStep_(n, chatId, a.d);
     case 'hd': return navInvoiceStep_(n, chatId, a.d, dryRun);
+    case 'hdso': return { text: navMenu_(chatId) };
     case 'bs': return n === 1 ? { text: '🔗 Bổ sung trên web: ' + webOrigin_() + '/admin (Tổng quan → Mã cần bổ sung thông tin)\nNhắn số: 9 Menu' } : { text: navMenu_(chatId) };
     case 'huyban': return saleLineCancelPick_(n, chatId, a.d, dryRun);
     case 'after':
@@ -832,20 +834,45 @@ function navInvoiceShow_(chatId, ids, i) {
   if (!t) return navInvoiceShow_(chatId, ids, i + 1);
   navSetAsk_(chatId, 'hd', { ids, i });
   return { text: '🧾 Phiếu ' + (i + 1) + '/' + ids.length + ': ' + t.id + ' · ' + t.supplier + ' · ' + t.qty + ' sp · ' + invoiceAgeDays_(t) + ' ngày\n\n' +
-    invoiceMessage_(t) + '\n\nNhắn số: 1 Đã có hoá đơn · 2 Không lấy · 3 Chưa (nhắc lại) · 0 Để sau · 9 Menu' };
+    invoiceMessage_(t) + '\n\nNhắn số: 1 Có HĐ, giá đúng như phiếu (gõ số HĐ) · 2 Không lấy · 3 Chưa (nhắc lại) · 4 Giá khác phiếu → mở app · 0 Để sau · 9 Menu' };
 }
 
 function navInvoiceStep_(n, chatId, d, dryRun) {
   const ids = d.ids || [], i = d.i || 0, id = ids[i];
-  if ([1, 2, 3].indexOf(n) === -1 || !id) return { text: navMenu_(chatId) };
-  const st = { 1: 'da', 2: 'khong', 3: 'chua' }[n];
-  if (!dryRun && st !== 'chua') { // 3 = chưa: không ghi gì (ghi tay "chua" sẽ chặn tự nhận hoá đơn từ thư mục Drive)
+  if ([1, 2, 3, 4].indexOf(n) === -1 || !id) return { text: navMenu_(chatId) };
+  if (n === 1) { // nhập số hoá đơn bằng chữ (dữ liệu thật), giá lấy đúng như phiếu
+    navSetAsk_(chatId, 'hdso', { ids, i });
+    return { text: '🧾 ' + id + ': gõ số hoá đơn (kèm ngày nếu khác hôm nay, vd: 0001234 15/10)\nNhắn số: ' + NAV_FOOT };
+  }
+  MEMO = {};
+  if (n === 4) {
+    const next = navInvoiceShow_(chatId, ids, i + 1);
+    return { text: '🔗 Nhập giá từng dòng trên app (Kho → Hoá đơn NCC): ' + webOrigin_() + '/admin/app\n\n' + next.text };
+  }
+  const st = { 2: 'khong', 3: 'chua' }[n];
+  if (!dryRun && st === 'khong') { // 3 = chưa: không ghi gì (ghi tay "chua" sẽ chặn tự nhận hoá đơn từ thư mục Drive)
     PropertiesService.getScriptProperties().setProperty('hdon_' + id, JSON.stringify({ s: st, at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') }));
     CacheService.getScriptCache().remove('nav_counts');
   }
+  const next = navInvoiceShow_(chatId, ids, i + 1);
+  return { text: '🧾 ' + id + ': ' + ({ khong: '➖ không lấy hoá đơn', chua: '⏳ chưa có, tuần sau nhắc lại' })[st] + '\n\n' + next.text };
+}
+
+/** Chủ gõ số hoá đơn sau "1 Có HĐ" → ghi HĐ giá đúng như phiếu, sang phiếu kế. */
+function navInvoiceNumber_(text, chatId, d, dryRun) {
+  const ids = d.ids || [], i = d.i || 0, id = ids[i];
+  const m = String(text).trim().match(/^([A-Za-z0-9\/\-.]{1,30})(?:\s+(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?))?$/);
+  if (!m) return { text: '❓ Gõ số hoá đơn (vd 0001234 hoặc 0001234 15/10). Nhắn số: ' + NAV_FOOT };
+  let ngay = m[2] || '';
+  if (ngay && ngay.split(/[\/\-.]/).length === 2) ngay += '/' + Utilities.formatDate(new Date(), TZ, 'yyyy');
+  const r = invoiceAction_({ che_do: 'ghi', phieu: id, so_hd: m[1], ngay_hd: ngay, dung_nhu_phieu: true }, ownerEmails_()[0], dryRun);
   MEMO = {};
   const next = navInvoiceShow_(chatId, ids, i + 1);
-  return { text: '🧾 ' + id + ': ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không lấy hoá đơn', chua: '⏳ chưa có, tuần sau nhắc lại' })[st] + '\n\n' + next.text };
+  if (!r.ok) {
+    return { text: '⚠️ ' + id + ': ' + r.error + (r.loi ? ' — ' + r.loi.slice(0, 3).join('; ') : '') + '\n→ nhập giá trên app: ' + webOrigin_() + '/admin/app\n\n' + next.text };
+  }
+  return { text: '✅ ' + id + ': HĐ ' + r.so_hd + ' ngày ' + r.ngay_hd + ', ' + r.so_dong + ' dòng, giá như phiếu' + (r.lech_gia.length ? ' (lệch: ' + r.lech_gia.join('; ') + ')' : '') +
+    '\n\n' + next.text, touched: dryRun ? [] : ['NHAP', 'SANPHAM'] };
 }
 
 // =====================================================================
@@ -1471,7 +1498,8 @@ function handleStock_(body, dryRun) {
   if (PN_ACTIONS.indexOf(action) !== -1) return handleReceipt_(action, body, dryRun);
   if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
   if (action === 'xuat_misa') return handleMisaExport_(body, seller, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa']).join(', ') };
+  if (action === 'hoa_don') return invoiceAction_(body, seller, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -1929,6 +1957,7 @@ function receiptConfirm_(body, nguoi, dryRun) {
       khoRows.forEach(k => ops.push(appendKhoRow_(k)));
       if (ops.length) MEMO = { __pnx: MEMO.__pnx }; // đọc lại SANPHAM / KHO sau khi thêm dòng
       lines.forEach((ln, i) => {
+        CTX.donGiaPhieu = (d.dong.find(x => x.dong === ln.src) || {}).don_gia || '';
         const r = stockLine_('nhap', {}, ln, i, false);
         r.result.dong_phieu = ln.src;
         out.push(r.result);
@@ -2815,6 +2844,7 @@ function testSyncHint() {
 // =====================================================================
 
 const MISA_LOAI = ['danh_muc', 'nhap_kho_15e', 'nhap_kho_3c'];
+const MISA_WAIT_DAYS = 3; // chưa có hoá đơn: chờ 3 ngày rồi mới xuất "giá tạm" (anh Kha 17/10)
 const SYSTEM_FOLDER_DEFAULT = '1rZ_ynNNKLXfviqXBlnQyMYQcJYPPeok4'; // My Drive/HNC/He_thong (theo ID; đổi bằng SYSTEM_FOLDER_ID)
 const MISA_STOCK_STATUS_COLS = ['misa_stock', 'misa_stock_y3c', 'misa_stock_15e']; // như main.py STATUS_COLUMNS[8]
 const MISA_CAREER_NEW = '101-Hoạt động bán buôn, bán lẻ các loại hàng hóa (trừ giá trị hàng hóa đại lý bán đúng giá hưởng hoa hồng);';
@@ -3023,8 +3053,9 @@ function misaStockExport_(kho, dry, flags) {
   }
   const sups = subSuppliers_();
   const now = misaNow_();
-  const statuses = [], canhBao = [], boQua = [], rows = [];
+  const statuses = [], canhBao = [], boQua = [], rows = [], choHd = {};
   const v = (row, n) => (c[n] === undefined ? '' : row[c[n]]);
+  const todayKey = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   for (let r = 1; r < nh.length; r++) {
     const row = nh[r];
     const code = String(v(row, 'product_code') || '').trim();
@@ -3043,7 +3074,20 @@ function misaStockExport_(kho, dry, flags) {
     const d = v(row, 'Ngày chứng từ (*)') || v(row, 'Ngày');
     const docDate = d instanceof Date ? Utilities.formatDate(d, TZ, 'dd/MM/yyyy') : String(d || '').trim();
     const qty = Number(String(v(row, 'Số lượng (*)') || v(row, 'item_quantity') || 0).replace(',', '.')) || 0;
-    const price = p ? (p.inv > 0 ? p.inv : p.pur) : 0;
+    // Giá theo lô (anh Kha 17/10): don_gia_hd → don_gia_phieu → giá theo mã (invoice_price, rồi purchase_price) = "giá cũ"
+    const soHd = String(v(row, 'so_hd') || '').trim();
+    const giaHd = moneyValue_(v(row, 'don_gia_hd')), giaPhieu = moneyValue_(v(row, 'don_gia_phieu'));
+    const lotPrice = giaHd || giaPhieu;
+    const price = lotPrice || (p ? (p.inv > 0 ? p.inv : p.pur) : 0);
+    // Chờ hoá đơn: chưa có số HĐ thì đợi; quá MISA_WAIT_DAYS ngày mới xuất "giá tạm"
+    const dk = dateKey_(d);
+    const age = dk ? Math.round((Date.parse(todayKey) - Date.parse(dk)) / 86400000) : 99;
+    if (!soHd && age <= MISA_WAIT_DAYS) {
+      const k = docNo + ' ' + docDate;
+      choHd[k] = (choHd[k] || 0) + 1;
+      continue;
+    }
+    const tags = [soHd ? '' : 'giá tạm', lotPrice ? '' : 'giá cũ theo mã'].filter(Boolean);
     const sup = p && p.supplier ? sups[p.supplier.toLowerCase()] : null;
     const reasons = [];
     if (!docNo) reasons.push('Thiếu số chứng từ');
@@ -3054,7 +3098,7 @@ function misaStockExport_(kho, dry, flags) {
     if (!sup) reasons.push('Thiếu NCC');
     if (!rowKho) reasons.push('Thiếu kho');
     if (reasons.length) { statuses.push({ row: r + 1, value: reasons.join(', ') }); canhBao.push('Dòng ' + (r + 1) + ' ' + sku + ': ' + reasons.join(', ')); continue; }
-    statuses.push({ row: r + 1, value: 'Done - ' + now });
+    statuses.push({ row: r + 1, value: 'Done - ' + now + (tags.length ? ' · ' + tags.join(' · ') : '') });
     const amount = qty * price;
     const ckRate = parsePercent_(sup.ck);
     const ck = Math.round(amount * ckRate * 100) / 100;
@@ -3062,14 +3106,18 @@ function misaStockExport_(kho, dry, flags) {
     const tax = Math.round((amount - ck) * vatRate * 100) / 100;
     const o = {};
     o[1] = 'Nhập kho mua hàng'; o[2] = docDate; o[3] = docNo; o[4] = sup.ma_dt; o[5] = sup.ten_dt;
-    o[6] = sup.ten_dt ? 'Nhập kho mua hàng từ ' + sup.ten_dt : 'Nhập kho mua hàng'; o[7] = 'Chưa thanh toán'; o[8] = sku;
+    o[6] = (sup.ten_dt ? 'Nhập kho mua hàng từ ' + sup.ten_dt : 'Nhập kho mua hàng') + (soHd ? ' · HĐ ' + soHd + (v(row, 'ngay_hd') ? ' ngày ' + (v(row, 'ngay_hd') instanceof Date ? Utilities.formatDate(v(row, 'ngay_hd'), TZ, 'dd/MM/yyyy') : v(row, 'ngay_hd')) : '') : '') +
+      (tags.length ? ' (' + tags.join(', ') + ')' : ''); // mẫu MISA không có cột Số hoá đơn → ghi vào Diễn giải
+    o[7] = 'Chưa thanh toán'; o[8] = sku;
     o[12] = MISA_STOCK_KHO[kho].misa; o[14] = p.unit; o[15] = qty; o[16] = price; o[17] = amount; o[18] = ckRate; o[19] = ck;
     o[20] = vatRate; o[21] = tax; o[22] = amount - ck + tax;
     rows.push(o);
   }
   const files = rows.length ? [misaWriteFile_(MISA_STOCK_KHO[kho].tpl, 'Nhap kho', 9, rows, MISA_STOCK_KHO[kho].out + misaStamp_() + '.xlsx', dry)] : [];
   if (!dry && flags !== false && statuses.length) misaWriteStatus_('NHAP', stCol, statuses);
-  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: rows.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['NHAP'] : [] };
+  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: rows.length, so_loi: canhBao.length,
+    cho_hd: Object.keys(choHd).map(k => ({ so_chung_tu: k.split(' ')[0], ngay: k.split(' ').slice(1).join(' '), so_dong: choHd[k] })),
+    _sync: !dry && statuses.length ? ['NHAP'] : [] };
 }
 
 // ---- Sửa xlsx bằng XML (Apps Script không có openpyxl): giữ nguyên mẫu, xoá dòng mẫu từ startRow, chèn dòng mới ----
@@ -3326,15 +3374,22 @@ function invoiceTickets_() {
     if (qty <= 0) continue;
     const p = prod[code] || { supplier: '', price: 0, name: '', parent: code.replace(/[A-Z]$/, '') };
     const so = String(nh[r][col['Số chứng từ (*)']] || '').trim();
+    // Nhập lẻ qua Zalo không số NK → không đòi hoá đơn (anh Kha 17/10)
+    const mark = col.misa_stock !== undefined ? String(nh[r][col.misa_stock] || '').trim() : '';
+    if (mark === NHAP_ZALO_MARK && !/^NK\d+$/i.test(so)) continue;
     const pn = receiptIndex_(so) || receiptByNhap_(kho, so); // nhập từ phiếu NCC → NCC / số phiếu theo phiếu
     const supplier = (pn && pn.ncc) || p.supplier || NO_SUPPLIER;
     const key = date + '|' + supplier + '|' + kho;
     const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {}, ncc_docs: [] });
     if (pn && pn.so && t.ncc_docs.indexOf(pn.so) === -1) t.ncc_docs.push(pn.so);
-    const line = t.lines[code] || (t.lines[code] = { code, parent: p.parent || code, name: p.name, price: p.price, qty: 0 });
+    // Giá theo lô: don_gia_hd → don_gia_phieu → giá theo mã
+    const rowPrice = (col.don_gia_hd !== undefined && moneyValue_(nh[r][col.don_gia_hd])) || (col.don_gia_phieu !== undefined && moneyValue_(nh[r][col.don_gia_phieu])) || p.price;
+    const line = t.lines[code] || (t.lines[code] = { code, parent: p.parent || code, name: p.name, price: rowPrice, qty: 0 });
     line.qty += qty;
     t.qty += qty;
-    t.amount += qty * p.price;
+    t.amount += qty * rowPrice;
+    (t.rows = t.rows || []).push(r + 1);
+    if (col.so_hd !== undefined && String(nh[r][col.so_hd] || '').trim()) t.so_hd = String(nh[r][col.so_hd]).trim();
   }
 
   const sup = supplierInfo_();
@@ -3427,6 +3482,7 @@ function invoiceStatus_(tickets) {
     let manual = null;
     try { manual = JSON.parse(props.getProperty('hdon_' + t.id) || 'null'); } catch (e) { /* bỏ qua */ }
     if (manual && manual.s) { t.status = manual.s; t.source = 'tay ' + (manual.at || ''); }
+    else if (t.so_hd) { t.status = 'da'; t.source = 'HĐ ' + t.so_hd; }
     else if (auto[t.id]) { t.status = 'da'; t.source = 'thư mục ' + auto[t.id]; }
     else { t.status = 'chua'; t.source = ''; }
   });
@@ -3442,6 +3498,10 @@ function invoiceAgeDays_(t) {
 function invoiceMessage_(t) {
   const raw = PropertiesService.getScriptProperties().getProperty('HKD_' + t.kho) || '';
   const parts = raw.split('|').map(x => x.trim());
+  // Chặn tin xin hoá đơn khi thiếu MST hộ (MST hộ = CCCD 12 số hoặc MST 10 số) — anh Kha 17/10
+  if (!/^\d{10}(\d{2})?(-\d{3})?$/.test(parts[1] || '')) {
+    return '⛔ Chưa gửi được tin xin hoá đơn: thiếu MST hộ kho ' + t.kho + ' (Script Property HKD_' + t.kho + ' = tên | MST | địa chỉ).';
+  }
   const d = t.date.split('-');
   const lines = [
     'Chào ' + (t.supplier === NO_SUPPLIER ? 'anh/chị' : t.supplier) + ',',
@@ -3491,10 +3551,20 @@ function doInvoice_(text, dryRun) {
     return { text: out.join('\n') + note };
   }
 
-  const key = toks[0].toUpperCase();
-  const matches = st.tickets.filter(t => t.id.indexOf(key) === 0);
-  if (!matches.length) return { text: '❓ Không có phiếu nào bắt đầu bằng "' + key + '". Nhắn "hoadon" để xem danh sách mã phiếu.' };
-  const stTok = toks[1] || '';
+  // Đúng mã phiếu (không khớp đầu mã — "hoadon 26 da" từng đánh dấu cả năm); nhiều mã trước chữ trạng thái = 1 HĐ cho nhiều phiếu
+  const statusRe = /^(da|roi|xong|ok|khong|ko|k|chua|tudong)$/;
+  const stIdx = toks.findIndex(x => statusRe.test(x));
+  const ids = (stIdx === -1 ? toks : toks.slice(0, stIdx)).map(x => x.toUpperCase());
+  const stTok = stIdx === -1 ? '' : toks[stIdx];
+  const matches = st.tickets.filter(t => ids.indexOf(t.id.toUpperCase()) !== -1);
+  if (!matches.length) {
+    const near = st.tickets.filter(t => ids.some(k => t.id.indexOf(k) === 0)).slice(0, 8).map(t => t.id);
+    return { text: '❓ Không có phiếu đúng mã "' + ids.join(' ') + '".' + (near.length ? ' Có thể là: ' + near.join(', ') : '') + '\nNhắn số: 4 Duyệt phiếu · 9 Menu' };
+  }
+  if (stTok === 'tudong') {
+    if (!dryRun) matches.forEach(t => PropertiesService.getScriptProperties().deleteProperty('hdon_' + t.id));
+    return { text: '🧾 Bỏ trạng thái đặt tay, bot tự nhận lại theo thư mục hoá đơn: ' + matches.map(t => t.id).join(', ') };
+  }
   const newStatus = /^(da|roi|xong|ok)$/.test(stTok) ? 'da' : /^(khong|ko|k)$/.test(stTok) ? 'khong' : /^chua$/.test(stTok) ? 'chua' : '';
   if (!newStatus) {
     return { text: matches.slice(0, 3).map(t => '🧾 ' + t.id + ' — ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không cần', chua: '⏳ chưa có' })[t.status] +
@@ -3506,6 +3576,123 @@ function doInvoice_(text, dryRun) {
     matches.forEach(t => props.setProperty('hdon_' + t.id, JSON.stringify({ s: newStatus, at })));
   }
   return { text: '🧾 Đã ghi ' + ({ da: '✅ đã có hoá đơn', khong: '➖ không cần hoá đơn', chua: '⏳ chưa có hoá đơn' })[newStatus] + ': ' + matches.map(t => t.id).join(', ') };
+}
+
+// ---- Hoá đơn NCC theo lô (anh Kha "làm" 17/10): ghi số / ngày / giá hoá đơn vào từng dòng NHAP ----
+// POST ?stock_key {action:"hoa_don", nguoi (Chủ), che_do: "ds" | "xem" | "ghi", ...}
+//   ds  → {phieu:[{id, ngay, ncc, kho, sl, trang_thai, so_hd, tuoi_ngay}]} (phiếu từ INVOICE_START)
+//   xem {phieu} → {phieu:{…}, dong:[{dong, ma, size, sl, don_gia_phieu, don_gia_hd, so_hd, ngay_hd, misa}]}
+//   ghi {phieu: id | [id…] (1 HĐ nhiều phiếu), so_hd, ngay_hd?, dung_nhu_phieu?: true, dong?: [{dong, don_gia_hd}]}
+//       → ghi don_gia_hd / so_hd / ngay_hd từng dòng, phiếu = đã có HĐ, SANPHAM.invoice_price = giá HĐ mới nhất; lệch giá phiếu → nhắn Chủ.
+const NHAP_HD_COLS = ['don_gia_phieu', 'don_gia_hd', 'so_hd', 'ngay_hd'];
+
+function ownerEmails_() {
+  return String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(',')).split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+}
+
+function invoiceAction_(body, nguoi, dryRun) {
+  const mode = String(body.che_do || '').trim();
+  const fail = msg => ({ ok: false, action: 'hoa_don', che_do: mode, error: msg });
+  if (ownerEmails_().indexOf(String(nguoi || '').toLowerCase()) === -1) return fail('chỉ Chủ xem / ghi hoá đơn NCC');
+  MEMO = {};
+  const tickets = invoiceStatus_(invoiceTickets_()).tickets;
+  if (mode === 'ds') {
+    return { ok: true, action: 'hoa_don', che_do: 'ds', phieu: tickets.filter(t => t.date >= INVOICE_START).map(t => ({ id: t.id, ngay: t.date, ncc: t.supplier, kho: t.kho,
+      sl: t.qty, trang_thai: t.status, so_hd: t.so_hd || '', tuoi_ngay: invoiceAgeDays_(t), ncc_docs: t.ncc_docs })) };
+  }
+  if (mode === 'xem') {
+    const t = tickets.find(x => x.id === String(body.phieu || '').trim());
+    if (!t) return fail('không có phiếu ' + body.phieu);
+    return { ok: true, action: 'hoa_don', che_do: 'xem', phieu: { id: t.id, ngay: t.date, ncc: t.supplier, kho: t.kho, sl: t.qty, trang_thai: t.status, ncc_docs: t.ncc_docs },
+      dong: invoiceRows_(t) };
+  }
+  if (mode !== 'ghi') return fail('che_do phải là ds, xem hoặc ghi');
+  const ids = (Array.isArray(body.phieu) ? body.phieu : [body.phieu]).map(x => String(x || '').trim()).filter(Boolean);
+  const list = ids.map(id => tickets.find(x => x.id === id));
+  if (!ids.length || list.some(x => !x)) return fail('phiếu không có: ' + ids.filter((id, i) => !list[i]).join(', '));
+  const soHd = String(body.so_hd || '').replace(/\s+/g, '').trim();
+  if (!/^[A-Za-z0-9\/\-.]{1,30}$/.test(soHd)) return fail('so_hd không hợp lệ');
+  const ngayHd = invoiceDate_(body.ngay_hd);
+  if (!ngayHd) return fail('ngay_hd phải dạng dd/mm/yyyy (bỏ trống = hôm nay)');
+  const override = {};
+  (Array.isArray(body.dong) ? body.dong : []).forEach(x => { override[Number(x.dong)] = Math.round(moneyValue_(x.don_gia_hd)); });
+  const rows = [].concat.apply([], list.map(t => invoiceRows_(t)));
+  const errs = [], lech = [];
+  rows.forEach(r => {
+    const price = override[r.dong] !== undefined ? override[r.dong] : (body.dung_nhu_phieu === true ? r.don_gia_phieu : (r.don_gia_hd || r.don_gia_phieu));
+    if (!(price > 0)) errs.push('dòng ' + r.dong + ' ' + r.ma + (r.size || '') + ': chưa có giá phiếu, cần don_gia_hd');
+    r.moi = price;
+    if (r.don_gia_phieu && price && price !== r.don_gia_phieu) lech.push(r.ma + (r.size || '') + ': phiếu ' + money_(r.don_gia_phieu) + ' → HĐ ' + money_(price));
+  });
+  Object.keys(override).forEach(k => { if (!rows.some(r => r.dong === Number(k))) errs.push('dòng ' + k + ' không thuộc phiếu'); });
+  if (errs.length) return Object.assign(fail('Có lỗi, chưa ghi gì'), { loi: errs });
+  const out = { ok: true, action: 'hoa_don', che_do: 'ghi', dry_run: dryRun, phieu: ids, so_dong: rows.length, so_hd: soHd, ngay_hd: ngayHd, lech_gia: lech };
+  if (dryRun) return out;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet_('NHAP');
+    const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
+    requireColumns_('NHAP', c, NHAP_HD_COLS);
+    rows.forEach(r => {
+      sheet.getRange(r.dong, c.don_gia_hd + 1).setValue(r.moi);
+      sheet.getRange(r.dong, c.so_hd + 1).setValue(soHd);
+      sheet.getRange(r.dong, c.ngay_hd + 1).setValue(ngayHd);
+    });
+    // SANPHAM.invoice_price = giá hoá đơn gần nhất
+    const sp = getSheet_('SANPHAM');
+    const spv = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let i = 0; i < Math.min(2, spv.length); i++) if (spv[i].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = i; break; }
+    const sc = headerMap_(spv[hr]);
+    if (sc.invoice_price !== undefined) {
+      const latest = {};
+      rows.forEach(r => { latest[r.ma] = r.moi; });
+      for (let i = hr + 1; i < spv.length; i++) {
+        const code = String(spv[i][sc.product_code] || '').trim().toUpperCase();
+        if (latest[code] && moneyValue_(spv[i][sc.invoice_price]) !== latest[code]) sp.getRange(i + 1, sc.invoice_price + 1).setValue(latest[code]);
+      }
+    }
+    const props = PropertiesService.getScriptProperties();
+    list.forEach(t => props.setProperty('hdon_' + t.id, JSON.stringify({ s: 'da', at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'), so_hd: soHd })));
+    CacheService.getScriptCache().remove('nav_counts');
+    // Đã xuất MISA giá tạm / giá cũ mà HĐ khác → nhắn Chủ sửa trên MISA
+    const sua = rows.filter(r => /^Done/.test(r.misa) && /giá tạm|giá cũ/.test(r.misa) && r.moi !== r.gia_da_xuat).map(r => r.ma + (r.size || '') + ' (' + money_(r.moi) + ')');
+    if (lech.length || sua.length) {
+      syncAlertOwner_('🧾 HĐ ' + soHd + ' (' + ids.join(', ') + ')' + (lech.length ? '\nLệch giá phiếu: ' + lech.join('; ') : '') +
+        (sua.length ? '\nĐã xuất MISA giá tạm → sửa đơn giá trên MISA: ' + sua.join('; ') : '') + '\nNhắn số: 9 Menu');
+      out.bao_chu = true;
+    }
+    out._sync = ['NHAP', 'SANPHAM'];
+    return out;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Dòng NHAP của 1 phiếu hoá đơn kèm giá phiếu / HĐ. */
+function invoiceRows_(t) {
+  const nh = sheetValues_('NHAP');
+  const c = headerMap_(nh[0]);
+  const v = (row, n) => (c[n] === undefined ? '' : row[c[n]]);
+  return (t.rows || []).map(rn => {
+    const row = nh[rn - 1];
+    const misa = String(v(row, 'misa_stock') || '').trim();
+    return { dong: rn, ma: String(v(row, 'product_code') || '').trim().toUpperCase(), size: normSize_(v(row, 'item_size')), sl: Number(v(row, 'Số lượng (*)')) || 0,
+      don_gia_phieu: moneyValue_(v(row, 'don_gia_phieu')), don_gia_hd: moneyValue_(v(row, 'don_gia_hd')), so_hd: String(v(row, 'so_hd') || '').trim(),
+      ngay_hd: v(row, 'ngay_hd') instanceof Date ? Utilities.formatDate(v(row, 'ngay_hd'), TZ, 'dd/MM/yyyy') : String(v(row, 'ngay_hd') || ''), misa,
+      gia_da_xuat: moneyValue_(v(row, 'don_gia_phieu')) };
+  });
+}
+
+/** dd/mm/yyyy | yyyy-mm-dd | trống (hôm nay) → dd/MM/yyyy; sai → ''. */
+function invoiceDate_(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  if (!s) return Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy');
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) return ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + (m[3].length === 2 ? '20' + m[3] : m[3]);
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
 }
 
 /** Trigger sáng thứ Hai: nhắc anh các phiếu quá INVOICE_REMIND_DAYS ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn. */
@@ -3715,10 +3902,12 @@ function appendNhap_(code, color, size, qty, kho, isReturn) {
     NHAP_MARK_COLUMNS.forEach(c => { values[c] = isReturn ? NHAP_RETURN_MARK : NHAP_ZALO_MARK; });
   }
   // FSKU của NHAP là công thức từng dòng: =CONCATENATE(KHO; product_code; item_size)
+  // don_gia_phieu: đơn giá trên phiếu NCC (nhập từ phiếu) — giá theo từng lô cho MISA (anh Kha 17/10)
   return appendByHeader_('NHAP', values, (row, col) => {
     const a1 = c => columnLetter_(col[c] + 1) + row;
     return { 'FSKU': '=CONCATENATE(' + a1('KHO') + '; ' + a1('product_code') + '; ' + a1('item_size') + ')' };
-  }, { product_code: code, item_size: size, 'Số lượng (*)': qty, KHO: kho });
+  }, { product_code: code, item_size: size, 'Số lượng (*)': qty, KHO: kho },
+  CTX.receiptId && !isReturn && CTX.donGiaPhieu ? { don_gia_phieu: CTX.donGiaPhieu } : null);
 }
 
 /**
