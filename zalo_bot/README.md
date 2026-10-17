@@ -98,7 +98,7 @@ Chuyển hàng giữa 2 hộ (15E = Hải Nancy, Y3C = Yen Leather) không xuấ
 Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký gửi). Gửi tới Script Property `MISA_CHAT_IDS` (nhiều chat cách nhau dấu phẩy), mặc định `OWNER_CHAT_ID`. Tên hộ lấy từ `HKD_15E` / `HKD_Y3C`.
 - **Đơn khách lấy hoá đơn** (`lay_hoa_don` trong phiếu bán): gửi ngay 1 tin / hộ: hộ, ngày, số CT (`ticket_id`), kênh, người bán, khách, công ty, MST, địa chỉ, email; từng dòng mã MISA (mã + size, như danh mục con HNC xuất), tên, ĐVT, SL × đơn giá = thành tiền; thuế (GTGT 1%, TNCN 0,5% theo danh mục MISA); tổng, thanh toán, ship.
 - **Còn lại**: trigger `dailyMisaSummary` 21:00 gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
-- Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập MISA cuối ngày: chờ mẫu nhập khẩu bán hàng từ MISA eShop.
+- Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập đơn MISA (mẫu `HNC_Templates/Nhap_khau_don_hang.xlsx`) do web làm vì web giữ thông tin khách / hoá đơn / thanh toán; bot chỉ soạn tin Zalo.
 
 ## Xuất file MISA qua bot (web /admin/san, anh Kha "làm" 17/10)
 
