@@ -614,6 +614,7 @@ function navHandle_(text, chatId, dryRun) {
       if ([1, 2, 3].indexOf(n) !== -1 && (a.d.ban || []).length) return navSetPayment_(n, chatId, a.d.ban, dryRun);
       return { text: navMenu_(chatId) };
     case 'huy6': return navCancelPick_(n, chatId, a.d, dryRun);
+    case 'web': return navWebPick_(n, chatId, a.d, dryRun);
     case 'undo1':
       if (n !== 1) return { text: navMenu_(chatId) };
       navClearAsk_(chatId);
@@ -2543,6 +2544,8 @@ function handleNotify_(body, owner, props) {
   const text = String(body.text || '').trim();
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(orderId)) return { ok: false, error: 'order_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!text) return { ok: false, order_id: orderId, error: 'text trống' };
+  const opt = notifyOptions_(body);
+  if (opt.error) return { ok: false, order_id: orderId, error: 'options: ' + opt.error };
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -2550,14 +2553,98 @@ function handleNotify_(body, owner, props) {
     const key = 'notify_' + orderId;
     if (props.getProperty(key)) return { ok: true, duplicate: true, order_id: orderId };
     const truncated = text.length > NOTIFY_MAX_CHARS;
-    const msg = (truncated ? text.slice(0, NOTIFY_MAX_CHARS) + '\n…(đã cắt bớt)' : text) + '\nNhắn số: 9 Menu';
+    const foot = opt.list.length ? 'Nhắn số: ' + opt.list.map(o => o.so + ' ' + o.nhan).join(' · ') + ' · ' + NAV_FOOT : 'Nhắn số: 9 Menu';
+    const msg = (truncated ? text.slice(0, NOTIFY_MAX_CHARS) + '\n…(đã cắt bớt)' : text) + '\n' + foot;
     if (!sendMessage_(owner, msg)) return { ok: false, order_id: orderId, error: 'Zalo không nhận tin (xem Nhật ký thực thi)' };
     props.setProperty(key, JSON.stringify({ t: Date.now() }));
     pruneTickets_(props, 'notify_');
-    return { ok: true, order_id: orderId, truncated };
+    if (opt.list.length) navSetAsk_(owner, 'web', { order_id: orderId, options: opt.list, exp: Date.now() + opt.han * 60000 });
+    return { ok: true, order_id: orderId, truncated, so_lua_chon: opt.list.length };
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---- Câu hỏi mở do web gửi qua notify (luật 14, anh Kha 17/10) ----
+// options 1–8: {so, nhan ≤40, hanh_dong: url | callback | ghi_nhan, url?, callback?: {loai, id, data?}, xac_nhan_2_lan?}; han_phut 1–720.
+// url: https, tên miền web (gốc SYNC_HINT_URL) hoặc trong Script Property URL_ALLOW (phẩy). callback: POST WEB_CALLBACK_URL
+// (mặc định <gốc web>/api/bot-callback), header x-bot-key: BOT_CALLBACK_KEY.
+const NOTIFY_MAX_OPTIONS = 8;
+
+function urlAllowed_(u) {
+  const m = String(u || '').match(/^https:\/\/([^\/?#:]+)(?:[\/?#:]|$)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  const origin = webOrigin_().replace(/^https?:\/\//, '').toLowerCase();
+  const extra = String(PropertiesService.getScriptProperties().getProperty('URL_ALLOW') || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  return [origin].concat(extra).filter(Boolean).some(h => host === h || host.endsWith('.' + h));
+}
+
+/** Kiểm options của notify → { list, han } hoặc { error }. */
+function notifyOptions_(body) {
+  const raw = body.options;
+  const out = { list: [], han: 720 };
+  if (raw === undefined || raw === null) return out;
+  if (!Array.isArray(raw) || !raw.length || raw.length > NOTIFY_MAX_OPTIONS) return { error: 'phải là mảng 1–' + NOTIFY_MAX_OPTIONS + ' lựa chọn' };
+  if (body.han_phut !== undefined) {
+    const h = Number(body.han_phut);
+    if (!Number.isInteger(h) || h < 1 || h > 720) return { error: 'han_phut phải 1–720' };
+    out.han = h;
+  }
+  const seen = {};
+  for (const o of raw) {
+    const so = Number(o && o.so);
+    if (!Number.isInteger(so) || so < 1 || so > 8) return { error: 'so phải là số 1–8 (0 và 9 bot giữ)' };
+    if (seen[so]) return { error: 'so ' + so + ' bị trùng' };
+    seen[so] = true;
+    const nhan = String(o.nhan || '').replace(/\s+/g, ' ').trim();
+    if (!nhan || nhan.length > 40) return { error: 'nhan của số ' + so + ' phải 1–40 ký tự' };
+    const hd = String(o.hanh_dong || '').trim();
+    const item = { so, nhan, hanh_dong: hd, x2: o.xac_nhan_2_lan === true };
+    if (hd === 'url') {
+      if (!urlAllowed_(o.url)) return { error: 'url của số ' + so + ' phải https và thuộc tên miền web / URL_ALLOW' };
+      item.url = String(o.url);
+    } else if (hd === 'callback') {
+      const cb = o.callback || {};
+      if (!/^[a-z0-9_]{1,40}$/.test(String(cb.loai || ''))) return { error: 'callback.loai của số ' + so + ' phải snake_case 1–40 ký tự' };
+      if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(String(cb.id || ''))) return { error: 'callback.id của số ' + so + ' không hợp lệ' };
+      if (cb.data !== undefined && JSON.stringify(cb.data).length > 1024) return { error: 'callback.data của số ' + so + ' quá 1 KB' };
+      item.callback = { loai: cb.loai, id: cb.id, data: cb.data };
+    } else if (hd !== 'ghi_nhan') return { error: 'hanh_dong của số ' + so + ' phải là url, callback hoặc ghi_nhan' };
+    out.list.push(item);
+  }
+  out.list.sort((a, b) => a.so - b.so);
+  return out;
+}
+
+/** Người nhận chọn số cho câu hỏi web. */
+function navWebPick_(n, chatId, d, dryRun) {
+  const o = (d.options || []).find(x => x.so === n);
+  if (!o) return { text: navMenu_(chatId) };
+  if (d.exp && Date.now() > d.exp) { navClearAsk_(chatId); return { text: '⌛ Câu hỏi của ' + d.order_id + ' đã hết hạn, làm trên web.\nNhắn số: 9 Menu' }; }
+  if (o.x2 && !(d.pending === n && Date.now() - (d.pt || 0) <= UNDO_SECONDS * 1000)) {
+    navSetAsk_(chatId, 'web', Object.assign({}, d, { pending: n, pt: Date.now() }));
+    return { text: '⚠️ ' + d.order_id + ': ' + o.nhan + ' — nhắn ' + n + ' lần nữa (trong 10 phút) để làm · ' + NAV_FOOT };
+  }
+  if (o.hanh_dong === 'url') { navClearAsk_(chatId); return { text: '🔗 ' + o.nhan + ': ' + o.url + '\nNhắn số: 9 Menu' }; }
+  if (o.hanh_dong === 'ghi_nhan') { navClearAsk_(chatId); return { text: '✅ Đã ghi nhận: ' + o.nhan + ' (' + d.order_id + ')\nNhắn số: 9 Menu' }; }
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('BOT_CALLBACK_KEY') || '';
+  const url = props.getProperty('WEB_CALLBACK_URL') || (webOrigin_() ? webOrigin_() + '/api/bot-callback' : '');
+  if (key.length < 16 || !url) return { text: '⚠️ Bot chưa đặt BOT_CALLBACK_KEY / địa chỉ web — làm trên web.\nNhắn số: 9 Menu' };
+  if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ báo web: ' + o.nhan + ' (' + d.order_id + ')' };
+  let code = 0, resp = {};
+  try {
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', headers: { 'x-bot-key': key }, muteHttpExceptions: true,
+      payload: JSON.stringify({ order_id: d.order_id, so: n, loai: o.callback.loai, id: o.callback.id, data: o.callback.data, nguoi: navIsOwner_(chatId) ? 'chu' : 'nhan_vien', luc: new Date().toISOString() }) });
+    code = res.getResponseCode();
+    try { resp = JSON.parse(res.getContentText() || '{}'); } catch (e) { resp = {}; }
+  } catch (err) { code = 0; }
+  if ((code === 200 || code === 202) && resp.ok !== false) {
+    navClearAsk_(chatId);
+    return { text: (resp.text ? String(resp.text).slice(0, 500) : '✅ Đã báo web: ' + o.nhan + ' (' + d.order_id + ')') + '\nNhắn số: 9 Menu' };
+  }
+  return { text: '⚠️ Web chưa nhận (' + (resp.error ? String(resp.error).slice(0, 120) : 'lỗi ' + (code || 'mạng')) + '), nhắn lại ' + n + ' sau hoặc làm trên web · ' + NAV_FOOT };
 }
 
 // =====================================================================
@@ -3892,7 +3979,7 @@ function thuXuatMisa() {
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
-    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY', 'GEMINI_API_KEY'];
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY', 'GEMINI_API_KEY', 'BOT_CALLBACK_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
@@ -3904,7 +3991,7 @@ function checkConfig() {
       .map(b => ('0' + (b & 255).toString(16)).slice(-2)).join('').slice(0, 8);
     console.log('GEMINI_API_KEY sha256 8 ký tự đầu: ' + h + (h === GEMINI_SHARED_HASH ? ' ❌ vẫn là khoá chung các repo' : ''));
   }
-  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY', 'STOCK_KEY'].map(n => props.getProperty(n) || '');
+  const keys = ['WEBHOOK_KEY', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'EXPORT_KEY', 'SYNC_HINT_KEY', 'STOCK_KEY', 'BOT_CALLBACK_KEY'].map(n => props.getProperty(n) || '');
   console.log('Các khoá khác nhau: ' + (new Set(keys.filter(Boolean)).size === keys.filter(Boolean).length ? '✅' : '❌ có khoá trùng'));
   console.log('SALE_KEY ≥16: ' + (keys[1].length >= 16 ? '✅' : '❌') + ' | WEB_NOTIFY_KEY ≥16: ' + (keys[2].length >= 16 ? '✅' : '❌') +
     ' | EXPORT_KEY ≥16: ' + (keys[3].length >= 16 ? '✅' : '❌') + ' | STOCK_KEY ≥16: ' + (keys[5].length >= 16 ? '✅' : '❌'));

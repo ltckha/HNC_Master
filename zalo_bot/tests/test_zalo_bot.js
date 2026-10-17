@@ -733,5 +733,44 @@ eq('web chạy lại: gửi bù, xoá hàng chờ + hẹn, báo Chủ', [HINTS.l
 ctx.UrlFetchApp.fetch = okFetch;
 delete PROPS.SYNC_HINT_URL;
 
+// ---- Tin web có lựa chọn số (notify options) ----
+PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.URL_ALLOW = 'yenleather.com';
+const nt = b => ctx.handleNotify_(b, 'owner1', ctx.PropertiesService.getScriptProperties());
+let nr2 = nt({ order_id: 'HN-1710-901', text: 'Đơn mới', options: [{ so: 9, nhan: 'x', hanh_dong: 'ghi_nhan' }] });
+eq('options: số 9 bị chặn, không gửi', [nr2.ok, /so phải là số 1–8/.test(nr2.error)], [false, true]);
+nr2 = nt({ order_id: 'HN-1710-902', text: 'Đơn mới', options: [{ so: 1, nhan: 'Xem', hanh_dong: 'url', url: 'https://evil.com/x' }] });
+eq('options: url ngoài tên miền → lỗi', [nr2.ok, /url của số 1/.test(nr2.error)], [false, true]);
+const s5 = SENT.length;
+nr2 = nt({ order_id: 'HN-1710-903', text: '🛒 Đơn web mới', options: [
+  { so: 1, nhan: 'Đã gọi khách', hanh_dong: 'callback', callback: { loai: 'don_da_goi', id: 'HN-1710-903' } },
+  { so: 3, nhan: 'Huỷ đơn', hanh_dong: 'callback', callback: { loai: 'don_huy', id: 'HN-1710-903' }, xac_nhan_2_lan: true },
+  { so: 4, nhan: 'Xem đơn', hanh_dong: 'url', url: 'https://giayhainancy.vn/admin/don/HN-1710-903' },
+  { so: 5, nhan: 'Mở admin Yen', hanh_dong: 'url', url: 'https://admin.yenleather.com/x' }] });
+eq('tin web: gửi kèm dòng Nhắn số + nhớ câu hỏi', [nr2.ok, nr2.so_lua_chon, /Nhắn số: 1 Đã gọi khách · 3 Huỷ đơn · 4 Xem đơn · 5 Mở admin Yen · 0 Để sau · 9 Menu/.test((SENT[s5] || {}).text || ''), JSON.parse(PROPS.ask_owner1).k], [true, 4, true, 'web']);
+eq('chọn url → gửi link', /🔗 Xem đơn: https:\/\/giayhainancy\.vn\/admin\/don\/HN-1710-903/.test(z('4')), true);
+nt({ order_id: 'HN-1710-904', text: 'Đơn', options: [{ so: 1, nhan: 'Đã gọi khách', hanh_dong: 'callback', callback: { loai: 'don_da_goi', id: 'HN-1710-904' } },
+  { so: 3, nhan: 'Huỷ đơn', hanh_dong: 'callback', callback: { loai: 'don_huy', id: 'HN-1710-904' }, xac_nhan_2_lan: true }] });
+eq('callback khi chưa đặt khoá → báo làm trên web', /chưa đặt BOT_CALLBACK_KEY/.test(z('1')), true);
+PROPS.BOT_CALLBACK_KEY = 'cbkey_1234567890abcdef';
+const CB = [];
+const f0 = ctx.UrlFetchApp.fetch;
+let cbFail = false;
+ctx.UrlFetchApp.fetch = (url, opt) => {
+  if (url.indexOf('/api/bot-callback') !== -1) { CB.push({ url, headers: opt.headers, body: JSON.parse(opt.payload) }); return cbFail ? { getResponseCode: () => 500, getContentText: () => '{"ok":false,"error":"lỗi web"}' } : { getResponseCode: () => 200, getContentText: () => '{"ok":true,"text":"Đã ghi: đã gọi khách"}' }; }
+  return f0(url, opt);
+};
+cbFail = true;
+eq('callback web lỗi → giữ câu hỏi, báo nhắn lại', [/Web chưa nhận \(lỗi web\)/.test(z('1')), JSON.parse(PROPS.ask_owner1).k], [true, 'web']);
+cbFail = false;
+zr = z('1');
+eq('callback: POST /api/bot-callback, khoá ở header, trả text của web', [zr.indexOf('Đã ghi: đã gọi khách') === 0, CB.slice(-1)[0].headers['x-bot-key'], CB.slice(-1)[0].body.loai, CB.slice(-1)[0].body.so, /key/.test(CB.slice(-1)[0].url)],
+  [true, 'cbkey_1234567890abcdef', 'don_da_goi', 1, false]);
+nt({ order_id: 'HN-1710-905', text: 'Đơn', options: [{ so: 3, nhan: 'Huỷ đơn', hanh_dong: 'callback', callback: { loai: 'don_huy', id: 'HN-1710-905' }, xac_nhan_2_lan: true }] });
+const cb0 = CB.length;
+eq('việc khó quay lại: nhắn 3 lần 1 → hỏi lại, chưa gọi web', [/nhắn 3 lần nữa/.test(z('3')), CB.length - cb0], [true, 0]);
+eq('nhắn 3 lần 2 → gọi web', [z('3').length > 0, CB.length - cb0, CB.slice(-1)[0].body.loai], [true, 1, 'don_huy']);
+ctx.UrlFetchApp.fetch = f0;
+delete PROPS.SYNC_HINT_URL; delete PROPS.URL_ALLOW;
+
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
