@@ -173,8 +173,8 @@ def safe_write_cell(ws, row, col, value):
 
 
 # Ảnh file đăng sàn (Shopee / TikTok) lấy từ web mới: <WEB_IMG_BASE>/img/<mã>/<n>.jpg (JPG ≤1600, công khai, đúng thứ tự ảnh trên web).
-# Đổi gốc 1 chỗ: ngày chuyển tên miền đặt WEB_IMG_BASE=https://giayhainancy.vn trong .env (hoặc sửa mặc định dưới).
-WEB_IMG_BASE = (os.getenv("WEB_IMG_BASE") or "https://giayhainancy-web.giayhainancy-web.workers.dev").rstrip("/")
+# Gốc ảnh: tên miền chính (đã chuyển sang web mới 17/10/2026); đổi được bằng WEB_IMG_BASE trong .env.
+WEB_IMG_BASE = (os.getenv("WEB_IMG_BASE") or "https://giayhainancy.vn").rstrip("/")
 SALE_MAX_IMAGES = 9  # Shopee / TikTok nhận tối đa 9 ảnh
 _web_img_cache = {}
 _web_img_state = {"down": False}
