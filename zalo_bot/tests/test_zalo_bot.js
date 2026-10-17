@@ -80,7 +80,7 @@ const CACHE = {};
 const ctx = {
   console,
   Utilities: { base64Decode: b => Array.from(Buffer.from(b, 'base64')), base64Encode: b => Buffer.from(b).toString('base64'),
-    newBlob: (bytes, mime, name) => ({ bytes: typeof bytes === 'string' ? Array.from(Buffer.from(bytes)) : bytes, mime, name }), DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' }, computeDigest: (a, t) => Array.from(require('crypto').createHash('md5').update(t).digest()).map(b => (b > 127 ? b - 256 : b)), formatDate: (d, tz, f) => {
+    newBlob: (bytes, mime, name) => ({ bytes: typeof bytes === 'string' ? Array.from(Buffer.from(bytes)) : bytes, mime, name }), DigestAlgorithm: { MD5: 'md5' }, Charset: { UTF_8: 'utf8' }, computeHmacSha256Signature: (msg, key) => Array.from(require('crypto').createHmac('sha256', key).update(msg).digest()).map(b => (b > 127 ? b - 256 : b)), computeDigest: (a, t) => Array.from(require('crypto').createHash('md5').update(t).digest()).map(b => (b > 127 ? b - 256 : b)), formatDate: (d, tz, f) => {
     const parts = {};
     new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       .formatToParts(d).forEach(x => { parts[x.type] = x.value; });
@@ -750,8 +750,9 @@ eq('tin web: gửi kèm dòng Nhắn số + nhớ câu hỏi', [nr2.ok, nr2.so_l
 eq('chọn url → gửi link', /🔗 Xem đơn: https:\/\/giayhainancy\.vn\/admin\/don\/HN-1710-903/.test(z('4')), true);
 nt({ order_id: 'HN-1710-904', text: 'Đơn', options: [{ so: 1, nhan: 'Đã gọi khách', hanh_dong: 'callback', callback: { loai: 'don_da_goi', id: 'HN-1710-904' } },
   { so: 3, nhan: 'Huỷ đơn', hanh_dong: 'callback', callback: { loai: 'don_huy', id: 'HN-1710-904' }, xac_nhan_2_lan: true }] });
-eq('callback khi chưa đặt khoá → báo làm trên web', /chưa đặt BOT_CALLBACK_KEY/.test(z('1')), true);
-PROPS.BOT_CALLBACK_KEY = 'cbkey_1234567890abcdef';
+const nk0 = PROPS.WEB_NOTIFY_KEY; delete PROPS.WEB_NOTIFY_KEY;
+eq('callback khi chưa có khoá → báo làm trên web', /chưa có khoá/.test(z('1')), true);
+PROPS.WEB_NOTIFY_KEY = 'notifykey_1234567890';
 const CB = [];
 const f0 = ctx.UrlFetchApp.fetch;
 let cbFail = false;
@@ -763,14 +764,18 @@ cbFail = true;
 eq('callback web lỗi → giữ câu hỏi, báo nhắn lại', [/Web chưa nhận \(lỗi web\)/.test(z('1')), JSON.parse(PROPS.ask_owner1).k], [true, 'web']);
 cbFail = false;
 zr = z('1');
-eq('callback: POST /api/bot-callback, khoá ở header, trả text của web', [zr.indexOf('Đã ghi: đã gọi khách') === 0, CB.slice(-1)[0].headers['x-bot-key'], CB.slice(-1)[0].body.loai, CB.slice(-1)[0].body.so, /key/.test(CB.slice(-1)[0].url)],
-  [true, 'cbkey_1234567890abcdef', 'don_da_goi', 1, false]);
+const lastCb = CB.slice(-1)[0];
+const expSig = require('crypto').createHmac('sha256', 'notifykey_1234567890').update(lastCb.headers['x-bot-time'] + '.' + JSON.stringify(lastCb.body)).digest('hex');
+eq('callback: POST /api/bot-callback, ký HMAC bằng khoá notify (không gửi khoá), trả text của web',
+  [zr.indexOf('Đã ghi: đã gọi khách') === 0, lastCb.headers['x-bot-sig'] === expSig, JSON.stringify(lastCb.headers).indexOf('notifykey') === -1, lastCb.body.loai, lastCb.body.so],
+  [true, true, true, 'don_da_goi', 1]);
 nt({ order_id: 'HN-1710-905', text: 'Đơn', options: [{ so: 3, nhan: 'Huỷ đơn', hanh_dong: 'callback', callback: { loai: 'don_huy', id: 'HN-1710-905' }, xac_nhan_2_lan: true }] });
 const cb0 = CB.length;
 eq('việc khó quay lại: nhắn 3 lần 1 → hỏi lại, chưa gọi web', [/nhắn 3 lần nữa/.test(z('3')), CB.length - cb0], [true, 0]);
 eq('nhắn 3 lần 2 → gọi web', [z('3').length > 0, CB.length - cb0, CB.slice(-1)[0].body.loai], [true, 1, 'don_huy']);
 ctx.UrlFetchApp.fetch = f0;
 delete PROPS.SYNC_HINT_URL; delete PROPS.URL_ALLOW;
+if (nk0) PROPS.WEB_NOTIFY_KEY = nk0; else delete PROPS.WEB_NOTIFY_KEY;
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

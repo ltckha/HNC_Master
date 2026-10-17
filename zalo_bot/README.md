@@ -215,7 +215,7 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
 
 ## Cửa "báo đơn web" (API)
 
-**Câu hỏi chọn số (luật 14, 17/10):** body thêm `options` 1–8 `{so, nhan ≤40, hanh_dong: url | callback | ghi_nhan, url?, callback?: {loai, id, data?}, xac_nhan_2_lan?}` và `han_phut` 1–720 (mặc định 720). Bot nối "Nhắn số: …" vào tin, nhớ câu hỏi cho Chủ. Chọn `url` → gửi link (https, tên miền web hoặc `URL_ALLOW`); `ghi_nhan` → chỉ trả lời; `callback` → POST `WEB_CALLBACK_URL` (mặc định `<gốc web>/api/bot-callback`) header `x-bot-key: BOT_CALLBACK_KEY`, body `{order_id, so, loai, id, data, nguoi, luc}`, web trả `{ok, text?}`. `xac_nhan_2_lan` phải nhắn 2 lần trong 10 phút. options sai → `{ok:false, error:"options: …"}`, không gửi tin.
+**Câu hỏi chọn số (luật 14, 17/10):** body thêm `options` 1–8 `{so, nhan ≤40, hanh_dong: url | callback | ghi_nhan, url?, callback?: {loai, id, data?}, xac_nhan_2_lan?}` và `han_phut` 1–720 (mặc định 720). Bot nối "Nhắn số: …" vào tin, nhớ câu hỏi cho Chủ. Chọn `url` → gửi link (https, tên miền web hoặc `URL_ALLOW`); `ghi_nhan` → chỉ trả lời; `callback` → POST `WEB_CALLBACK_URL` (mặc định `<gốc web>/api/bot-callback`) ký HMAC, không gửi khoá: header `x-bot-time` (= `luc`) và `x-bot-sig` = hex HMAC-SHA256(khoá, `x-bot-time` + "." + body thô); khoá = `BOT_CALLBACK_KEY` nếu có, không thì `WEB_NOTIFY_KEY`; body `{order_id, so, loai, id, data, nguoi, luc}`, web trả `{ok, text?}`. `xac_nhan_2_lan` phải nhắn 2 lần trong 10 phút. options sai → `{ok:false, error:"options: …"}`, không gửi tin.
 
 Web gửi tin báo đơn mới tới **chat Zalo của anh** qua bot. Cửa này **chỉ nhắn tin**: không đọc lệnh, không ghi Sheet.
 

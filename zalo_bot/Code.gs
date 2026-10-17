@@ -2568,7 +2568,8 @@ function handleNotify_(body, owner, props) {
 // ---- Câu hỏi mở do web gửi qua notify (luật 14, anh Kha 17/10) ----
 // options 1–8: {so, nhan ≤40, hanh_dong: url | callback | ghi_nhan, url?, callback?: {loai, id, data?}, xac_nhan_2_lan?}; han_phut 1–720.
 // url: https, tên miền web (gốc SYNC_HINT_URL) hoặc trong Script Property URL_ALLOW (phẩy). callback: POST WEB_CALLBACK_URL
-// (mặc định <gốc web>/api/bot-callback), header x-bot-key: BOT_CALLBACK_KEY.
+// (mặc định <gốc web>/api/bot-callback), ký HMAC (không gửi khoá): x-bot-time = luc, x-bot-sig = hex HMAC-SHA256(khoá, luc + "." + body).
+// Khoá = BOT_CALLBACK_KEY nếu có, không thì WEB_NOTIFY_KEY (web đã giữ sẵn) → anh không phải đặt khoá mới.
 const NOTIFY_MAX_OPTIONS = 8;
 
 function urlAllowed_(u) {
@@ -2617,6 +2618,11 @@ function notifyOptions_(body) {
   return out;
 }
 
+/** Chữ ký HMAC-SHA256 dạng hex (khoá không đi qua mạng). */
+function hmacHex_(key, msg) {
+  return Utilities.computeHmacSha256Signature(msg, key, Utilities.Charset.UTF_8).map(b => ('0' + (b & 255).toString(16)).slice(-2)).join('');
+}
+
 /** Người nhận chọn số cho câu hỏi web. */
 function navWebPick_(n, chatId, d, dryRun) {
   const o = (d.options || []).find(x => x.so === n);
@@ -2629,14 +2635,16 @@ function navWebPick_(n, chatId, d, dryRun) {
   if (o.hanh_dong === 'url') { navClearAsk_(chatId); return { text: '🔗 ' + o.nhan + ': ' + o.url + '\nNhắn số: 9 Menu' }; }
   if (o.hanh_dong === 'ghi_nhan') { navClearAsk_(chatId); return { text: '✅ Đã ghi nhận: ' + o.nhan + ' (' + d.order_id + ')\nNhắn số: 9 Menu' }; }
   const props = PropertiesService.getScriptProperties();
-  const key = props.getProperty('BOT_CALLBACK_KEY') || '';
+  const key = props.getProperty('BOT_CALLBACK_KEY') || props.getProperty('WEB_NOTIFY_KEY') || '';
   const url = props.getProperty('WEB_CALLBACK_URL') || (webOrigin_() ? webOrigin_() + '/api/bot-callback' : '');
-  if (key.length < 16 || !url) return { text: '⚠️ Bot chưa đặt BOT_CALLBACK_KEY / địa chỉ web — làm trên web.\nNhắn số: 9 Menu' };
+  if (key.length < 16 || !url) return { text: '⚠️ Bot chưa có khoá / địa chỉ web — làm trên web.\nNhắn số: 9 Menu' };
   if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ báo web: ' + o.nhan + ' (' + d.order_id + ')' };
   let code = 0, resp = {};
   try {
-    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', headers: { 'x-bot-key': key }, muteHttpExceptions: true,
-      payload: JSON.stringify({ order_id: d.order_id, so: n, loai: o.callback.loai, id: o.callback.id, data: o.callback.data, nguoi: navIsOwner_(chatId) ? 'chu' : 'nhan_vien', luc: new Date().toISOString() }) });
+    const luc = new Date().toISOString();
+    const payload = JSON.stringify({ order_id: d.order_id, so: n, loai: o.callback.loai, id: o.callback.id, data: o.callback.data, nguoi: navIsOwner_(chatId) ? 'chu' : 'nhan_vien', luc });
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload,
+      headers: { 'x-bot-time': luc, 'x-bot-sig': hmacHex_(key, luc + '.' + payload) } });
     code = res.getResponseCode();
     try { resp = JSON.parse(res.getContentText() || '{}'); } catch (e) { resp = {}; }
   } catch (err) { code = 0; }
@@ -3979,7 +3987,7 @@ function thuXuatMisa() {
 function checkConfig() {
   const props = PropertiesService.getScriptProperties();
   const names = ['BOT_TOKEN', 'WEBHOOK_KEY', 'WEBAPP_URL', 'ALLOWED_CHAT_IDS', 'DRY_RUN', 'SALE_KEY', 'WEB_NOTIFY_KEY', 'OWNER_CHAT_ID',
-    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY', 'GEMINI_API_KEY', 'BOT_CALLBACK_KEY'];
+    'SYNC_HINT_URL', 'SYNC_HINT_KEY', 'EXPORT_KEY', 'STOCK_KEY', 'GEMINI_API_KEY'];
   names.forEach(n => {
     const v = props.getProperty(n);
     console.log(n + ': ' + (v === null ? '❌ CHƯA CÓ' : '✅ có, dài ' + String(v).length + ' ký tự'));
