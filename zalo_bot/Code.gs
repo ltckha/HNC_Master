@@ -1991,6 +1991,14 @@ function receiptConfirm_(body, nguoi, dryRun) {
     props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
     pruneTickets_(props, 'stk_');
     CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'nhập phiếu ' + d.id, ops, pn: d.id }), UNDO_SECONDS);
+    if (body.ncc_xuat_hd === false) { // NCC không xuất hoá đơn → phiếu hoá đơn = không lấy, không đòi / nhắc
+      try {
+        MEMO = { __pnx: MEMO.__pnx };
+        const nhRows = ops.filter(o => o.sheet === 'NHAP').map(o => o.row);
+        invoiceTickets_().filter(t => (t.rows || []).some(r => nhRows.indexOf(r) !== -1)).forEach(t =>
+          props.setProperty('hdon_' + t.id, JSON.stringify({ s: 'khong', at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'), pn: d.id })));
+      } catch (err) { console.error('Không ghi được trạng thái không lấy hoá đơn: ' + (err && err.message ? err.message : err)); }
+    }
     return { ok: true, action: 'xac_nhan', id, ticket_id: ticket, dry_run: false, results: out, canh_bao: canhBao, tao_moi: taoMoi, so_chung_tu: nk,
       undo_until: new Date(Date.now() + UNDO_SECONDS * 1000).toISOString(), _sync: uniq_(ops.map(o => o.sheet)) };
   } finally {
@@ -3603,8 +3611,10 @@ function invoiceAction_(body, nguoi, dryRun) {
   if (mode === 'xem') {
     const t = tickets.find(x => x.id === String(body.phieu || '').trim());
     if (!t) return fail('không có phiếu ' + body.phieu);
+    const msg = invoiceMessage_(t);
+    const thieuMst = msg.indexOf('⛔') === 0;
     return { ok: true, action: 'hoa_don', che_do: 'xem', phieu: { id: t.id, ngay: t.date, ncc: t.supplier, kho: t.kho, sl: t.qty, trang_thai: t.status, ncc_docs: t.ncc_docs },
-      dong: invoiceRows_(t) };
+      dong: invoiceRows_(t), tin_xin_hd: thieuMst ? '' : msg, thieu_mst: thieuMst, loi_tin: thieuMst ? msg.replace(/^⛔\s*/, '') : undefined };
   }
   if (mode !== 'ghi') return fail('che_do phải là ds, xem hoặc ghi');
   const ids = (Array.isArray(body.phieu) ? body.phieu : [body.phieu]).map(x => String(x || '').trim()).filter(Boolean);

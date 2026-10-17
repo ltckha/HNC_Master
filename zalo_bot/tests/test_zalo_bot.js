@@ -820,6 +820,17 @@ eq('MISA lô: có HĐ → giá HĐ + số HĐ trong diễn giải', [rowOf('NK00
 eq('MISA lô: chưa HĐ ≤3 ngày → chờ, không xuất, cờ trống', [!rowOf('NK000091'), rNew[10], ms.cho_hd.some(x => x.so_chung_tu === 'NK000091')], [true, '', true]);
 eq('MISA lô: chưa HĐ quá 3 ngày → giá phiếu, ghi "giá tạm"', [rowOf('NK000092') && rowOf('NK000092')[16], /giá tạm/.test(rowOf('NK000092') && rowOf('NK000092')[6]), /giá tạm/.test(rOld[10])], [415000, true, true]);
 ctx.misaWriteFile_ = realWrite;
+const hx2 = ha({ che_do: 'xem', phieu: hdT.id }, true);
+eq('hoa_don xem: kèm tin xin hoá đơn soạn sẵn (không giá)', [hx2.thieu_mst, /Hiệu giày Hải Nancy nhờ anh\/chị xuất hoá đơn/.test(hx2.tin_xin_hd), /\d{3}\.\d{3}đ/.test(hx2.tin_xin_hd)], [false, true, false]);
+const hkd0 = PROPS.HKD_15E; PROPS.HKD_15E = 'Hải Nancy||Đà Lạt';
+eq('hoa_don xem: thiếu MST hộ → thieu_mst, không có tin', [ha({ che_do: 'xem', phieu: hdT.id }, true).thieu_mst, ha({ che_do: 'xem', phieu: hdT.id }, true).tin_xin_hd], [true, '']);
+PROPS.HKD_15E = hkd0;
+GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX4000', ngay: '2026-10-17', dong: [{ ma_ncc: 'TH', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+const p5 = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-9').toString('base64') }).id;
+const x5 = pn({ action: 'xac_nhan', id: p5, ticket_id: 'V9', ncc_xuat_hd: false, dong: [{ dong: 1, ma_hnc: 'CXED', kho: 'Y3C', sizes: { '40': 1 } }] });
+ctx.MEMO = {};
+const t5 = ctx.invoiceTickets_().find(t => (t.rows || []).some(r => DATA.NHAP[r - 1] && DATA.NHAP[r - 1][2] === 'CXED' && DATA.NHAP[r - 1][hdIx('don_gia_phieu')] === 300000));
+eq('xac_nhan ncc_xuat_hd:false → phiếu hoá đơn = không lấy; don_gia_phieu ghi theo phiếu', [x5.ok, !!t5, t5 && JSON.parse(PROPS['hdon_' + t5.id] || '{}').s], [true, true, 'khong']);
 eq('hoadon: nhân viên bị chặn', /chỉ Chủ/.test(z('hoadon', 'nv1')), true);
 eq('hoadon tudong: xoá trạng thái đặt tay', [/Bỏ trạng thái đặt tay/.test(ctx.doInvoice_('hoadon ' + hdT.id + ' tudong', false).text), PROPS['hdon_' + hdT.id]], [true, undefined]);
 eq('KHO 15ETBH / 3CTBH được hiểu', [ctx.KHO_ALIASES ? 1 : 1], [1]);
