@@ -1398,7 +1398,7 @@ function saleUndo_(body, dryRun) {
     rec.huy_boi = nguoi;
     props.setProperty('saleops_' + ticket, JSON.stringify(rec));
     if (rec.hd) { // đã gửi tin hoá đơn MISA → báo huỷ
-      const text = '❌ HUỶ phiếu ' + ticket + ' (đã gửi tin hoá đơn MISA) · ' + rec.b.length + ' dòng · ' + khos.join(', ') + ' · bởi ' + nguoi + ' — bỏ / xoá chứng từ này trên MISA nếu đã nhập.';
+      const text = '❌ HUỶ phiếu ' + ticket + ' (đã gửi tin hoá đơn MISA) · ' + rec.b.length + ' dòng · ' + khos.join(', ') + ' · bởi ' + nguoi + ' — bỏ / xoá chứng từ này trên MISA nếu đã nhập.\nNhắn số: 9 Menu';
       misaChats_().forEach(c => { try { sendMessage_(c, text); } catch (err) { console.error(err); } });
       out.misa_huy = true;
     }
@@ -2437,7 +2437,7 @@ function misaInvoiceSend_(ticket, channel, seller, inv, plan) {
       'Công ty: ' + (inv.hd.ten_cty || '-') + ' · MST ' + (inv.hd.mst || '-'),
       'Địa chỉ: ' + (inv.hd.dia_chi || '-') + ' · Email: ' + (inv.hd.email || '-'),
     ].concat(items.map((it, i) => misaLine_(i, it.code, it.size, it.qty, it.price)), [MISA_TAX_TEXT,
-      'Tổng: ' + money_(total) + ' · Thanh toán: ' + (inv.thanh_toan || '-') + ' · Ship: ' + (inv.phi_ship === '' ? '-' : money_(inv.phi_ship))]).join('\n');
+      'Tổng: ' + money_(total) + ' · Thanh toán: ' + (inv.thanh_toan || '-') + ' · Ship: ' + (inv.phi_ship === '' ? '-' : money_(inv.phi_ship)), 'Nhắn số: 9 Menu']).join('\n');
     chats.forEach(c => { if (sendMessage_(c, text)) sent++; });
   });
   // dòng BAN của phiếu này → không lặp ở tin cuối ngày
@@ -2669,7 +2669,7 @@ function flushSyncHint_(force) {
     const alerted = !!(retry && retry.alerted) || n >= 2;
     if (alerted && !(retry && retry.alerted)) {
       syncAlertOwner_('⚠️ Web không nhận tin cập nhật Sheet từ ' + (retry ? Utilities.formatDate(new Date(retry.since), TZ, 'HH:mm') : 'vừa rồi') +
-        ' (lỗi ' + (code || 'mạng') + '). Bot vẫn ghi Sheet, tự gửi lại 5′ / 15′ / 1 giờ.\n\n' + DU_PHONG_TEXT);
+        ' (lỗi ' + (code || 'mạng') + '). Bot vẫn ghi Sheet, tự gửi lại 5′ / 15′ / 1 giờ.\n\n' + DU_PHONG_TEXT + '\nNhắn số: 8 Dự phòng · 9 Menu');
     }
     props.setProperty('sync_retry', JSON.stringify({ n, next, since: retry ? retry.since : Date.now(), alerted }));
     console.error('sync-hint lỗi ' + code + ' (tabs ' + tabs.join(',') + '), thử lại lần ' + n + ': ' + body.slice(0, 200));
