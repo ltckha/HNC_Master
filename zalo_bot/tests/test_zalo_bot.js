@@ -599,12 +599,6 @@ eq('nhập kho 15E: mẫu, mã kho MISA, đơn giá = giá nhập khi invoice_pr
 eq('nhập kho 15E: dòng TRA- → "Bỏ qua - trả hàng", dòng Y3C để nguyên', [DATA.NHAP[nhBase + 2][10], DATA.NHAP[nhBase + 1][10], /^Done - /.test(DATA.NHAP[nhBase][10])], ['Bỏ qua - trả hàng', '', true]);
 ctx.misaWriteFile_ = realWrite;
 
-xr = xm2({ loai: 'nhap_kho_3c' }, true);
-eq('nhập kho 3C tạm tắt (chưa khai MISA Yen Leather)', [xr.ok, xr.tat, /Chưa khai MISA/.test(xr.error)], [false, true, true]);
-PROPS.MISA_3C = '1';
-eq('bật lại MISA_3C = 1 → chạy được', xm2({ loai: 'nhap_kho_3c' }, true).ok, true);
-delete PROPS.MISA_3C;
-
 // ---- Huỷ phiếu bán (huy_ban) ----
 vm.runInContext('this.saleUndo_=saleUndo_;', ctx);
 const kyR = kyRow('15E', 'Y3C', 41); kyR[4] = 1; ctx.MEMO = {};

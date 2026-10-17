@@ -108,7 +108,6 @@ Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký g
 - Đơn giá nhập kho = `invoice_price`, trống thì `purchase_price` (anh Kha 17/10; menu Mac cũng vậy). Hoá đơn NCC (`hoadon`) cũng tính như vậy.
 - File: điền vào mẫu gốc trong `HNC/He_thong/HNC_Templates` bằng cách sửa XML của xlsx (giữ nguyên định dạng, danh sách chọn của MISA), lưu `HNC/He_thong/HNC_Exported_Files` (theo ID thư mục `He_thong`, đổi bằng `SYSTEM_FOLDER_ID`).
 - Trả `{ok, files:[{ten, url, so_dong}], so_hop_le, so_loi, canh_bao:[…], bo_qua:[mã]}`. `dry_run`: chỉ đếm, không tạo file, không ghi cờ. Ghi thật thì gửi sync-hint SANPHAM / NHAP.
-- `nhap_kho_3c` **tạm tắt** (anh Kha 17/10): Yen Leather dùng MISA riêng, chưa khai mẫu / mã kho cho HNC; trả `{ok:false, tat:true}`. Dòng NHAP kho Y3C giữ cờ trống. Bật lại: Script Property `MISA_3C` = `1` (menu Mac: `MISA_3C=1` trong .env).
 - Thử trong trình soạn thảo: `thuXuatMisa` tạo 3 file **không ghi cờ**, link ở Nhật ký.
 
 ## Cửa "kho" cho app điện thoại (API)
