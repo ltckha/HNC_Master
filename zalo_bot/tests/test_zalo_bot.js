@@ -688,7 +688,7 @@ eq('nhập "misa" không số → cùng kho + NCC + ngày dùng chung số NK đ
 const nl3 = DATA.NHAP.length;
 z('nhap TH2040D 39 TBH', 'nv9');
 eq('nhập không số → Zalo_Update như cũ', DATA.NHAP.filter(r => r[2] === 'TH2040D' && String(r[5]) === '39' && !r[1]).some(r => r[10] === 'Zalo_Update'), true);
-eq('lệnh "du phong" → bảng cú pháp', /DỰ PHÒNG[\s\S]*ban TH2040D[\s\S]*huy TH2040D 40/.test(z('du phong', 'nv9')), true);
+eq('lệnh "du phong" → bảng cú pháp theo số', /DỰ PHÒNG[\s\S]*1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ[\s\S]*menu → 6/.test(z('du phong', 'nv9')), true);
 eq('menu có 8 Dự phòng', /8 Dự phòng/.test(z('menu', 'nv9')), true);
 // A4: Chủ huỷ dòng bán Zalo
 const banRow = DATA.BAN.length - 1;
@@ -697,6 +697,18 @@ zr = z('huy TH2040D 40');
 eq('Chủ: liệt kê dòng bán khớp', /HUỶ DÒNG BÁN[\s\S]*TH2040D size 40 × 1 · Y3C/.test(zr), true);
 zr = z('1');
 eq('nhắn 1 → huỷ dòng bán gần nhất', [/Đã huỷ dòng bán TH2040D size 40/.test(zr)], [true]);
+// Chọn số sau khi bán: đổi cách trả; Chủ huỷ dòng bán qua menu 6
+zr = z('ban TH2040D 41 YEN 800k', 'nv8');
+eq('bán xong → hỏi cách trả bằng số', /Nhắn số: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ/.test(zr), true);
+zr = z('2', 'nv8');
+const lastPay = DATA.BAN.filter(r => r[1] === 'TH2040D' && String(r[4]) === '41' && r[pIx('payment_method')]).slice(-1)[0];
+eq('nhắn 2 → ghi Chuyển khoản vào dòng vừa bán', [/Đã ghi cách trả: Chuyển khoản/.test(zr), lastPay && lastPay[pIx('payment_method')]], [true, 'Chuyển khoản']);
+z('ban TH2040D 40 YEN 700k');
+zr = z('6');
+eq('Chủ: menu 6 → 1 lệnh vừa rồi + các dòng bán 2 ngày', [/1 Lệnh vừa rồi/.test(zr), /2 Bán .* TH2040D size 40 × 1/.test(zr)], [true, true]);
+zr = z('2');
+eq('chọn 2 → huỷ dòng bán đó', /Đã huỷ dòng bán TH2040D size 40/.test(zr), true);
+
 // A1: web lỗi → giữ hàng chờ, thử lại, báo Chủ, báo khi chạy lại
 PROPS.SYNC_HINT_URL = 'https://web.example/api/sync-hint'; PROPS.SYNC_HINT_KEY = 'synckey_1234567890';
 const okFetch = ctx.UrlFetchApp.fetch;

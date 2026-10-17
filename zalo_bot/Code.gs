@@ -170,7 +170,11 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
     if (res.ops && res.ops.length && !dryRun && chatId) {
       CacheService.getScriptCache().put('last_' + chatId,
         JSON.stringify({ label: res.label || '', ops: res.ops }), UNDO_SECONDS);
-      res.text += '\n↩️ Nhắn "huy" trong 10 phút nếu ghi nhầm' + (res.batch ? ' (huỷ cả lô).' : '.');
+      // Sau lệnh ghi: chọn bằng số (anh Kha 17/10) — bán thì đổi cách trả 1/2/3; 6 huỷ lệnh vừa rồi
+      const banRows = res.ops.filter(o => o.sheet === 'BAN').map(o => o.row);
+      navSetAsk_(chatId, 'after', { ban: res.batch ? [] : banRows });
+      res.text += '\nNhắn số: ' + (banRows.length && !res.batch ? '1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ (đổi cách trả) · ' : '') +
+        '6 Huỷ lệnh này' + (res.batch ? ' (cả lô)' : '') + ' · 9 Menu';
     }
     return { reply: (dryRun && isWrite ? '🧪 CHẠY THỬ — chưa ghi Sheet\n' : '') + res.text, syncTabs };
   } finally {
@@ -495,13 +499,13 @@ function parseReportDate_(n) {
 const ASK_TTL_MS = 720 * 60000;
 // Lệnh "du phong" / menu 8 / tin tự động khi web lỗi: cú pháp ngắn để làm việc qua Zalo khi web / app hỏng (anh Kha 17/10)
 const DU_PHONG_TEXT = [
-  '🛟 DỰ PHÒNG — web / app lỗi thì gõ lệnh Zalo:',
-  '🛒 Bán: ban TH2040D 40 YEN 800k ck sdt 0909123456 (tm tiền mặt, mặc định · ck chuyển khoản · the thẻ)',
-  '🔎 Tra: TH2040D 40  |  TH2040 (mọi màu)',
-  '📥 Nhập hàng NCC: nhap TH2040D 38/2 39 TBH NK000045 (hoặc chữ misa để bot tự lấy số) → vào tem + MISA',
-  '↩️ Khách trả: nhap TH2040D 40 15E tra hang',
-  '❌ Huỷ lệnh vừa rồi (10 phút): huy  ·  Chủ huỷ dòng bán (2 ngày): huy TH2040D 40 17/10',
-  '📊 Báo cáo: bc  |  bc hom qua',
+  '🛟 DỰ PHÒNG — web / app lỗi thì làm qua Zalo (chọn số, chỉ gõ mã / size / giá):',
+  '🔎 Tra hàng: menu → 1 → gõ mã (vd TH2040D 40)',
+  '🛒 Bán: gõ "ban TH2040D 40 YEN 800k" → bot hỏi cách trả: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ (có SĐT khách thì thêm "sdt 09…")',
+  '📥 Nhập hàng NCC: gõ "nhap TH2040D 38/2 39 TBH misa" → vào tem + MISA (chữ misa = bot tự lấy số chứng từ)',
+  '↩️ Khách trả: gõ "nhap TH2040D 40 15E tra hang"',
+  '❌ Huỷ: menu → 6 → chọn số (lệnh vừa rồi; Chủ: các dòng bán 2 ngày gần nhất)',
+  '📊 Báo cáo: menu → 2 → 1 hôm nay · 2 hôm qua · 3 tuần này',
   'Web chạy lại thì quay về app; đừng ghi 1 đơn ở cả 2 nơi.',
 ].join('\n');
 const NAV_FOOT = '0 Để sau · 9 Menu';
@@ -605,6 +609,15 @@ function navHandle_(text, chatId, dryRun) {
     case 'hd': return navInvoiceStep_(n, chatId, a.d, dryRun);
     case 'bs': return n === 1 ? { text: '🔗 Bổ sung trên web: ' + webOrigin_() + '/admin (Tổng quan → Mã cần bổ sung thông tin)\nNhắn số: 9 Menu' } : { text: navMenu_(chatId) };
     case 'huyban': return saleLineCancelPick_(n, chatId, a.d, dryRun);
+    case 'after':
+      if (n === 6) return navMenuPick_(6, chatId, owner);
+      if ([1, 2, 3].indexOf(n) !== -1 && (a.d.ban || []).length) return navSetPayment_(n, chatId, a.d.ban, dryRun);
+      return { text: navMenu_(chatId) };
+    case 'huy6': return navCancelPick_(n, chatId, a.d, dryRun);
+    case 'undo1':
+      if (n !== 1) return { text: navMenu_(chatId) };
+      navClearAsk_(chatId);
+      { const r = doUndo_(chatId, dryRun); return { text: r.text + '\nNhắn số: 9 Menu', touched: r.touched || [] }; }
     case 'undo':
       if (n !== 6) return { text: navMenu_(chatId) };
       navClearAsk_(chatId);
@@ -637,9 +650,19 @@ function navMenuPick_(n, chatId, owner) {
     }
     case 6: {
       const raw = chatId ? CacheService.getScriptCache().get('last_' + chatId) : null;
-      if (!raw) { navClearAsk_(chatId); return { text: 'ℹ️ Không có thao tác nào của bạn trong 10 phút qua để huỷ.\nNhắn số: 9 Menu' }; }
-      navSetAsk_(chatId, 'undo', {});
-      return { text: '↩️ Thao tác vừa rồi: ' + (JSON.parse(raw).label || '(không rõ)') + '\nNhắn 6 lần nữa để HUỶ (trong 10 phút) · ' + NAV_FOOT };
+      const sales = owner ? recentSaleLines_(8) : [];
+      if (!raw && !sales.length) { navClearAsk_(chatId); return { text: 'ℹ️ Không có thao tác nào của bạn trong 10 phút qua để huỷ.\nNhắn số: 9 Menu' }; }
+      if (!sales.length) { // nhân viên: chỉ huỷ lệnh vừa rồi, nhắn 6 lần nữa
+        navSetAsk_(chatId, 'undo', {});
+        return { text: '↩️ Thao tác vừa rồi: ' + (JSON.parse(raw).label || '(không rõ)') + '\nNhắn 6 lần nữa để HUỶ (trong 10 phút) · ' + NAV_FOOT };
+      }
+      navSetAsk_(chatId, 'huy6', { last: !!raw, rows: sales });
+      const lines = ['❌ HUỶ — nhắn số:'];
+      if (raw) lines.push('1 Lệnh vừa rồi: ' + (JSON.parse(raw).label || '(không rõ)'));
+      sales.forEach((x, i) => lines.push((i + 2) + ' Bán ' + x.dk.slice(8) + '/' + x.dk.slice(5, 7) + ' · ' + x.code + (x.size ? ' size ' + x.size : '') + ' × ' + x.qty +
+        ' · ' + x.kho + (x.price ? ' · ' + money_(x.price) : '') + (x.seller ? ' · ' + x.seller : '')));
+      lines.push(NAV_FOOT);
+      return { text: lines.join('\n') };
     }
     case 8: navClearAsk_(chatId); return { text: DU_PHONG_TEXT + '\nNhắn số: 9 Menu' };
     case 9: navClearAsk_(chatId); return { text: HELP_TEXT + '\n\nNhắn số: 9 Menu' };
@@ -702,6 +725,46 @@ function saleLineCancelPick_(n, chatId, d, dryRun) {
   }
   return { text: '✅ Đã huỷ dòng bán ' + x.code + (x.size ? ' size ' + x.size : '') + ' × ' + x.qty + ' kho ' + x.kho + ' (' + x.dk.slice(8) + '/' + x.dk.slice(5, 7) +
     '). Tồn tự cộng lại' + (touched.length > 1 ? ', trả sổ ký gửi ' + chu : '') + '.\nNhắn số: 9 Menu', touched };
+}
+
+/** Dòng bán gần nhất trong 2 ngày (mọi mã) cho Chủ huỷ bằng số. */
+function recentSaleLines_(max) {
+  const ban = sheetValues_('BAN');
+  const c = headerMap_(ban[0]);
+  const today = today_();
+  const minKey = Utilities.formatDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 2), TZ, 'yyyy-MM-dd');
+  const out = [];
+  for (let r = ban.length - 1; r >= 1 && out.length < max; r--) {
+    const code = String(ban[r][c.product_code] || '').trim().toUpperCase();
+    const dk = dateKey_(ban[r][c['Ngày']]);
+    if (!code || !dk || dk < minKey) continue;
+    out.push({ r: r + 1, code, size: normSize_(ban[r][c.item_size]), qty: Number(ban[r][c.item_quantity]) || 0, kho: String(ban[r][c.KHO] || '').trim(), dk,
+      chu: c.chu_hang !== undefined ? String(ban[r][c.chu_hang] || '').trim() : '', price: moneyValue_(ban[r][c['Giá']]),
+      seller: c.seller !== undefined ? String(ban[r][c.seller] || '').trim() : '' });
+  }
+  return out;
+}
+
+/** Menu 6 của Chủ: 1 = lệnh vừa rồi (nhắn 1 lần nữa để huỷ), 2..9 = huỷ dòng bán đó. */
+function navCancelPick_(n, chatId, d, dryRun) {
+  if (n === 1 && d.last) {
+    navSetAsk_(chatId, 'undo1', {});
+    const raw = CacheService.getScriptCache().get('last_' + chatId);
+    return { text: '↩️ ' + (raw ? JSON.parse(raw).label : 'Lệnh vừa rồi') + '\nNhắn 1 lần nữa để HUỶ · ' + NAV_FOOT };
+  }
+  if (n >= 2 && (d.rows || [])[n - 2]) return saleLineCancelPick_(1, chatId, { rows: [d.rows[n - 2]] }, dryRun);
+  return { text: navMenu_(chatId) };
+}
+
+/** Đổi cách trả của dòng bán vừa ghi: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ. */
+function navSetPayment_(n, chatId, rows, dryRun) {
+  const pay = { 1: 'Tiền mặt', 2: 'Chuyển khoản', 3: 'Thẻ' }[n];
+  const ban = getSheet_('BAN');
+  const c = headerMap_(ban.getRange(1, 1, 1, ban.getLastColumn()).getValues()[0]);
+  if (c.payment_method === undefined) return { text: '⚠️ Tab BAN chưa có cột payment_method.\nNhắn số: 9 Menu' };
+  if (!dryRun) rows.forEach(r => ban.getRange(r, c.payment_method + 1).setValue(pay));
+  navSetAsk_(chatId, 'after', { ban: rows });
+  return { text: '💳 Đã ghi cách trả: ' + pay + '\nNhắn số: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ · 6 Huỷ lệnh này · 9 Menu', touched: ['BAN'] };
 }
 
 function navReport_(n, chatId) {

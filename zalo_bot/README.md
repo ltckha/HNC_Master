@@ -20,6 +20,7 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 - **Bán qua Zalo:** thêm `tm` (mặc định) / `ck` / `the` và `sdt 09…` (hoặc số điện thoại trần). Ghi BAN cột `payment_method` (Tiền mặt / Chuyển khoản / Thẻ — trùng danh sách MISA) và `customer_phone`. Cửa ghi bán của app cũng ghi 2 cột này (từ `thanh_toan`, `khach.sdt`).
 - **Chủ huỷ dòng bán** (2 ngày, Zalo của Chủ): `huy TH2040D 40 [kho] [17/10]` → bot liệt kê dòng khớp → nhắn số dòng để huỷ (xoá ô BAN, tồn tự cộng, trả sổ ký gửi nếu là hàng ký gửi). `huy` không kèm mã vẫn là huỷ lệnh vừa gõ (10 phút).
 - **`du phong`** (hoặc menu 8): bảng cú pháp ngắn bán / tra / nhập / trả / huỷ / bc.
+- **Chọn bằng số sau lệnh ghi** (anh Kha 17/10): bán xong bot hỏi "1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ" (đổi cột payment_method của dòng vừa bán) và "6 Huỷ lệnh này". Menu 6 của Chủ: 1 = lệnh vừa rồi (nhắn 1 lần nữa), 2–9 = các dòng bán 2 ngày gần nhất (chọn là huỷ). Chỉ mã / size / giá / số điện thoại là phải gõ.
 
 ## Bot hiểu những tin gì
 
