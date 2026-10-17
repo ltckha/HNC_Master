@@ -2280,6 +2280,10 @@ function handleMisaExport_(body, nguoi, dryRun) {
   const loai = String(body.loai || '').trim().toLowerCase();
   if (MISA_LOAI.indexOf(loai) === -1) return { ok: false, action: 'xuat_misa', error: 'loai phải là: ' + MISA_LOAI.join(', ') };
   if (!nguoi) return { ok: false, action: 'xuat_misa', loai, error: 'thiếu nguoi (email người dùng app)' };
+  // Hộ Y3C dùng MISA riêng (chưa khai mẫu / mã kho cho HNC), kho 3C trong MISA 15E sẽ xoá (anh Kha 17/10) → tạm tắt; bật lại: Script Property MISA_3C = "1"
+  if (loai === 'nhap_kho_3c' && PropertiesService.getScriptProperties().getProperty('MISA_3C') !== '1') {
+    return { ok: false, action: 'xuat_misa', loai, tat: true, error: 'Chưa khai MISA của Yen Leather (Y3C) — tạm không xuất phiếu nhập kho 3C. Dòng NHAP kho Y3C để trống cờ, xuất sau.' };
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -3427,6 +3431,7 @@ function testSale() {
 /** Chạy trong trình soạn thảo: tạo thử 3 file MISA (danh mục, nhập kho 15E, 3C) KHÔNG ghi cờ — mở / nhập thử vào MISA. Xem link ở Nhật ký. */
 function thuXuatMisa() {
   ['danh_muc', 'nhap_kho_15e', 'nhap_kho_3c'].forEach(loai => {
+    if (loai === 'nhap_kho_3c' && PropertiesService.getScriptProperties().getProperty('MISA_3C') !== '1') return; // chưa khai MISA Yen Leather
     const r = handleMisaExport_({ loai, ghi_co: false }, 'thu@editor', false);
     console.log(loai + ': ' + JSON.stringify({ files: r.files, so_hop_le: r.so_hop_le, so_loi: r.so_loi, bo_qua: r.bo_qua, canh_bao: (r.canh_bao || []).slice(0, 10) }));
   });

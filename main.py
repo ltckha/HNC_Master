@@ -116,6 +116,9 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 PENDING_INFO_COLUMNS = ("Tên Ngành Hàng", "product_price")
 # Tác vụ bỏ qua mã chưa bổ sung: 1 web đăng mới, 2 Shopee đăng mới, 3 TikTok đăng mới, 4 MISA danh mục, 5 web tồn, 8 MISA phiếu nhập
 PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8}
+# Hộ Y3C (Yen Leather) dùng MISA riêng, chưa khai mẫu / mã kho cho HNC; kho 3C trong MISA 15E sẽ xoá (anh Kha 17/10)
+# → tạm không xuất phiếu nhập kho 3C. Dòng NHAP kho Y3C giữ cờ misa_stock trống để xuất sau. Bật lại: MISA_3C=1 trong .env.
+MISA_3C_ENABLED = os.getenv("MISA_3C", "").strip() == "1"
 
 
 def clean_code(value):
@@ -2431,6 +2434,7 @@ def process_export_task(choice, loader):
         row_status_list = []
         warning_rows = []
         valid_count = 0
+        skipped_3c = 0
 
         for rel_idx, rec in zip(pending_row_indices, pending_records):
             pcode = str(rec.get('product_code', '')).strip()
@@ -2459,6 +2463,12 @@ def process_export_task(choice, loader):
             # Dòng trả hàng / huỷ đơn (Số chứng từ TRA-…): anh nhập trả trong app MISA → không xuất phiếu nhập
             if doc_no.upper().startswith('TRA-'):
                 row_status_list.append("Bỏ qua - trả hàng")
+                continue
+
+            # Kho Y3C chưa có MISA → để trống cờ, không xuất
+            if not MISA_3C_ENABLED and kho_raw in ['Y3C', '3C', '3CTBH']:
+                row_status_list.append("")
+                skipped_3c += 1
                 continue
 
             # DANH SÁCH KIỂM TRA LỖI THIẾU DỮ LIỆU
@@ -2523,6 +2533,8 @@ def process_export_task(choice, loader):
             rec_valid['_unit'] = unit
             records_by_kho[kho_key].append(rec_valid)
 
+        if skipped_3c:
+            print(f"⏭️ Bỏ qua {skipped_3c} dòng kho Y3C: chưa khai MISA của Yen Leather (giữ cờ trống, xuất sau; bật lại: MISA_3C=1 trong .env).")
         if warning_rows:
             warn_msg = "\n".join(warning_rows)
             if HAS_RICH:
