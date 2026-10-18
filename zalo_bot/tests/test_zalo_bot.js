@@ -42,7 +42,7 @@ function dFile(name, bytes, mime, folder) {
   const id = 'D' + (++DSEQ);
   const file = { id, name, bytes, mime, folder, getId: () => id, getName: () => name,
     getBlob: () => ({ getDataAsString: () => Buffer.from(file.bytes).toString(), getBytes: () => file.bytes, getContentType: () => file.mime }),
-    setContent: t => { file.bytes = Array.from(Buffer.from(t)); }, moveTo: f => { file.folder = f.getId(); },
+    setContent: t => { file.bytes = Array.from(Buffer.from(t)); }, moveTo: f => { file.folder = f.getId(); }, getUrl: () => 'https://drive/' + id,
     makeCopy: (n, f) => dFile(n, file.bytes, file.mime, f.getId()) };
   DFILES[id] = file;
   return file;
@@ -865,6 +865,31 @@ const sz0 = SENT.length;
 const swept = ctx.kyguiSweep_(true);
 eq('soát gõ tay: trừ cua_15E, ghi ky_gui_tru, không nhắn Zalo', [swept, kyRow('15E', 'Y3C', 41)[4], /^soat /.test(hand[kyBanCol('ky_gui_tru')]), SENT.length - sz0], [1, 1, true, 0]);
 eq('soát lần 2: dòng đã đánh dấu không trừ nữa', [ctx.kyguiSweep_(true), kyRow('15E', 'Y3C', 41)[4]], [0, 1]);
+
+// ---- In tem theo kho (V34) ----
+vm.runInContext('this.labelCsv_=labelCsv_;', ctx);
+const IN_DIR = dFolder('IN Mini Code', null);
+ctx.DriveApp.getRootFolder = () => ({ getFoldersByName: n => driveIt(n === 'IN Mini Code' ? [IN_DIR] : []) });
+IN_DIR.getFilesByName = n => driveIt(Object.values(DFILES).filter(x => x.folder === IN_DIR.getId() && x.name === n));
+const lbRow = ['16/10/2026', 'NK000123', 'TH2040D', 'Đen', '15E', 40, 3, '', '', '', '', '', '', '', '', ''];
+const lbRow2 = ['16/10/2026', 'NK000123', 'TH2040D', 'Đen', 'Y3C', 41, 1, '', '', '', '', '', '', '', '', ''];
+const lbZalo = ['16/10/2026', '', 'TH2040N', 'Nâu', '15E', 41, 1, '', 'Zalo_Update', 'Zalo_Update', 'Zalo_Update', '', '', '', '', ''];
+DATA.NHAP.push(lbRow, lbRow2, lbZalo);
+const lbN = DATA.NHAP.length;
+const it = (b, dry) => ctx.handleStock_(Object.assign({ action: 'in_tem', seller: 'nv@hn.vn' }, b), !!dry);
+let lr = it({ so_chung_tu: 'NK000123', kho: '15E' }, true);
+eq('in_tem chạy thử: chỉ kho 15E của phiếu, số tem = số lượng', [lr.ok, lr.so_dong, lr.so_tem, lr.rows[0].ma_hang], [true, 1, 3, 'TH2040D40']);
+lr = it({ so_chung_tu: 'NK000123', kho: '15E' });
+const lbFile = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_15E.csv');
+const lbCsv = lbFile ? Buffer.from(lbFile.bytes).toString() : '';
+eq('in_tem: ghi IN_15E.csv + IN.csv, cột như task 10', [lr.file, !!lbFile, lbCsv.split('\n')[0], /TH2040D40/.test(lbCsv), !!Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN.csv')],
+  ['IN_15E.csv', true, 'QR code,Tên,Màu,Size,Size Color,F6,Code128,Gía', true, true]);
+lr = it({ ngay: '16/10/2026', kho: '15E' }, true);
+eq('in_tem theo ngày + kho: lấy cả dòng nhập Zalo không số chứng từ', lr.rows.some(r => r.ma_hang === 'TH2040N41'), true);
+eq('chưa bấm "Đã in" → web_label còn trống', lbRow[9], '');
+const dn = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
+eq('da_in_tem → web_label Done cho đúng dòng', [dn.ok, dn.so_dong, /^Done - /.test(lbRow[9]), lbRow2[9]], [true, 1, true, '']);
+eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da", nâu' }]).split('\n')[1].indexOf('"Giày ""da"", nâu"') !== -1, true);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

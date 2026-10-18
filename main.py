@@ -220,6 +220,31 @@ def sale_images(code, sheet_pics):
     return (list(picks) + [""] * SALE_MAX_IMAGES)[:SALE_MAX_IMAGES]
 
 
+# Tem mã hàng (V34): cùng cột / luật với cửa bot in_tem (zalo_bot/Code.gs LABEL_COLUMNS, labelRecord_) — luật 15
+LABEL_COLUMNS = ['QR code', 'Tên', 'Màu', 'Size', 'Size Color', 'F6', 'Code128', 'Gía']
+
+
+def label_record(rec, product_map):
+    """1 dòng tem từ 1 dòng NHAP: QR = web_url, Tên = product_name, giá bán dạng "450.000 đ", F6 = số tem (= số lượng)."""
+    pcode = str(rec.get('product_code', '')).strip()
+    sz = str(rec.get('item_size', '')).strip()
+    if sz.endswith('.0'):
+        sz = sz[:-2]
+    sp_info = product_map.get(pcode.upper(), product_map.get(pcode, {}))
+    pname = sp_info.get('product_name') or rec.get('Tên', '')
+    pcolor = str(rec.get('product_color') or sp_info.get('product_color') or rec.get('Màu', '')).strip()
+    scolor = f"{pcolor} (Size {sz})" if sz and pcolor else (pcolor or f"Size {sz}")
+    try:
+        f6 = max(1, int(float(rec.get('item_quantity') or rec.get('Số lượng (*)') or rec.get('F6', 1))))
+    except Exception:
+        f6 = 1
+    raw_price = sp_info.get('product_price') or rec.get('Giá', '')
+    num_p = parse_number(raw_price)
+    price_str = f"{int(num_p):,} đ".replace(",", ".") if num_p > 0 else str(raw_price)
+    return {'QR code': sp_info.get('web_url') or rec.get('QR code', ''), 'Tên': pname, 'Màu': pcolor, 'Size': sz,
+            'Size Color': scolor, 'F6': f6, 'Code128': f"{pcode}{sz}" if sz else pcode, 'Gía': price_str}
+
+
 def fetch_web_images(url, product_code=""):
     """Cào tự động tối đa 10 ảnh sản phẩm chất lượng cao chuẩn theo product_code từ link web, loại bỏ hoàn toàn logo và ảnh rác."""
     if not url or not str(url).startswith('http'):
@@ -1695,7 +1720,7 @@ def process_export_task(choice, loader):
             skip_codes = pending_info_codes(df_sp_chk, col_map_sp_chk, (sp_hdr_idx + 1) if sp_hdr_idx is not None else 2)
         pending_records, pending_row_indices = drop_pending_info(pending_records, pending_row_indices, skip_codes)
 
-    if not pending_records:
+    if not pending_records and choice != 10:  # in tem: vẫn cho in lại theo phiếu / ngày
         msg = f"✨ Tất cả các bản ghi trong tab {sheet_name} đều đã hoàn thành (Done) cho tác vụ [{choice}]!"
         if HAS_RICH: console.print(f"[bold yellow]{msg}[/bold yellow]")
         else: print(msg)
@@ -2647,60 +2672,67 @@ def process_export_task(choice, loader):
 
     # ==================== TASK 10: IN TEM BARCODE & QR CODE ====================
     elif choice == 10:
+        # V34 (anh Kha 18/10): in tem theo kho / số chứng từ / ngày — cùng cột và luật với cửa bot in_tem (LABEL_COLUMNS).
+        # Tạo file KHÔNG tính là đã in: chỉ ghi web_label = Done khi trả lời "Đã in xong".
         product_map = get_product_info_map(loader)
-        out_rows = []
-        for rec in pending_records:
-            pcode = str(rec.get('product_code', '')).strip()
-            sz = str(rec.get('item_size', '')).strip()
-            if sz.endswith('.0'): sz = sz[:-2]
+        kho_pick = input("Kho in tem [1] 15E  [2] Y3C  [Enter] cả 2: ").strip()
+        kho_want = {'1': '15E', '2': 'Y3C'}.get(kho_pick, '')
+        filt = input("Số chứng từ (vd NK000045) hoặc ngày dd/mm/yyyy (lấy cả dòng nhập Zalo không số) — Enter = mọi dòng chưa in: ").strip().upper()
+        pcode_idx, kho_idx2 = col_map.get('product_code'), col_map.get('KHO')
+        doc_idx, date_idx = col_map.get('Số chứng từ (*)'), col_map.get('Ngày chứng từ (*)')
 
-            sp_info = product_map.get(pcode, {})
-            pname = sp_info.get('product_name') or rec.get('Tên', '')
-            pcolor = str(rec.get('product_color') or sp_info.get('product_color') or rec.get('Màu', '')).strip()
-            scolor = f"{pcolor} (Size {sz})" if sz and pcolor else (pcolor or f"Size {sz}")
+        def kho_norm(v):
+            v = str(v or '').strip().upper()
+            return '15E' if v in ('15E', '15ETBH', 'TBH') else ('Y3C' if v in ('Y3C', '3C', '3CTBH', 'YEN') else '')
 
-            # Số lượng tem in lấy từ cột Số lượng (*) hoặc item_quantity
-            qty_raw = rec.get('item_quantity') or rec.get('Số lượng (*)') or rec.get('F6', 1)
-            try:
-                f6 = int(float(qty_raw))
-            except Exception:
-                f6 = 1
+        sel_idx, sel_recs = [], []
+        if filt:
+            for rel_idx in range(data_start_row, len(df_raw)):
+                row = df_raw.iloc[rel_idx]
+                code = str(row[pcode_idx]).strip() if pd.notna(row[pcode_idx]) else ""
+                if not code or code == 'product_code':
+                    continue
+                doc = str(row[doc_idx]).strip().upper() if (doc_idx is not None and pd.notna(row[doc_idx])) else ""
+                if doc.startswith('TRA-'):
+                    continue
+                if kho_want and kho_norm(row[kho_idx2]) != kho_want:
+                    continue
+                day = str(row[date_idx]).strip()[:10] if (date_idx is not None and pd.notna(row[date_idx])) else ""
+                if (re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', filt) and day != filt) or (not re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', filt) and doc != filt):
+                    continue
+                sel_idx.append(rel_idx)
+                sel_recs.append({k: (row[i] if pd.notna(row[i]) else "") for k, i in col_map.items() if i < len(row)})
+        else:
+            for rel_idx, rec in zip(pending_row_indices, pending_records):
+                if str(rec.get('Số chứng từ (*)', '')).strip().upper().startswith('TRA-'):
+                    continue
+                if kho_want and kho_norm(rec.get('KHO')) != kho_want:
+                    continue
+                sel_idx.append(rel_idx)
+                sel_recs.append(rec)
+        if not sel_recs:
+            print("ℹ️ Không có dòng nào để in tem với lựa chọn này.")
+            return
 
-            code128 = f"{pcode}{sz}" if sz else pcode
-
-            # Định dạng giá bán VND hiển thị đẹp (ví dụ: 450.000 đ)
-            raw_price = sp_info.get('product_price') or rec.get('Giá', '')
-            try:
-                num_p = parse_number(raw_price)
-                price_str = f"{int(num_p):,} đ".replace(",", ".") if num_p > 0 else str(raw_price)
-            except Exception:
-                price_str = str(raw_price)
-
-            qr = sp_info.get('web_url') or rec.get('QR code', '')
-
-            out_rows.append({
-                'QR code': qr,
-                'Tên': pname,
-                'Màu': pcolor,
-                'Size': sz,
-                'Size Color': scolor,
-                'F6': f6,
-                'Code128': code128,
-                'Gía': price_str
-            })
-
-        out_df = pd.DataFrame(out_rows)
+        out_df = pd.DataFrame([label_record(rec, product_map) for rec in sel_recs], columns=LABEL_COLUMNS)
         exported_filepath = os.path.join(EXPORT_DIR, f"WEB_LABEL_{timestamp_file}.csv")
         out_df.to_csv(exported_filepath, index=False)
-
-        # Ghi đè trực tiếp vào file IN.csv cố định
         in_fixed_path = in_csv_path()
         try:
             os.makedirs(os.path.dirname(in_fixed_path), exist_ok=True)
-            out_df.to_csv(in_fixed_path, index=False)
-            exported_filepath += f"\n📁 (Đã ghi đè) {in_fixed_path}"
+            out_df.to_csv(in_fixed_path, index=False)  # mẫu .lbx cũ đọc IN.csv
+            if kho_want:
+                out_df.to_csv(os.path.join(os.path.dirname(in_fixed_path), f"IN_{kho_want}.csv"), index=False)
+            exported_filepath += f"\n📁 (Đã ghi đè) {in_fixed_path}" + (f" + IN_{kho_want}.csv" if kho_want else "")
         except Exception as e:
             print(f"[!] Không thể ghi đè file IN.csv: {e}")
+        print(f"\n🏷️ {len(sel_recs)} dòng · {int(out_df['F6'].sum())} tem\n📁 {exported_filepath}")
+        if input("Mở P-touch in xong chưa? Đã in xong thì gõ y để đánh dấu (Enter = chưa): ").strip().lower() == 'y':
+            loader.update_status(sheet_name, sel_idx, status_col_idx, f"Done - {now_str}")
+            print("✅ Đã đánh dấu đã in (web_label).")
+        else:
+            print("ℹ️ Chưa đánh dấu — lần sau vẫn ra các dòng này (hoặc bấm \"Đã in xong\" trên app).")
+        return
 
     # ==================== TASK 9: ĐỒNG BỘ SKU TAB NHAP VÀO 2 KHO ====================
     elif choice == 9:
@@ -3838,8 +3870,8 @@ def print_submenu_website():
              [bold #FFD700]🏷️ SUB-MENU: TEM & KHO[/bold #FFD700]
 -------------------------------------------------------------------
   [dim](Đã ẩn [1] đăng SP web cũ, [2] tồn web cũ, [3] cào ảnh web cũ — web mới đọc thẳng Sheet)[/dim]
-  [4] 🖨️  In Tem Mã Hàng (Barcode & QR, ghi đè file IN.csv)
-  [5] 🔄 Đồng Bộ Mã Hàng Mới Từ Phiếu Nhập Kho Vào Kho 15E / Kho Y3C
+  [4] 🖨️  In Tem Mã Hàng theo kho / phiếu (IN_15E.csv / IN_Y3C.csv + IN.csv; đánh dấu khi in xong)
+  [5] 🔄 Đồng Bộ Mã Hàng Mới Vào Kho 15E / Kho Y3C (chỉ dự phòng — bot đã tự thêm lúc ghi phiếu nhập kho)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""

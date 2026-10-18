@@ -1495,7 +1495,9 @@ function handleStock_(body, dryRun) {
   if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
   if (action === 'xuat_misa') return handleMisaExport_(body, seller, dryRun);
   if (action === 'hoa_don') return invoiceAction_(body, seller, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don']).join(', ') };
+  if (action === 'in_tem') return labelPrint_(body, dryRun);
+  if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -3700,6 +3702,115 @@ function invoiceDate_(v) {
   if (m) return ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + (m[3].length === 2 ? '20' + m[3] : m[3]);
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+}
+
+// ---- In tem theo kho (V34, anh Kha "làm" 18/10) — cùng cột / luật với main.py task 10 (LABEL_COLUMNS) ----
+// in_tem   {so_chung_tu, kho} | {ngay: dd/mm/yyyy, kho} (dòng nhập dự phòng không số CT) → ghi IN Mini Code/IN_15E.csv | IN_Y3C.csv + IN.csv
+// da_in_tem {cùng bộ lọc} | {dong:[số hàng NHAP]} → web_label = "Done - <giờ>" (chỉ lúc này mới tính là đã in)
+const LABEL_COLUMNS = ['QR code', 'Tên', 'Màu', 'Size', 'Size Color', 'F6', 'Code128', 'Gía']; // như main.py task 10 (mẫu P-touch .lbx đọc đúng tên)
+const LABEL_FOLDER_NAME = 'IN Mini Code';
+
+/** Dòng NHAP theo bộ lọc (bỏ phiếu trả hàng TRA-). */
+function labelSelect_(body) {
+  const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
+  if (!kho) return { error: 'kho phải là 15E hoặc Y3C' };
+  const so = String(body.so_chung_tu || '').trim().toUpperCase();
+  const ngay = body.ngay ? invoiceDate_(body.ngay) : '';
+  const rowsWanted = Array.isArray(body.dong) ? body.dong.map(Number) : null;
+  if (!so && !ngay && !rowsWanted) return { error: 'cần so_chung_tu, ngay (dd/mm/yyyy) hoặc dong' };
+  const nh = sheetValues_('NHAP');
+  const c = headerMap_(nh[0]);
+  const dayKey = ngay ? ngay.split('/').reverse().join('-') : '';
+  const out = [];
+  for (let r = 1; r < nh.length; r++) {
+    const code = String(nh[r][c.product_code] || '').trim().toUpperCase();
+    if (!code || code === 'PRODUCT_CODE') continue;
+    const doc = String(nh[r][c['Số chứng từ (*)']] || '').trim().toUpperCase();
+    if (doc.indexOf('TRA-') === 0) continue;
+    if (KHO_ALIASES[String(nh[r][c.KHO] || '').trim().toUpperCase()] !== kho) continue;
+    if (rowsWanted) { if (rowsWanted.indexOf(r + 1) === -1) continue; }
+    else if (so) { if (doc !== so) continue; }
+    else if (dateKey_(nh[r][c['Ngày chứng từ (*)']]) !== dayKey) continue;
+    out.push({ row: r + 1, code, size: normSize_(nh[r][c.item_size]), color: String(nh[r][c.product_color] || '').trim(),
+      qty: Number(nh[r][c['Số lượng (*)']]) || 1, da_in: c.web_label !== undefined && /^Done/i.test(String(nh[r][c.web_label] || '')) });
+  }
+  return { kho, rows: out };
+}
+
+/** 1 dòng tem: QR = web_url, Tên = product_name, giá bán dạng "450.000 đ" (như main.py). */
+function labelRecord_(x) {
+  const sp = sheetValues_('SANPHAM');
+  if (!MEMO.__labelSp) {
+    let hr = 0;
+    for (let i = 0; i < Math.min(2, sp.length); i++) if (sp[i].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = i; break; }
+    const c = headerMap_(sp[hr]);
+    MEMO.__labelSp = {};
+    for (let i = hr + 1; i < sp.length; i++) {
+      const k = String(sp[i][c.product_code] || '').trim().toUpperCase();
+      if (k) MEMO.__labelSp[k] = { name: c.product_name !== undefined ? sp[i][c.product_name] : '', color: c.product_color !== undefined ? sp[i][c.product_color] : '',
+        price: c.product_price !== undefined ? sp[i][c.product_price] : '', url: c.web_url !== undefined ? sp[i][c.web_url] : '' };
+    }
+  }
+  const p = MEMO.__labelSp[x.code] || {};
+  const color = String(x.color || p.color || '').trim();
+  const priceNum = moneyValue_(p.price);
+  return { 'QR code': String(p.url || '').trim(), 'Tên': String(p.name || '').trim(), 'Màu': color, 'Size': x.size,
+    'Size Color': x.size && color ? color + ' (Size ' + x.size + ')' : (color || 'Size ' + x.size), 'F6': Math.max(1, Math.round(x.qty)),
+    'Code128': x.code + x.size, 'Gía': priceNum > 0 ? String(priceNum).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' đ' : String(p.price || '') };
+}
+
+/** CSV như pandas to_csv (UTF-8, dấu phẩy, bọc "" khi có , " hoặc xuống dòng). */
+function labelCsv_(records) {
+  const cell = v => { const t = String(v === undefined || v === null ? '' : v); return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  return [LABEL_COLUMNS.join(',')].concat(records.map(r => LABEL_COLUMNS.map(k => cell(r[k])).join(','))).join('\n') + '\n';
+}
+
+function labelFolder_() {
+  const id = PropertiesService.getScriptProperties().getProperty('LABEL_FOLDER_ID');
+  if (id) return DriveApp.getFolderById(id);
+  const it = DriveApp.getRootFolder().getFoldersByName(LABEL_FOLDER_NAME);
+  if (!it.hasNext()) throw new Error('Không thấy thư mục My Drive/' + LABEL_FOLDER_NAME);
+  return it.next();
+}
+
+function labelWrite_(folder, name, csv) {
+  const it = folder.getFilesByName(name);
+  if (it.hasNext()) { const f = it.next(); f.setContent(csv); return f; }
+  return folder.createFile(Utilities.newBlob(csv, 'text/csv', name));
+}
+
+function labelPrint_(body, dryRun) {
+  MEMO = {};
+  const sel = labelSelect_(body);
+  if (sel.error) return { ok: false, action: 'in_tem', error: sel.error };
+  if (!sel.rows.length) return { ok: false, action: 'in_tem', error: 'không có dòng nhập nào khớp (kho ' + sel.kho + ')' };
+  const records = sel.rows.map(labelRecord_);
+  const soTem = records.reduce((t, r) => t + r.F6, 0);
+  const out = { ok: true, action: 'in_tem', kho: sel.kho, dry_run: dryRun, so_dong: records.length, so_tem: soTem,
+    rows: sel.rows.map((x, i) => ({ dong: x.row, ma_hang: records[i].Code128, so_tem: records[i].F6, da_in: x.da_in })) };
+  if (dryRun) return out;
+  const folder = labelFolder_();
+  const csv = labelCsv_(records);
+  const f = labelWrite_(folder, 'IN_' + sel.kho + '.csv', csv);
+  labelWrite_(folder, 'IN.csv', csv); // mẫu .lbx cũ vẫn đọc IN.csv
+  out.file = 'IN_' + sel.kho + '.csv';
+  out.link = f.getUrl();
+  return out;
+}
+
+function labelDone_(body, nguoi, dryRun) {
+  MEMO = {};
+  const sel = labelSelect_(body);
+  if (sel.error) return { ok: false, action: 'da_in_tem', error: sel.error };
+  if (!sel.rows.length) return { ok: false, action: 'da_in_tem', error: 'không có dòng nhập nào khớp' };
+  if (dryRun) return { ok: true, action: 'da_in_tem', dry_run: true, so_dong: sel.rows.length };
+  const sheet = getSheet_('NHAP');
+  const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
+  requireColumns_('NHAP', c, ['web_label']);
+  const stamp = 'Done - ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  sel.rows.forEach(x => sheet.getRange(x.row, c.web_label + 1).setValue(stamp));
+  console.log('da_in_tem kho ' + sel.kho + ' bởi ' + nguoi + ': ' + sel.rows.length + ' dòng');
+  return { ok: true, action: 'da_in_tem', so_dong: sel.rows.length, _sync: ['NHAP'] };
 }
 
 /** Trigger sáng thứ Hai: nhắc anh các phiếu quá INVOICE_REMIND_DAYS ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn. */

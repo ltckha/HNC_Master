@@ -128,6 +128,12 @@ Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký g
 - **Còn lại**: trigger `dailyMisaSummary` 21:00 gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
 - Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập đơn MISA (mẫu `HNC_Templates/Nhap_khau_don_hang.xlsx`) do web làm vì web giữ thông tin khách / hoá đơn / thanh toán; bot chỉ soạn tin Zalo.
 
+## In tem theo kho (V34, anh Kha "làm" 18/10)
+
+- `in_tem` (cửa `?stock_key`): `{so_chung_tu, kho}` hoặc `{ngay: "dd/mm/yyyy", kho}` (lấy cả dòng nhập Zalo không số chứng từ) hoặc `{dong:[số hàng NHAP], kho}`. Bỏ phiếu trả hàng TRA-. Ghi `My Drive/IN Mini Code/IN_15E.csv` / `IN_Y3C.csv` và chép thành `IN.csv` (mẫu P-touch cũ). Cột / luật như menu Mac task 10 (`LABEL_COLUMNS`: QR code · Tên · Màu · Size · Size Color · F6 (= số tem = số lượng) · Code128 (= mã hàng) · Gía). Trả `{ok, kho, so_dong, so_tem, rows:[{dong, ma_hang, so_tem, da_in}], file, link}`; `dry_run` không ghi file.
+- `da_in_tem` (cùng bộ lọc): ghi `web_label = "Done - <giờ>"`. Chỉ lúc này mới tính đã in (tạo file chưa tính). Trả `{ok, so_dong}`.
+- Menu Mac [1] › [4]: chọn kho + số chứng từ / ngày (Enter = mọi dòng chưa in), ghi IN.csv (+ IN_<kho>.csv), hỏi "đã in xong" rồi mới đánh dấu. Menu [5] đồng bộ mã hàng vào kho chỉ còn là dự phòng.
+
 ## Xuất file MISA qua bot (web /admin/san, anh Kha "làm" 17/10)
 
 `POST ?stock_key=` `{action:"xuat_misa", loai, nguoi, dry_run?}`, giống menu HNC mục 4 (web không giữ giá nhập / thuế nên chạy qua bot).
