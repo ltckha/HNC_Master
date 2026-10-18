@@ -877,6 +877,8 @@ const lbRow2 = ['16/10/2026', 'NK000123', 'TH2040D', 'Đen', 'Y3C', 41, 1, '', '
 const lbZalo = ['16/10/2026', '', 'TH2040N', 'Nâu', '15E', 41, 1, '', 'Zalo_Update', 'Zalo_Update', 'Zalo_Update', '', '', '', '', ''];
 DATA.NHAP.push(lbRow, lbRow2, lbZalo);
 const lbN = DATA.NHAP.length;
+DATA.in_tem_lenh = [['kho', 'lenh', 'ket_qua', 'cap_nhat'], ['15E', '', '', ''], ['Y3C', '', '', '']];
+const lenhOf = kho => { const r = DATA.in_tem_lenh.find(x => x[0] === kho); return r[1] ? JSON.parse(r[1]) : null; };
 const it = (b, dry) => ctx.handleStock_(Object.assign({ action: 'in_tem', seller: 'nv@hn.vn' }, b), !!dry);
 let lr = it({ so_chung_tu: 'NK000123', kho: '15E' }, true);
 eq('in_tem chạy thử: chỉ kho 15E của phiếu, số tem = số lượng', [lr.ok, lr.so_dong, lr.so_tem, lr.rows[0].ma_hang], [true, 1, 3, 'TH2040D40']);
@@ -885,14 +887,13 @@ const lbFile = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.
 const lbCsv = lbFile ? Buffer.from(lbFile.bytes).toString() : '';
 eq('in_tem: ghi IN_15E.csv + IN.csv, cột như task 10', [lr.file, !!lbFile, lbCsv.split('\n')[0], /TH2040D40/.test(lbCsv), !!Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN.csv')],
   ['IN_15E.csv', true, 'QR code,Tên,Màu,Size,Size Color,F6,Code128,Gía', true, true]);
-const lbFlag = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_15E.can_in');
-const flagJ = lbFlag ? JSON.parse(Buffer.from(lbFlag.bytes).toString()) : {};
-eq('in_tem: ghi cờ IN_15E.can_in cho Mac in QL-700 (dòng, mã, số tem)', [lr.tu_in, flagJ.kho, flagJ.dong.length, flagJ.ma_hang[0], flagJ.so_tem, flagJ.luc === lr.luc], [true, '15E', 1, 'TH2040D40', 3, true]);
+const flagJ = lenhOf('15E') || {};
+eq('in_tem: ghi lệnh vào tab in_tem_lenh cho Mac in QL-700 (dòng, tem, số tem)', [lr.tu_in, flagJ.kho, flagJ.dong.length, flagJ.tem[0][flagJ.cot.indexOf('Code128')], flagJ.so_tem, flagJ.luc === lr.luc], [true, '15E', 1, 'TH2040D40', 3, true]);
 let kq = ctx.handleStock_({ action: 'kq_in_tem', kho: '15E' }, false);
 eq('kq_in_tem: đang chờ in, chưa có kết quả', [kq.ok, kq.dang_cho_in, kq.ket_qua], [true, true, null]);
-IN_DIR.createFile({ name: 'IN_15E.ket_qua.json', bytes: Array.from(Buffer.from(JSON.stringify({ ok: true, so_tem_da_in: 3 }))), mime: 'application/json' });
+DATA.in_tem_lenh[1][1] = ''; DATA.in_tem_lenh[1][2] = JSON.stringify({ ok: true, so_tem_da_in: 3 });
 kq = ctx.handleStock_({ action: 'kq_in_tem', kho: 'TBH' }, false);
-eq('kq_in_tem: đọc ket_qua.json của Mac', [kq.kho, kq.ket_qua.so_tem_da_in], ['15E', 3]);
+eq('kq_in_tem: đọc ket_qua Mac ghi, hết chờ', [kq.kho, kq.ket_qua.so_tem_da_in, kq.dang_cho_in], ['15E', 3, false]);
 lr = it({ ngay: '16/10/2026', kho: '15E' }, true);
 eq('in_tem theo ngày + kho: lấy cả dòng nhập Zalo không số chứng từ', lr.rows.some(r => r.ma_hang === 'TH2040N41'), true);
 eq('chưa bấm "Đã in" → web_label còn trống', lbRow[9], '');
@@ -902,14 +903,14 @@ eq('da_in_tem → web_label Done cho đúng dòng', [dn.ok, dn.so_dong, /^Done -
 lr = it({ so_chung_tu: 'NK000123', kho: '15E', chon: [{ dong: lbN - 2, so_tem: 5 }] }, true);
 eq('in_tem chon: so_tem tuỳ chỉnh + ten/mau/size/gia', [lr.ok, lr.so_tem, lr.rows[0].so_tem, lr.rows[0].mau, lr.rows[0].size], [true, 5, 5, 'Đen', '40']);
 lr = it({ ngay: '16/10/2026', kho: '15E', chon: [{ dong: lbN - 2, so_tem: 0 }, { dong: lbN, so_tem: 2 }] });
-const flag2 = JSON.parse(Buffer.from(Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_15E.can_in').bytes).toString());
-eq('in_tem chon: so_tem 0 bỏ dòng, cờ chỉ có dòng in', [lr.so_dong, flag2.dong, flag2.so_tem, flag2.ma_hang], [1, [lbN], 2, ['TH2040N41']]);
+const flag2 = lenhOf('15E');
+eq('in_tem chon: so_tem 0 bỏ dòng, lệnh chỉ có dòng in', [lr.so_dong, flag2.dong, flag2.so_tem, flag2.tem.map(t => t[6])], [1, [lbN], 2, ['TH2040N41']]);
 // in_bu
 const ib = (b, dry) => ctx.handleStock_(Object.assign({ action: 'in_bu', seller: 'nv@hn.vn', kho: 'Y3C' }, b), !!dry);
 let bu = ib({ items: [{ ma_hang: 'th2040d40', so_tem: 2 }, { ma_hang: 'KHONGCO40', so_tem: 1 }] });
-eq('in_bu: mã không có → báo lỗi dòng, không in', [bu.ok, bu.rows[1].loi, !!Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_Y3C.can_in')], [false, 'mã không có trong SANPHAM', false]);
+eq('in_bu: mã không có → báo lỗi dòng, không in', [bu.ok, bu.rows[1].loi, lenhOf('Y3C')], [false, 'mã không có trong SANPHAM', null]);
 bu = ib({ items: [{ ma_hang: 'TH2040D40', so_tem: 2 }] });
-const flagBu = JSON.parse(Buffer.from(Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_Y3C.can_in').bytes).toString());
+const flagBu = lenhOf('Y3C');
 const logBu = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_BU_nhat_ky.csv');
 eq('in_bu: cờ không có dòng NHAP, ghi nhật ký', [bu.ok, bu.so_tem, bu.rows[0].size, flagBu.dong, flagBu.in_bu, /TH2040D40,2/.test(Buffer.from(logBu.bytes).toString())], [true, 2, '40', [], true, true]);
 eq('in_bu không đụng web_label', lbRow2[9], '');

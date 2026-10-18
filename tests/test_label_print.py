@@ -3,7 +3,6 @@ Chạy: venv/bin/python tests/test_label_print.py"""
 import json
 import os
 import sys
-import tempfile
 from datetime import datetime, timedelta
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,19 +25,38 @@ mods = label_render.code128_modules('TH2040D40')
 eq('code128 tổng module', sum(int(m) for m in mods), 11 * (9 + 2) + 13)
 eq('code128 số kiểm tra', (104 + sum((i + 1) * (ord(c) - 32) for i, c in enumerate('TH2040D40'))) % 103, 76)  # tính tay: (104 + 1002) % 103
 eq('code128 ký hiệu kiểm tra nằm trước stop', mods[-13:-7], label_render.CODE128[76])
-img = label_render.render_label({'Tên': 'Giày tây nam da bò TH2040D', 'Size Color': 'Đen (Size 40)', 'Code128': 'TH2040D40'}, 'Y3C')
+img = label_render.render_label({'Tên': 'Giày tây nam da bò TH2040D', 'Size Color': 'Đen (Size 40)', 'Code128': 'TH2040D40', 'Gía': '800.000 đ'}, 'Y3C')
 eq('tem 62x29: ảnh 1-bit 696x271', (img.size, img.mode), ((696, 271), '1'))
 
-d = tempfile.mkdtemp()
-label_print.folder = lambda: d
+COT = ['QR code', 'Tên', 'Màu', 'Size', 'Size Color', 'F6', 'Code128', 'Gía']
+
+
+class FakeWS:
+    """Tab in_tem_lenh giả: kho | lenh | ket_qua | cap_nhat."""
+    def __init__(self):
+        self.v = [['kho', 'lenh', 'ket_qua', 'cap_nhat'], ['15E', '', '', ''], ['Y3C', '', '', '']]
+
+    def get_all_values(self):
+        return [list(r) for r in self.v]
+
+    def update_cells(self, cells):
+        for c in cells:
+            self.v[c.row - 1][c.col - 1] = c.value
+
+    def kq(self, kho):
+        r = next(x for x in self.v if x[0] == kho)
+        return json.loads(r[2]) if r[2] else None
+
+    def lenh(self, kho):
+        return next(x for x in self.v if x[0] == kho)[1]
+
+
+def job(kho='15E', luc=None, dong=(120,), so_tem=3):
+    return json.dumps({'kho': kho, 'luc': luc or datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'dong': list(dong), 'so_tem': so_tem, 'cot': COT,
+                       'tem': [['', 'Giày tây', 'Đen', '40', 'Đen (Size 40)', so_tem, 'TH2040D40', '800.000 đ']]})
+
+
 calls = {'print': 0, 'mark': []}
-
-
-def write_job(luc=None, so_tem=3, codes=('TH2040D40',)):
-    with open(os.path.join(d, 'IN_15E.csv'), 'w', encoding='utf-8') as f:
-        f.write('QR code,Tên,Màu,Size,Size Color,F6,Code128,Gía\n,Giày tây,Đen,40,Đen (Size 40),3,TH2040D40,800.000 đ\n')
-    with open(os.path.join(d, 'IN_15E.can_in'), 'w', encoding='utf-8') as f:
-        json.dump({'kho': '15E', 'luc': luc or datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'dong': [120], 'ma_hang': list(codes), 'so_tem': so_tem}, f)
 
 
 def fake_print(ok, loi='', da_gui=None):
@@ -49,40 +67,56 @@ def fake_print(ok, loi='', da_gui=None):
 
 
 label_print.mark_done = lambda rows, codes: calls['mark'].append((rows, sorted(codes))) or rows
-flag = os.path.join(d, 'IN_15E.can_in')
+ws = FakeWS()
 
-# 1. In được → đánh dấu đúng dòng, xoá cờ, ket_qua ok
+# 1. In được → đánh dấu đúng dòng, xoá lệnh, ket_qua ok
 label_print.print_records = fake_print(True)
-write_job()
-r = label_print.process_flag('15E')
-eq('in xong: đánh dấu + xoá cờ', [r['ok'], r['so_tem_da_in'], r['dong_da_danh_dau'], os.path.exists(flag), calls['mark'][-1]], [True, 3, [120], False, ([120], ['TH2040D40'])])
-kq = json.load(open(os.path.join(d, 'IN_15E.ket_qua.json'), encoding='utf-8'))
-eq('ket_qua.json có số tem, lỗi trống', [kq['kho'], kq['so_tem_da_in'], kq['loi']], ['15E', 3, ''])
+ws.v[1][1] = job()
+label_print.poll_once(ws)
+eq('in xong: đánh dấu + xoá lệnh', [ws.kq('15E')['ok'], ws.kq('15E')['so_tem_da_in'], ws.kq('15E')['dong_da_danh_dau'], ws.lenh('15E'), calls['mark'][-1]],
+   [True, 3, [120], '', ([120], ['TH2040D40'])])
 
-# 2. Lỗi máy in → KHÔNG đánh dấu, giữ cờ, ghi lỗi
+# 2. Không thấy máy in (chưa gửi) → không đánh dấu, giữ lệnh, ghi lỗi
 n_mark = len(calls['mark'])
 label_print.print_records = fake_print(False, label_print.ERR_HINT)
-write_job()
-r = label_print.process_flag('15E')
-eq('lỗi: không đánh dấu, giữ cờ', [r['ok'], r['so_tem_da_in'], len(calls['mark']) == n_mark, os.path.exists(flag), 'Editor Lite' in r['loi']], [False, 0, True, True, True])
+ws.v[2][1] = job('Y3C')
+label_print.poll_once(ws)
+eq('chưa tới máy in: giữ lệnh, không đánh dấu', [ws.kq('Y3C')['ok'], len(calls['mark']) == n_mark, bool(ws.lenh('Y3C')), 'Editor Lite' in ws.kq('Y3C')['loi']], [False, True, True, True])
 
-# 3. CSV chưa đồng bộ (mã khác cờ) → chưa in, chờ lần sau
-n_print = calls['print']
-write_job(codes=('KHAC41',))
-eq('CSV chưa khớp cờ → chờ', [label_print.process_flag('15E'), calls['print'] == n_print, os.path.exists(flag)], [None, True, True])
-
-# 4. Cờ quá 30 phút → bỏ, không in
-write_job(luc=(datetime.now() - timedelta(minutes=45)).strftime('%Y-%m-%d %H:%M:%S'))
-r = label_print.process_flag('15E')
-eq('cờ cũ → bỏ, không in, không đánh dấu', [r['ok'], calls['print'] == n_print, os.path.exists(flag), len(calls['mark']) == n_mark], [False, True, False, True])
-
-# 5. Đã gửi máy in rồi mới báo lỗi (hết giấy giữa chừng) → không đánh dấu, xoá cờ (không in lặp)
+# 3. Đã gửi rồi máy báo lỗi (hết giấy) → xoá lệnh (không in lặp), không đánh dấu
 label_print.print_records = fake_print(False, 'máy in báo: hết giấy', da_gui=True)
-write_job()
-r = label_print.process_flag('15E')
-eq('lỗi sau khi gửi: xoá cờ, không đánh dấu', [r['ok'], os.path.exists(flag), len(calls['mark']) == n_mark], [False, False, True])
+label_print.poll_once(ws)
+eq('lỗi sau khi gửi: xoá lệnh, không đánh dấu', [ws.lenh('Y3C'), len(calls['mark']) == n_mark], ['', True])
 
-# 6. Cắt cuối đợt: 1 lệnh, trang nối 0x0C, chỉ trang cuối 0x1A, "cắt sau N tem" = N
+# 4. Lệnh quá 30 phút → bỏ, không in
+n_print = calls['print']
+ws.v[1][1] = job(luc=(datetime.now() - timedelta(minutes=45)).strftime('%Y-%m-%d %H:%M:%S'))
+label_print.poll_once(ws)
+eq('lệnh cũ → bỏ, không in', [ws.kq('15E')['ok'], calls['print'] == n_print, ws.lenh('15E')], [False, True, ''])
+
+# 5. In bù: không có dòng NHAP → không đánh dấu
+label_print.print_records = fake_print(True)
+ws.v[1][1] = job(dong=())
+label_print.poll_once(ws)
+eq('in bù: in xong, không đánh dấu', [ws.kq('15E')['ok'], len(calls['mark']) == n_mark], [True, True])
+
+# 6. Bot ghi lệnh mới trong lúc đang in → không xoá lệnh mới
+newer = job(so_tem=1)
+orig = label_print.process_job
+
+
+def racing(lenh, dry=False):
+    ws.v[1][1] = newer
+    return orig(lenh, dry)
+
+
+label_print.process_job = racing
+ws.v[1][1] = job()
+label_print.poll_once(ws)
+label_print.process_job = orig
+eq('lệnh mới đến giữa chừng → giữ lại', ws.lenh('15E'), newer)
+
+# 7. Cắt cuối đợt: 1 lệnh, "cắt sau N tem" = N
 from brother_ql.conversion import convert  # noqa: E402
 imgs = [img] * 4
 data = convert(qlr=label_print.batch_raster('QL-700', 4, False), images=imgs, label='62x29', rotate='0', cut=True)

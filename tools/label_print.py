@@ -1,12 +1,13 @@
-"""In tem tự động qua Brother QL-700 (V34 mục 6, anh Kha "làm" 18/10). Chạy trên Mac mini (máy in cắm USB ở 15E).
+"""In tem tự động qua Brother QL-700 (V34 mục 6, anh Kha "làm" 18/10). Chạy trên Mac mini (máy in cắm USB).
 
-Luồng: bot (cửa in_tem) ghi My Drive/IN Mini Code/IN_<kho>.csv + cờ IN_<kho>.can_in (JSON: kho, dong, so_tem…)
-→ launchd gọi file này mỗi 30 giây → dựng tem (tools/label_render.py) → brother_ql in qua USB (không cần driver Brother)
-→ in được hết thì ghi NHAP.web_label = "Done - <giờ>" cho đúng các dòng → ghi IN_<kho>.ket_qua.json → xoá cờ.
-Lỗi (máy tắt, chưa cắm USB, Editor Lite còn bật, hết giấy) → KHÔNG đánh dấu, ghi lỗi vào ket_qua.json, giữ cờ để thử lại.
-Không gửi Zalo. Chạy tay: venv/bin/python tools/label_print.py [--thu]   (--thu: dựng ảnh tem vào /tmp, không in)
+Luồng (anh Kha 18/10: bỏ chờ Drive, tem ra trong ~10–15 giây):
+bot (cửa in_tem / in_bu) ghi lệnh vào tab ẩn `in_tem_lenh` (1 dòng / kho: kho | lenh | ket_qua | cap_nhat)
+→ dịch vụ này (launchd, chạy liên tục) đọc tab mỗi 4 giây trong giờ mở cửa → nhận lệnh (xoá ô lenh) → dựng tem
+(tools/label_render.py) → in cả đợt qua USB, cắt 1 lần cuối → ghi NHAP.web_label = "Done - <giờ>" cho đúng dòng
+→ ghi ô ket_qua (JSON). Lỗi trước khi gửi máy in (máy tắt, chưa cắm) → giữ lệnh, thử lại; quá 30 phút thì bỏ.
+Đã gửi máy in thì không gửi lại (tránh in trùng). Bot vẫn ghi IN_<kho>.csv lên Drive cho P-touch dự phòng.
+Chạy tay: venv/bin/python tools/label_print.py [--mot-lan]
 """
-import csv
 import fcntl
 import json
 import os
@@ -17,7 +18,6 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
-from hnc_paths import in_csv_path  # noqa: E402
 import label_render  # noqa: E402
 
 MODEL = 'QL-700'
@@ -25,28 +25,8 @@ KHOS = ('15E', 'Y3C')
 SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
 CAT = 'cuoi_dot'  # 'cuoi_dot' = in liền cả đợt, cắt 1 lần ở cuối (anh Kha 18/10, như P-touch) · 'moi_tem' = cắt từng tem
 BATCH_MAX = 255   # máy chỉ đếm "cắt sau N tem" tới 255 → đợt dài hơn thì chia
-MAX_AGE_MIN = 30  # cờ cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
-ERR_HINT = 'Không thấy máy in QL-700: kiểm máy đã bật, cắm USB vào Mac mini, và đã TẮT Editor Lite (giữ nút Editor Lite tới khi đèn tắt).'
-
-
-def folder():
-    return os.path.dirname(in_csv_path())
-
-
-def _read_text(path, tries=3):
-    """Đọc file Drive; file mới trên mây (dataless) có lúc báo lỗi lần đầu → chờ rồi thử lại."""
-    for i in range(tries):
-        try:
-            with open(path, encoding='utf-8-sig', newline='') as f:
-                return f.read()
-        except OSError:
-            if i == tries - 1:
-                raise
-            time.sleep(2)
-
-
-def read_csv(path):
-    return list(csv.DictReader(_read_text(path).splitlines()))
+MAX_AGE_MIN = 30  # lệnh cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
+ERR_HINT = 'Không thấy máy in QL-700: kiểm đèn nguồn sáng xanh, dây USB cắm vào Mac mini, đèn Editor Lite tắt.'
 
 
 def batch_raster(model, n, cut_each):
@@ -65,16 +45,6 @@ def batch_raster(model, n, cut_each):
             self.page += 1
 
     return _Batch(model)
-
-
-def csv_matches(req, records):
-    """IN_<kho>.csv đã đồng bộ đúng lần yêu cầu này chưa (cùng mã hàng, cùng tổng số tem)."""
-    codes = [r.get('Code128', '').strip().upper() for r in records]
-    try:
-        total = sum(max(1, int(float(r.get('F6') or 1))) for r in records)
-    except ValueError:
-        return False
-    return sorted(codes) == sorted(str(x).upper() for x in req.get('ma_hang', [])) and total == int(req.get('so_tem') or total)
 
 
 def find_printer():
@@ -153,65 +123,105 @@ def mark_done(rows, codes):
     return marked
 
 
-def process_flag(kho, dry=False):
-    d = folder()
-    flag = os.path.join(d, f'IN_{kho}.can_in')
-    out = os.path.join(d, f'IN_{kho}.ket_qua.json')
-    csv_path = os.path.join(d, f'IN_{kho}.csv')
-    try:
-        req = json.loads(_read_text(flag) or '{}')
-        records = read_csv(csv_path) if os.path.exists(csv_path) else []
-    except (OSError, ValueError) as e:
-        # Không đọc được file Drive: vẫn ghi kết quả để app không chờ suông; giữ cờ, lần sau thử lại
-        return write_result(out, {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': '', 'so_tem': 0,
-                                  'so_tem_da_in': 0, 'ok': False, 'loi': f'chưa đọc được file in từ Google Drive ({e}), đang thử lại',
-                                  'dong_da_danh_dau': []})
+QUEUE_TAB = 'in_tem_lenh'
+POLL_SEC, POLL_IDLE_SEC = 4, 30
+GIO_MO = (7, 22)  # đọc nhanh trong giờ mở cửa, ngoài giờ 30 giây / lần
+
+
+def queue_sheet():
+    import gspread
+    gc = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json'))
+    return gc.open_by_key(SHEET_ID).worksheet(QUEUE_TAB)
+
+
+def queue_rows(ws):
+    """{kho: (số hàng, lenh, chỉ số cột)} theo tên cột hàng 1 (luật 4)."""
+    v = ws.get_all_values()
+    head = [h.strip() for h in v[0]]
+    for name in ('kho', 'lenh', 'ket_qua', 'cap_nhat'):
+        if name not in head:
+            raise RuntimeError(f'Tab {QUEUE_TAB} thiếu cột {name}')
+    col = {n: head.index(n) for n in ('kho', 'lenh', 'ket_qua', 'cap_nhat')}
+    out = {}
+    for i, r in enumerate(v[1:], start=2):
+        kho = (r[col['kho']] if col['kho'] < len(r) else '').strip().upper()
+        out[kho] = (i, (r[col['lenh']] if col['lenh'] < len(r) else '').strip())
+    return out, col
+
+
+def queue_write(ws, row, col, **fields):
+    import gspread
+    fields['cap_nhat'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    ws.update_cells([gspread.Cell(row, col[k] + 1, v) for k, v in fields.items()])
+
+
+def process_job(lenh_txt, dry=False):
+    """1 lệnh (JSON bot ghi) → in → kết quả dict. Trả (result, giữ_lệnh)."""
+    req = json.loads(lenh_txt)
+    kho = req.get('kho', '')
+    cot = req.get('cot') or []
+    records = [dict(zip(cot, [str(x) for x in t])) for t in req.get('tem', [])]
     expired = False
-    if req.get('luc') and not dry:
-        try:
-            expired = (datetime.now() - datetime.strptime(req['luc'], '%Y-%m-%d %H:%M:%S')).total_seconds() > MAX_AGE_MIN * 60
-        except ValueError:
-            pass
+    try:
+        expired = (datetime.now() - datetime.strptime(req.get('luc', ''), '%Y-%m-%d %H:%M:%S')).total_seconds() > MAX_AGE_MIN * 60
+    except ValueError:
+        pass
     if expired:
         res = {'ok': False, 'so_tem': int(req.get('so_tem') or 0), 'loi': f'yêu cầu in quá {MAX_AGE_MIN} phút chưa in được, đã bỏ — bấm In tem lại'}
-        if os.path.exists(flag):
-            os.remove(flag)
-    elif req.get('ma_hang') and not dry and not csv_matches(req, records):
-        return None  # Drive chưa đồng bộ xong IN_<kho>.csv, lần sau thử lại
     else:
         res = print_records(records, kho, dry=dry)
-    result = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': req.get('luc', ''),
+    result = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': req.get('luc', ''), 'in_bu': bool(req.get('in_bu')),
               'so_chung_tu': req.get('so_chung_tu', ''), 'ngay': req.get('ngay', ''), 'so_tem': res['so_tem'],
               'so_tem_da_in': res.get('so_tem_da_in', res['so_tem'] if res['ok'] else 0), 'ok': res['ok'], 'loi': res['loi'], 'dong_da_danh_dau': []}
-    if res['ok'] and not dry:
+    if res['ok'] and not dry and req.get('dong'):
         try:
-            result['dong_da_danh_dau'] = mark_done([int(x) for x in req.get('dong', [])], {r.get('Code128', '').strip().upper() for r in records})
+            result['dong_da_danh_dau'] = mark_done([int(x) for x in req['dong']], {r.get('Code128', '').strip().upper() for r in records})
         except Exception as e:
             result['loi'] = f'in xong nhưng chưa đánh dấu được trên Sheet: {e}'
-    if res.get('da_gui') and not dry and os.path.exists(flag):
-        os.remove(flag)  # đã gửi máy in thì không thử lại nữa (tránh in trùng); lỗi giữa chừng → người dùng bấm In lại
-    return write_result(out, result)
+    keep = not expired and not res['ok'] and not res.get('da_gui')  # chưa tới máy in → thử lại lần sau
+    print(json.dumps(result, ensure_ascii=False), flush=True)
+    return result, keep
 
 
-def write_result(out, result):
-    with open(out, 'w', encoding='utf-8') as f:
-        json.dump(result, f, ensure_ascii=False, indent=1)
-    print(json.dumps(result, ensure_ascii=False))
-    return result
+def poll_once(ws):
+    rows, col = queue_rows(ws)
+    for kho in KHOS:  # mỗi kho 1 đợt riêng, không trộn (anh Kha 18/10)
+        if kho not in rows or not rows[kho][1]:
+            continue
+        row, lenh = rows[kho]
+        try:
+            result, keep = process_job(lenh)
+        except (ValueError, KeyError) as e:
+            result, keep = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'ok': False, 'so_tem': 0, 'so_tem_da_in': 0,
+                            'loi': f'lệnh in hỏng: {e}', 'dong_da_danh_dau': []}, False
+        # Bot có thể đã ghi lệnh mới trong lúc in → chỉ xoá ô lenh nếu vẫn là lệnh vừa xử lý
+        cur, _ = queue_rows(ws)
+        fields = {'ket_qua': json.dumps(result, ensure_ascii=False)}
+        if not keep and cur.get(kho, (0, ''))[1] == lenh:
+            fields['lenh'] = ''
+        queue_write(ws, row, col, **fields)
 
 
 def main():
-    dry = '--thu' in sys.argv
+    import logging
+    logging.getLogger('brother_ql').setLevel(logging.ERROR)  # QL-700 không gửi "printing completed" — đã biết, không phải lỗi
     lock = open('/tmp/hnc_label_print.lock', 'w')
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        return  # lần chạy trước chưa xong
-    d = folder()
-    for kho in KHOS:  # mỗi kho 1 đợt riêng, không trộn (anh Kha 18/10)
-        if os.path.exists(os.path.join(d, f'IN_{kho}.can_in')) or (dry and os.path.exists(os.path.join(d, f'IN_{kho}.csv'))):
-            process_flag(kho, dry=dry)
-            time.sleep(1)
+        return  # đang có 1 bản chạy
+    ws = None
+    while True:
+        try:
+            ws = ws or queue_sheet()
+            poll_once(ws)
+        except Exception as e:  # mất mạng / quota Sheet: chờ rồi thử lại, kết nối lại từ đầu
+            print(f'{datetime.now():%Y-%m-%d %H:%M:%S} lỗi đọc tab {QUEUE_TAB}: {e}', flush=True)
+            ws = None
+            time.sleep(POLL_IDLE_SEC)
+        if '--mot-lan' in sys.argv:
+            return
+        time.sleep(POLL_SEC if GIO_MO[0] <= datetime.now().hour < GIO_MO[1] else POLL_IDLE_SEC)
 
 
 if __name__ == '__main__':

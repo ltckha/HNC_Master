@@ -66,7 +66,7 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 
 **Drive** (`hnc_paths.py` khai 1 chỗ):
 - `My Drive/HNC/He_thong/` (cũ: `Spark/HNC_Master`): `HNC_Templates` (tpl_*), `HNC_Exported_Files` (file xuất, `channel_links.csv`, SPEC_FILL_AI_*), `Outputs`. Không thấy thì main.py dừng, không dùng thư mục local.
-- `My Drive/IN Mini Code/`: `IN.csv` (mẫu P-touch cũ), `IN_<kho>.csv` + cờ `IN_<kho>.can_in` (bot `in_tem`) → Mac mini in thẳng QL-700 qua USB (launchd `vn.giayhainancy.hnc.intem` mở `~/Applications/HNC_InTem.app` → `tools/label_print.py`; cài bằng `tools/launchd/cai_in_tem.sh` — launchd chạy python trực tiếp thì không tải được file Drive chưa có trên máy, lỗi Errno 11, dựng tem `tools/label_render.py`, dùng chung với main.py task 10), in xong tự ghi `web_label` + `IN_<kho>.ket_qua.json`. Cần: QL-700 bật, cắm USB, tắt Editor Lite; HNC_InTem được macOS cho phép vào Google Drive. In liền cả đợt, cắt 1 lần cuối (`CAT` trong label_print.py).
+- `My Drive/IN Mini Code/`: `IN.csv` / `IN_<kho>.csv` (P-touch dự phòng), `IN_BU_nhat_ky.csv`. In tự động QL-700: bot ghi lệnh vào tab ẩn `in_tem_lenh` → Mac mini (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, chạy liên tục, đọc mỗi 4 giây; cài bằng `tools/launchd/cai_in_tem.sh`) in qua USB, dựng tem `tools/label_render.py` (dùng chung với main.py task 10), tự ghi `web_label` + ô `ket_qua`. Cần: QL-700 đèn nguồn sáng, cắm USB, đèn Editor Lite tắt. In liền cả đợt, cắt 1 lần cuối (`CAT`).
 - `My Drive/HNC/Thue/2026/`: `Hoá đơn 2026` (bot đọc theo ID `INVOICE_FOLDER_ID`), `Phiếu mua hàng` (bot ghi theo ID `PN_FOLDER_ID`: `Chưa chia/<NCC>/`, rồi `<hộ>/<NCC>/`).
 
 ## Cửa của bot (doPost)

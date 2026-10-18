@@ -3815,13 +3815,34 @@ function labelSend_(out, records, body, kho, dongs) {
   out.link = f.getUrl();
   out.luc = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
   if (body.tu_in !== false) {
-    // V34 mục 6: Mac in xong tự ghi web_label Done cho dongs + IN_<kho>.ket_qua.json
-    labelWrite_(folder, 'IN_' + kho + '.can_in', JSON.stringify({ kho, luc: out.luc, nguoi: String(body.seller || ''),
-      so_chung_tu: String(body.so_chung_tu || ''), ngay: String(body.ngay || ''), dong: dongs, in_bu: !!out.in_bu,
-      ma_hang: records.map(r => r.Code128), so_tem: records.reduce((t, r) => t + r.F6, 0) }));
+    // V34 mục 6: lệnh in đi qua tab ẩn in_tem_lenh (Mac mini đọc mỗi ~4 giây, không chờ Drive đồng bộ — anh Kha 18/10);
+    // Mac in xong tự ghi web_label Done cho dongs + cột ket_qua
+    const lenh = JSON.stringify({ kho, luc: out.luc, nguoi: String(body.seller || ''), so_chung_tu: String(body.so_chung_tu || ''),
+      ngay: String(body.ngay || ''), dong: dongs, in_bu: !!out.in_bu, so_tem: records.reduce((t, r) => t + r.F6, 0),
+      cot: LABEL_COLUMNS, tem: records.map(r => LABEL_COLUMNS.map(k => r[k] === undefined ? '' : r[k])) });
+    if (lenh.length > 45000) { out.ok = false; out.error = 'đợt quá nhiều tem cho 1 lệnh in tự động — chia nhỏ theo phiếu / chọn bớt dòng'; return out; }
+    labelQueueSet_(kho, { lenh });
     out.tu_in = true;
   }
   return out;
+}
+
+const LABEL_QUEUE_TAB = 'in_tem_lenh'; // tab ẩn: kho | lenh | ket_qua | cap_nhat (1 dòng / kho)
+
+/** Đọc / ghi dòng của kho trong tab in_tem_lenh theo tên cột (luật 4). */
+function labelQueueRow_(kho) {
+  const sheet = getSheet_(LABEL_QUEUE_TAB);
+  const v = sheet.getDataRange().getValues();
+  const c = headerMap_(v[0]);
+  requireColumns_(LABEL_QUEUE_TAB, c, ['kho', 'lenh', 'ket_qua', 'cap_nhat']);
+  for (let r = 1; r < v.length; r++) if (String(v[r][c.kho]).trim().toUpperCase() === kho) return { sheet, c, row: r + 1, vals: v[r] };
+  throw new Error('Tab ' + LABEL_QUEUE_TAB + ' thiếu dòng kho ' + kho);
+}
+
+function labelQueueSet_(kho, fields) {
+  const q = labelQueueRow_(kho);
+  Object.keys(fields).forEach(k => q.sheet.getRange(q.row, q.c[k] + 1).setValue(fields[k]));
+  q.sheet.getRange(q.row, q.c.cap_nhat + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'));
 }
 
 /** in_bu: in thêm tem theo mã hàng (mã + size), không đụng web_label NHAP; ghi nhật ký IN_BU_nhat_ky.csv. */
@@ -3864,12 +3885,10 @@ function labelExtraPrint_(body, dryRun) {
 function labelResult_(body) {
   const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
   if (!kho) return { ok: false, action: 'kq_in_tem', error: 'kho phải là 15E hoặc Y3C' };
-  const folder = labelFolder_();
-  const pending = folder.getFilesByName('IN_' + kho + '.can_in').hasNext();
-  const it = folder.getFilesByName('IN_' + kho + '.ket_qua.json');
+  const q = labelQueueRow_(kho);
   let kq = null;
-  if (it.hasNext()) { try { kq = JSON.parse(it.next().getBlob().getDataAsString()); } catch (e) { kq = null; } }
-  return { ok: true, action: 'kq_in_tem', kho, dang_cho_in: pending, ket_qua: kq };
+  try { kq = q.vals[q.c.ket_qua] ? JSON.parse(q.vals[q.c.ket_qua]) : null; } catch (e) { kq = null; }
+  return { ok: true, action: 'kq_in_tem', kho, dang_cho_in: !!String(q.vals[q.c.lenh] || '').trim(), ket_qua: kq };
 }
 
 function labelDone_(body, nguoi, dryRun) {
