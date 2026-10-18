@@ -2750,7 +2750,6 @@ def process_export_task(choice, loader):
     elif choice == 9:
         df_15e, _ = loader.load_sheet('KHO15E')
         df_y3c, _ = loader.load_sheet('KHOY3C')
-        sub_dict = get_sub_info(loader)
 
         _, col_map_15 = DynamicHeaderScanner.scan_data_headers(df_15e)
         _, col_map_y3 = DynamicHeaderScanner.scan_data_headers(df_y3c)
@@ -2785,10 +2784,7 @@ def process_export_task(choice, loader):
             if not pcode:
                 continue
 
-            # Tra cứu vị trí kệ từ tab SUB
-            sub_info = sub_dict.get(pcode.lower()) or {}
-            loc_15e = str(sub_info.get('15E_product_location', '')).strip()
-            loc_y3c = str(sub_info.get('Y3C_product_location', '')).strip()
+            loc_15e = loc_y3c = ''  # vị trí để trống, không lấy mặc định từ SUB (anh Kha 18/10, khớp bot appendKhoRow_)
 
             # Nếu dòng này thuộc Kho 15E ➔ Chỉ kiểm tra và thêm vào KHO15E
             if '15E' in kho:

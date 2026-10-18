@@ -2266,9 +2266,8 @@ function appendKhoRow_(k) {
     const f = columnLetter_(h.FSKU + 1), q = columnLetter_(h[qtyCol] + 1);
     return 'SUMIF(' + tab + '!' + f + ':' + f + '; ' + L(k.kho) + row + '; ' + tab + '!' + q + ':' + q + ')';
   };
-  const same = findKhoRows_(k.kho, k.code, null).find(r => r.product_location);
-  const values = { product_code: k.code, product_color: k.color || '', item_size: sizeValue_(k.size), opening_quantity: 0,
-    product_location: same ? same.product_location : '' };
+  // Vị trí để trống: chỉ ghi khi có người nhập (đổi vị trí / quét lên kệ), không lấy mặc định (anh Kha 18/10)
+  const values = { product_code: k.code, product_color: k.color || '', item_size: sizeValue_(k.size), opening_quantity: 0, product_location: '' };
   const formulas = {};
   formulas[k.kho] = '=CONCATENATE($' + L(k.kho) + '$1;' + L('product_code') + row + ';' + L('item_size') + row + ')';
   formulas.current_quantity = '=' + L('opening_quantity') + row + ' + ' + src('NHAP', 'Số lượng (*)') + ' - ' + src('XUAT', 'item_quantity') + ' - ' + src('BAN', 'item_quantity');
