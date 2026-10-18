@@ -6,6 +6,11 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 - Dùng lại bot Zalo cũ: chỉ đổi webhook, không tạo bot mới.
 - Mọi đọc/ghi đều theo **tên cột hàng 1**.
 
+## Tin bot tự gửi (anh Kha 18/10: hạn chế tự động nhắn)
+
+Chỉ còn 3 loại tự lên Zalo: **đơn web mới** và **doanh thu năm hộ chạm mốc** (đều qua cửa notify, web tự lọc) và **nhắc hoá đơn NCC thứ Hai 8:00**. Tin trả lời lệnh của anh / nhân viên giữ nguyên.
+Đã tắt (chỉ ghi Nhật ký): phiếu nhập chờ chia (`pn`), MISA cuối ngày 21:00 (`misa_ngay`), tin hoá đơn MISA khi khách lấy HĐ (`misa_hd`), tin "❌ HUỶ phiếu" (`misa_huy`), báo web lỗi / chạy lại (`web_loi`), lệch giá hoá đơn (`hd_lech` — web vẫn nhận `lech_gia` / `sua_misa` trong kết quả `hoa_don ghi`). Bật lại loại nào: Script Property `AUTO_ZALO` = các mã trên, cách nhau dấu phẩy.
+
 ## Điều khiển bằng số (anh Kha "làm" 17/10, như bot xưởng)
 
 - Nhắn `menu` / `m` (hoặc chữ bot không hiểu) → menu số kèm số việc chờ (N). Tin 1 chữ số trả lời câu hỏi bot gửi sau cùng cho người đó (nhớ 720 phút, Script Property `ask_<chat_id>`). Không có câu hỏi đang mở → bot gửi menu, không đoán. `0` = để sau, `9` = về menu.

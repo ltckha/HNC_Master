@@ -1427,7 +1427,7 @@ function saleUndo_(body, dryRun) {
     props.setProperty('saleops_' + ticket, JSON.stringify(rec));
     if (rec.hd) { // đã gửi tin hoá đơn MISA → báo huỷ
       const text = '❌ HUỶ phiếu ' + ticket + ' (đã gửi tin hoá đơn MISA) · ' + rec.b.length + ' dòng · ' + khos.join(', ') + ' · bởi ' + nguoi + ' — bỏ / xoá chứng từ này trên MISA nếu đã nhập.\nNhắn số: 9 Menu';
-      misaChats_().forEach(c => { try { sendMessage_(c, text); } catch (err) { console.error(err); } });
+      misaChats_().forEach(c => { try { autoZalo_('misa_huy', c, text); } catch (err) { console.error(err); } });
       out.misa_huy = true;
     }
     out._ky = rec.k.length > 0;
@@ -1825,9 +1825,8 @@ function receiptNotify_(r) {
   const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
   if (!owner || !r || !r.ok) return;
   try {
-    sendMessage_(owner, '📄 Có phiếu chờ chia: ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ' · ' + r.so_dong + ' dòng · ' +
-      r.so_doi + ' đôi → ' + receiptAppLink_(r.id) + '\nNhắn số: 1 Mở app chia size · 0 Để sau · 9 Menu');
-    navSetAsk_(owner, 'pn', { ids: [r.id], i: 0 });
+    if (autoZalo_('pn', owner, '📄 Có phiếu chờ chia: ' + (r.ncc_ten || 'chưa rõ NCC') + (r.so_phieu ? ' ' + r.so_phieu : '') + ' · ' + r.so_dong + ' dòng · ' +
+      r.so_doi + ' đôi → ' + receiptAppLink_(r.id) + '\nNhắn số: 1 Mở app chia size · 0 Để sau · 9 Menu')) navSetAsk_(owner, 'pn', { ids: [r.id], i: 0 });
   } catch (err) { console.error('Không báo được phiếu mới: ' + (err && err.message ? err.message : err)); }
 }
 
@@ -2476,7 +2475,7 @@ function misaInvoiceSend_(ticket, channel, seller, inv, plan) {
       'Địa chỉ: ' + (inv.hd.dia_chi || '-') + ' · Email: ' + (inv.hd.email || '-'),
     ].concat(items.map((it, i) => misaLine_(i, it.code, it.size, it.qty, it.price)), [MISA_TAX_TEXT,
       'Tổng: ' + money_(total) + ' · Thanh toán: ' + (inv.thanh_toan || '-') + ' · Ship: ' + (inv.phi_ship === '' ? '-' : money_(inv.phi_ship)), 'Nhắn số: 9 Menu']).join('\n');
-    chats.forEach(c => { if (sendMessage_(c, text)) sent++; });
+    chats.forEach(c => { if (autoZalo_('misa_hd', c, text)) sent++; });
   });
   // dòng BAN của phiếu này → không lặp ở tin cuối ngày
   const key = 'misa_hd_' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd');
@@ -2499,7 +2498,7 @@ function dailyMisaSummary(dryRun) {
   const msgs = misaSummaryMessages_(today_(), skip);
   const chats = misaChats_();
   if (msgs.length) msgs[msgs.length - 1] += '\nNhắn số: 9 Menu';
-  msgs.forEach(m => { if (dryRun) console.log(m); else chats.forEach(c => sendMessage_(c, m)); });
+  msgs.forEach(m => { if (dryRun) console.log(m); else chats.forEach(c => autoZalo_('misa_ngay', c, m)); });
   // dọn khoá misa_hd_ cũ hơn 7 ngày
   Object.keys(props.getProperties()).filter(k => k.indexOf('misa_hd_') === 0 && k.slice(8) < Utilities.formatDate(new Date(Date.now() - 7 * 86400000), TZ, 'yyyyMMdd'))
     .forEach(k => props.deleteProperty(k));
@@ -2809,10 +2808,10 @@ function flushSyncHint_(force) {
   return { code, body };
 }
 
-function syncAlertOwner_(text) {
+function syncAlertOwner_(text, kind) {
   const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
   if (!owner) return;
-  try { sendMessage_(owner, text); } catch (err) { console.error(err && err.stack ? err.stack : err); }
+  try { autoZalo_(kind || 'web_loi', owner, text); } catch (err) { console.error(err && err.stack ? err.stack : err); }
 }
 
 /** Cài trigger onEdit + onChange + mỗi phút + nhắc hoá đơn sáng thứ Hai (chạy 1 lần; không tạo trùng nếu đã có). */
@@ -3670,7 +3669,8 @@ function invoiceAction_(body, nguoi, dryRun) {
     const sua = rows.filter(r => /^Done/.test(r.misa) && /giá tạm|giá cũ/.test(r.misa) && r.moi !== r.gia_da_xuat).map(r => r.ma + (r.size || '') + ' (' + money_(r.moi) + ')');
     if (lech.length || sua.length) {
       syncAlertOwner_('🧾 HĐ ' + soHd + ' (' + ids.join(', ') + ')' + (lech.length ? '\nLệch giá phiếu: ' + lech.join('; ') : '') +
-        (sua.length ? '\nĐã xuất MISA giá tạm → sửa đơn giá trên MISA: ' + sua.join('; ') : '') + '\nNhắn số: 9 Menu');
+        (sua.length ? '\nĐã xuất MISA giá tạm → sửa đơn giá trên MISA: ' + sua.join('; ') : '') + '\nNhắn số: 9 Menu', 'hd_lech');
+      out.sua_misa = sua;
       out.bao_chu = true;
     }
     out._sync = ['NHAP', 'SANPHAM'];
@@ -4117,6 +4117,17 @@ function columnLetter_(n) {
   let s = '';
   while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
   return s;
+}
+
+/**
+ * Tin bot TỰ gửi (không phải trả lời lệnh) — anh Kha 18/10: "bot Zalo đang rất rối, hạn chế tự động nhắn".
+ * Chỉ giữ: đơn web / mốc doanh thu (cửa notify, web lọc) và nhắc hoá đơn NCC thứ Hai 8:00. Còn lại tắt, chỉ ghi Nhật ký.
+ * Bật lại loại nào: Script Property AUTO_ZALO = danh sách cách nhau dấu phẩy (pn, misa_ngay, misa_hd, misa_huy, web_loi, hd_lech).
+ */
+function autoZalo_(kind, chatId, text) {
+  const on = String(PropertiesService.getScriptProperties().getProperty('AUTO_ZALO') || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (on.indexOf(kind) === -1) { console.log('Tin tự gửi đã tắt (' + kind + '): ' + String(text).slice(0, 300)); return false; }
+  return sendMessage_(chatId, text);
 }
 
 function sendMessage_(chatId, text) {

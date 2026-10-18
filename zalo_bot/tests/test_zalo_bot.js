@@ -103,7 +103,8 @@ ctx.UrlFetchApp = { fetch: (url, opt) => {
   SENT.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } };
 ctx.ContentService = { createTextOutput: t => { const o = { t, setMimeType: () => o }; return o; }, MimeType: { JSON: 'json' } };
 PROPS.BOT_TOKEN = 'x';
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.receiptPrompt_=receiptPrompt_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.invoiceReminderMessages_=invoiceReminderMessages_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;', ctx);
+PROPS.AUTO_ZALO = 'pn,misa_ngay,misa_hd,misa_huy,web_loi,hd_lech'; // bật hết tin tự gửi để kiểm nội dung; cuối file kiểm mặc định tắt
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.parseMessage_=parseMessage_;this.handleSale_=handleSale_;this.knownCodes_=knownCodes_;this.handleText_=handleText_;this.handleNotify_=handleNotify_;this.doPost=doPost;this.queueSyncHint_=queueSyncHint_;this.appendNhap_=appendNhap_;this.receiptPrompt_=receiptPrompt_;this.handleStock_=handleStock_;this.invoiceTickets_=invoiceTickets_;this.invoiceStatus_=invoiceStatus_;this.doInvoice_=doInvoice_;this.invoiceMessage_=invoiceMessage_;this.invoiceReminderMessages_=invoiceReminderMessages_;this.handleExport_=handleExport_;this.flushSyncHints=flushSyncHints;this.weeklyInvoiceReminder=weeklyInvoiceReminder;', ctx);
 
 let fail = 0, total = 0;
 const eq = (name, got, want) => {
@@ -834,6 +835,18 @@ eq('xac_nhan ncc_xuat_hd:false → phiếu hoá đơn = không lấy; don_gia_ph
 eq('hoadon: nhân viên bị chặn', /chỉ Chủ/.test(z('hoadon', 'nv1')), true);
 eq('hoadon tudong: xoá trạng thái đặt tay', [/Bỏ trạng thái đặt tay/.test(ctx.doInvoice_('hoadon ' + hdT.id + ' tudong', false).text), PROPS['hdon_' + hdT.id]], [true, undefined]);
 eq('KHO 15ETBH / 3CTBH được hiểu', [ctx.KHO_ALIASES ? 1 : 1], [1]);
+
+// ---- Hạn chế tin tự gửi (anh Kha 18/10) ----
+delete PROPS.AUTO_ZALO;
+PROPS.OWNER_CHAT_ID = 'owner1';
+const s9 = SENT.length;
+pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-10').toString('base64') });
+ctx.dailyMisaSummary();
+eq('mặc định: không tự nhắn phiếu chờ chia / MISA cuối ngày', SENT.length - s9, 0);
+ctx.weeklyInvoiceReminder();
+eq('nhắc hoá đơn thứ Hai vẫn gửi (nếu có phiếu quá hạn)', SENT.length - s9 >= 0, true);
+nt({ order_id: 'HN-1810-001', text: 'Đơn mới' });
+eq('tin web (notify) vẫn gửi', SENT.length - s9 >= 1, true);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
