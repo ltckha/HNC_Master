@@ -104,6 +104,13 @@ Content-Type: application/json   (hoặc text/plain)
 
 **Chạy thử trong Apps Script:** chạy hàm `testSale` (luôn dry-run, không ghi Sheet).
 
+## Ký gửi ở cột KHO (anh Kha "làm" 18/10, thay tab KYGUI)
+
+- `KHO15E.cua_Y3C` = số đôi trong kho 15E là hàng của Y3C; `KHOY3C.cua_15E` ngược lại. Trống = 0. Luật bán / chuyển / trả / huỷ như dưới, chỉ đổi chỗ ghi (chưa có dòng KHO cho mã + size thì bot thêm dòng tồn đầu 0).
+- `BAN.ky_gui_tru`: dòng đã trừ ký gửi ("bot <giờ>" lúc bot / app ghi bán; "soat <giờ>" khi bot soát dòng gõ tay). `BAN.chu_hang` có ô chọn 15E / Y3C.
+- Gõ tay BAN chọn `chu_hang` = hộ kia (ngày từ 18/10): bot soát mỗi 5 phút (chạy cùng trigger `flushSyncHints`), trừ cột `cua_…`, ghi `ky_gui_tru`; thiếu ký gửi ghi thêm "(thiếu n)". Không nhắn Zalo.
+- Tab KYGUI cũ đổi tên `KYGUI_cu`, ẩn, giữ 7 ngày.
+
 ## Sổ ký gửi giữa 2 hộ (tab KYGUI, anh Kha "làm" 17/10)
 
 Chuyển hàng giữa 2 hộ (15E = Hải Nancy, Y3C = Yen Leather) không xuất hoá đơn, chỉ ghi ký gửi: hàng của hộ này đang nằm ở kho hộ kia.

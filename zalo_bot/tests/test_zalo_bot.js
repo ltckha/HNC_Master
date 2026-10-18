@@ -490,13 +490,17 @@ const kyStk = (b, dry) => ctx.handleStock_(Object.assign({ seller: 'nv@hn.vn' },
 const tf = (t, from, to, size, qty, dry) => kyStk({ action: 'chuyen_kho', ticket_id: t, from, to, lines: [{ code: 'TH2040D', size, qty }] }, dry);
 let kr = tf('K0', '15E', 'Y3C', 41, 1, true);
 eq('chưa có tab KYGUI → tắt sổ ký gửi', [kr.ok, kr.results[0].ky_gui], [true, []]);
-DATA.KYGUI = [['product_code', 'item_size', 'chu_hang', 'kho_dang_o', 'so_luong', 'cap_nhat']];
+DATA.KHO15E[0].push('cua_Y3C'); DATA.KHOY3C[0].push('cua_15E'); // ký gửi lưu ở cột KHO (18/10)
 if (DATA.BAN[0].indexOf('chu_hang') === -1) DATA.BAN[0].push('chu_hang');
-const kyRow = (chu, at, size) => DATA.KYGUI.slice(1).find(r => r[0] === 'TH2040D' && String(r[1]) === String(size) && r[2] === chu && r[3] === at);
+const kyRow = (chu, at, size) => { // ô cột cua_… của dòng KHO (TH2040D, size) ở kho `at`; [4] = số ký gửi
+  const t = DATA[at === '15E' ? 'KHO15E' : 'KHOY3C'], ci = t[0].indexOf(at === '15E' ? 'cua_Y3C' : 'cua_15E');
+  const r = t.find(x => x[1] === 'TH2040D' && String(x[3]) === String(size));
+  return r ? { get 4() { return Number(r[ci]) || 0; }, set 4(v) { r[ci] = v; } } : undefined;
+};
 kr = tf('K1', '15E', 'Y3C', 41, 1, true);
-eq('chạy thử: 15E → Y3C thành ký gửi của 15E ở Y3C, chưa ghi', [kr.ok, kr.results[0].ky_gui, DATA.KYGUI.length], [true, [{ size: '41', chu_hang: '15E', qty: 1, loai: 'thanh_ky_gui' }], 1]);
+eq('chạy thử: 15E → Y3C thành ký gửi của 15E ở Y3C, chưa ghi', [kr.ok, kr.results[0].ky_gui, kyRow('15E', 'Y3C', 41)[4]], [true, [{ size: '41', chu_hang: '15E', qty: 1, loai: 'thanh_ky_gui' }], 0]);
 kr = tf('K1', '15E', 'Y3C', 41, 1);
-eq('ghi: KYGUI có dòng 15E ở Y3C × 1 + gửi web tab KYGUI', [kr.ok, kyRow('15E', 'Y3C', 41) && kyRow('15E', 'Y3C', 41)[4], kr._sync.indexOf('KYGUI') !== -1], [true, 1, true]);
+eq('ghi: KHOY3C.cua_15E dòng TH2040D 41 = 1 + gửi web tab KHOY3C', [kr.ok, kyRow('15E', 'Y3C', 41)[4], kr._sync.indexOf('KHOY3C') !== -1], [true, 1, true]);
 // Bán ở Y3C 2 đôi size 41: 1 đôi ký gửi của 15E + 1 đôi của Y3C
 let ks = ctx.handleSale_({ ticket_id: 'KS1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 41, qty: 2, warehouse: 'Y3C', price: 800000 }] }, true);
 eq('bán chạy thử: tách chủ hàng (ký gửi trước)', [ks.ok, ks.results[0].phan, ks.results[0].chu_hang], [true, [{ chu_hang: '15E', qty: 1 }, { chu_hang: 'Y3C', qty: 1 }], '']);
@@ -513,7 +517,7 @@ eq('Y3C → 15E: trả về chủ trước, dư thành ký gửi của Y3C', kr.
 kr = tf('K3', 'Y3C', '15E', 40, 2);
 eq('ghi: KYGUI 15E ở Y3C = 0, Y3C ở 15E = 1', [kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [0, 1]);
 kr = kyStk({ action: 'huy', ticket_id: 'K4', undo_ticket_id: 'K3' });
-eq('huỷ chuyển kho → KYGUI trả lại như trước (dòng mới thêm thì xoá)', [kr.ok, kyRow('15E', 'Y3C', 40)[4], !kyRow('Y3C', '15E', 40)], [true, 1, true]);
+eq('huỷ chuyển kho → ký gửi trả lại như trước', [kr.ok, kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [true, 1, 0]);
 // Trả hàng về đúng chủ
 kr = kyStk({ action: 'tra_hang', ticket_id: 'K5', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] });
 eq('trả hàng không kèm chủ → theo dòng BAN gần nhất (Y3C)', [kr.ok, kr.results[0].chu_hang, kyRow('15E', 'Y3C', 41)[4]], [true, 'Y3C', 0]);
@@ -622,7 +626,7 @@ ctx.handleSale_({ ticket_id: 'HB2', channel: 'web', seller: 'nv@hn.vn', lines: [
 const hbRec = JSON.parse(PROPS.saleops_HB2); hbRec.t -= 11 * 60000; PROPS.saleops_HB2 = JSON.stringify(hbRec);
 eq('quá 10 phút, nhân viên → nhờ Chủ', /quá 10 phút/.test(ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'nv@hn.vn' }).error), true);
 kyR[4] = 5;
-eq('sổ ký gửi đổi sau phiếu → không huỷ', /Sổ ký gửi/.test(ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true }).error), true);
+eq('sổ ký gửi đổi sau phiếu → không huỷ', /Ký gửi/.test(ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true }).error), true);
 kyR[4] = 0;
 const s3 = SENT.length;
 hb = ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true });
@@ -847,6 +851,20 @@ ctx.weeklyInvoiceReminder();
 eq('nhắc hoá đơn thứ Hai vẫn gửi (nếu có phiếu quá hạn)', SENT.length - s9 >= 0, true);
 nt({ order_id: 'HN-1810-001', text: 'Đơn mới' });
 eq('tin web (notify) vẫn gửi', SENT.length - s9 >= 1, true);
+
+// ---- Soát ký gửi gõ tay (5 phút, không Zalo) ----
+vm.runInContext('this.kyguiSweep_=kyguiSweep_;', ctx);
+const kyBanCol = n => DATA.BAN[0].indexOf(n);
+if (kyBanCol('ky_gui_tru') === -1) DATA.BAN[0].push('ky_gui_tru');
+kyRow('15E', 'Y3C', 41)[4] = 2;
+DATA.BAN.slice(1).forEach(r => { if (r[kyBanCol('product_code')]) r[kyBanCol('ky_gui_tru')] = r[kyBanCol('ky_gui_tru')] || 'cu'; }); // dòng cũ trong test (Sheet thật có cột từ đầu)
+const hand = []; hand[kyBanCol('Ngày')] = today; hand[kyBanCol('product_code')] = 'TH2040D'; hand[kyBanCol('item_size')] = 41; hand[kyBanCol('item_quantity')] = 1;
+hand[kyBanCol('KHO')] = 'Y3C'; hand[kyBanCol('chu_hang')] = '15E'; hand[kyBanCol('Giá')] = 800000;
+DATA.BAN.push(hand);
+const sz0 = SENT.length;
+const swept = ctx.kyguiSweep_(true);
+eq('soát gõ tay: trừ cua_15E, ghi ky_gui_tru, không nhắn Zalo', [swept, kyRow('15E', 'Y3C', 41)[4], /^soat /.test(hand[kyBanCol('ky_gui_tru')]), SENT.length - sz0], [1, 1, true, 0]);
+eq('soát lần 2: dòng đã đánh dấu không trừ nữa', [ctx.kyguiSweep_(true), kyRow('15E', 'Y3C', 41)[4]], [0, 1]);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

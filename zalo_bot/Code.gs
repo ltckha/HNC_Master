@@ -724,7 +724,7 @@ function saleLineCancelPick_(n, chatId, d, dryRun) {
   const chu = KHO_ALIASES[String(x.chu || '').toUpperCase()];
   if (!dryRun) {
     BAN_WRITE_COLS.forEach(name => { if (c[name] !== undefined) ban.getRange(x.r, c[name] + 1).clearContent(); });
-    if (chu && kho && chu !== kho && kyguiOn_()) { kyguiAdjust_(chu, kho, x.code, x.size, x.qty, false); touched.push(KYGUI_TAB); } // bán hàng ký gửi → trả lại sổ
+    if (chu && kho && chu !== kho && kyguiOn_()) { kyguiAdjust_(chu, kho, x.code, x.size, x.qty, false); touched.push(KHO_SHEETS[kho]); } // bán hàng ký gửi → trả lại cột ký gửi
   }
   return { text: '✅ Đã huỷ dòng bán ' + x.code + (x.size ? ' size ' + x.size : '') + ' × ' + x.qty + ' kho ' + x.kho + ' (' + x.dk.slice(8) + '/' + x.dk.slice(5, 7) +
     '). Tồn tự cộng lại' + (touched.length > 1 ? ', trả sổ ký gửi ' + chu : '') + '.\nNhắn số: 9 Menu', touched };
@@ -1095,8 +1095,8 @@ function undoRecord_(last, dryRun) {
     if (op.guard) receiptUndoGuard_(op.guard, ownRows, tabCache).forEach(x => problems.push(x));
     if (op.type === 'kygui') {
       const col = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
-      const cur = Number(sheet.getRange(op.row, col.so_luong + 1).getValue()) || 0;
-      if (cur !== op.after) problems.push('KYGUI dòng ' + op.row + ' đã đổi (' + cur + ', lúc ghi ' + op.after + ')');
+      const cur = Number(sheet.getRange(op.row, col[op.col || 'so_luong'] + 1).getValue()) || 0;
+      if (cur !== op.after) problems.push('Ký gửi ' + op.sheet + ' dòng ' + op.row + ' đã đổi (' + cur + ', lúc ghi ' + op.after + ')');
       return;
     }
     if (op.type === 'loc') {
@@ -1129,7 +1129,10 @@ function undoRecord_(last, dryRun) {
       if (op.type === 'loc') {
         sheet.getRange(op.row, col.product_location + 1).setValue(op.oldLoc);
       } else if (op.type === 'kygui') {
-        if (op.created) op.created.forEach(n => sheet.getRange(op.row, col[n] + 1).clearContent()); // dòng bot vừa thêm → xoá
+        if (op.col) {
+          sheet.getRange(op.row, col[op.col] + 1).setValue(op.before || '');
+          (op.pre || []).forEach(pre => pre.written.forEach(n => sheet.getRange(pre.row, col[n] + 1).clearContent())); // dòng KHO bot vừa thêm
+        } else if (op.created) op.created.forEach(n => sheet.getRange(op.row, col[n] + 1).clearContent());
         else {
           sheet.getRange(op.row, col.so_luong + 1).setValue(op.before);
           sheet.getRange(op.row, col.cap_nhat + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
@@ -1222,7 +1225,7 @@ function handleSaleRequest_(e) {
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = body.action === 'huy_ban' ? saleUndo_(body, dryRun) : handleSale_(body, dryRun);
       if (body.action === 'huy_ban') {
-        if (!dryRun && out.ok) { try { queueSyncHint_(['BAN'].concat(out._ky ? [KYGUI_TAB] : [])); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
+        if (!dryRun && out.ok) { try { queueSyncHint_(['BAN'].concat(out._ky ? ['KHO15E', 'KHOY3C'] : [])); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
         delete out._ky;
       } else if (!dryRun && (out.rows || out.partial) && !out.duplicate) {
         try { queueSyncHint_(['BAN']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
@@ -1330,7 +1333,7 @@ function handleSale_(body, dryRun) {
           if (bans.length > 1) x.r.rows = bans.map(o => o.row);
           x.r.phan = sr.phan;
           x.r.chu_hang = sr.phan.length === 1 ? sr.phan[0].chu_hang : '';
-          if (sr.ops.some(o => o.sheet === KYGUI_TAB)) touchedKygui = true;
+          if (sr.ops.some(o => o.type === 'kygui')) touchedKygui = true;
           written++;
         });
       } catch (err) {
@@ -1346,7 +1349,7 @@ function handleSale_(body, dryRun) {
         try { misaSent = misaInvoiceSend_(ticket, channel, seller, inv, plan); }
         catch (err) { console.error('Không gửi được tin MISA: ' + (err && err.stack ? err.stack : err)); misaSent = 0; }
       }
-      if (touchedKygui) { try { queueSyncHint_([KYGUI_TAB]); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
+      if (touchedKygui) { try { queueSyncHint_(['KHO15E', 'KHOY3C']); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
     }
     const out = { ok: true, ticket_id: ticket, dry_run: dryRun, rows: plan.length, results };
     if (inv.hd) out.misa = dryRun ? { se_gui: uniq_([].concat.apply([], plan.map(x => (x.r.phan || [{ chu_hang: x.kho }]).map(ph => ph.chu_hang)))).sort() } : { da_gui: misaSent };
@@ -1358,13 +1361,13 @@ function handleSale_(body, dryRun) {
 
 // ---- Huỷ phiếu bán (huy_ban): người bán ≤ 10 phút, Chủ sau hạn (giữ 2 ngày) ----
 const SALE_UNDO_KEEP_MS = 2 * 86400000;
-const BAN_WRITE_COLS = ['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'channel', 'seller', 'chu_hang', 'payment_method', 'customer_phone'];
+const BAN_WRITE_COLS = ['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'channel', 'seller', 'chu_hang', 'payment_method', 'customer_phone', 'ky_gui_tru'];
 
 /** Lưu gọn thao tác của 1 phiếu bán để huỷ được: BAN [hàng, mã, size, sl, kho, chủ] · KYGUI [hàng, trước, sau]. */
 function saleRecordOps_(props, ticket, seller, ops, hd) {
   const rec = { t: Date.now(), s: String(seller || '').toLowerCase(), hd: hd ? 1 : 0,
     b: ops.filter(o => o.sheet === 'BAN').map(o => [o.row, o.check.product_code, normSize_(o.check.item_size), o.check.item_quantity, o.check.KHO]),
-    k: ops.filter(o => o.type === 'kygui').map(o => [o.row, o.before, o.after, o.created ? 1 : 0]) };
+    k: ops.filter(o => o.type === 'kygui').map(o => [o.row, o.before, o.after, 0, o.sheet, o.col]) };
   try { props.setProperty('saleops_' + ticket, JSON.stringify(rec)); } catch (err) { console.error('Không lưu được thao tác phiếu ' + ticket + ': ' + err); }
   const cutoff = Date.now() - SALE_UNDO_KEEP_MS;
   Object.keys(props.getProperties()).forEach(k => {
@@ -1407,21 +1410,14 @@ function saleUndo_(body, dryRun) {
         Number(vals[bc.item_quantity]) === Number(x[3]) && String(vals[bc.KHO] || '').trim() === x[4];
       if (!same) problems.push('BAN dòng ' + x[0] + ' đã đổi');
     });
-    let ky = null, kc = null;
-    if (rec.k.length) {
-      ky = getSheet_(KYGUI_TAB);
-      kc = headerMap_(ky.getRange(1, 1, 1, ky.getLastColumn()).getValues()[0]);
-      rec.k.forEach(x => { const cur = Number(ky.getRange(x[0], kc.so_luong + 1).getValue()) || 0; if (cur !== x[2]) problems.push('Sổ ký gửi dòng ' + x[0] + ' đã có giao dịch khác (' + cur + ', lúc bán ' + x[2] + ')'); });
-    }
+    const kyCell = x => { const sh = getSheet_(x[4] || KYGUI_TAB); const hc = headerMap_(sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]); return sh.getRange(x[0], hc[x[5] || 'so_luong'] + 1); };
+    rec.k.forEach(x => { const cur = Number(kyCell(x).getValue()) || 0; if (cur !== x[2]) problems.push('Ký gửi ' + (x[4] || 'KYGUI') + ' dòng ' + x[0] + ' đã có giao dịch khác (' + cur + ', lúc bán ' + x[2] + ')'); });
     if (problems.length) return Object.assign(fail('Không huỷ được, đã có thay đổi sau phiếu: ' + uniq_(problems).join('; ')), { loi: uniq_(problems) });
     const khos = uniq_(rec.b.map(x => x[4]));
     const out = { ok: true, action: 'huy_ban', ticket_id: ticket, dry_run: dryRun, so_dong: rec.b.length, kho: khos, chu: isOwner };
     if (dryRun) return out;
     rec.b.forEach(x => BAN_WRITE_COLS.forEach(n => { if (bc[n] !== undefined) ban.getRange(x[0], bc[n] + 1).clearContent(); }));
-    rec.k.forEach(x => {
-      if (x[3]) KYGUI_COLS.forEach(n => ky.getRange(x[0], kc[n] + 1).clearContent());
-      else { ky.getRange(x[0], kc.so_luong + 1).setValue(x[1]); ky.getRange(x[0], kc.cap_nhat + 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm')); }
-    });
+    rec.k.forEach(x => kyCell(x).setValue(x[1] || ''));
     rec.huy = Date.now();
     rec.huy_boi = nguoi;
     props.setProperty('saleops_' + ticket, JSON.stringify(rec));
@@ -2723,6 +2719,7 @@ function onSheetChangeHint(e) {
 
 /** Trigger mỗi phút: gửi phần còn trong hàng chờ. */
 function flushSyncHints() {
+  try { kyguiSweep_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // soát ký gửi gõ tay mỗi 5 phút (chạy chung trigger mỗi phút)
   try { flushSyncHint_(false); } catch (err) { console.error(err && err.stack ? err.stack : err); }
 }
 
@@ -3743,68 +3740,113 @@ function testInvoice() {
 // Trả hàng: về đúng chủ (chu_hang gửi kèm, hoặc dòng BAN gần nhất cùng mã / size / kho). Chưa có tab KYGUI → tắt, chủ hàng = kho.
 // =====================================================================
 
-const KYGUI_TAB = 'KYGUI';
+const KYGUI_TAB = 'KYGUI'; // tab cũ (đã chuyển sang cột KHO 18/10) — chỉ còn để tên tab sync cũ
 const KYGUI_COLS = ['product_code', 'item_size', 'chu_hang', 'kho_dang_o', 'so_luong', 'cap_nhat'];
+// Ký gửi lưu ở cột của tab KHO (anh Kha "làm" 18/10): KHO15E.cua_Y3C = đôi trong kho 15E là của Y3C; KHOY3C.cua_15E ngược lại.
+const KYGUI_COL = { '15E': 'cua_Y3C', 'Y3C': 'cua_15E' }; // kho đang ở → tên cột "của hộ kia"
+const KYGUI_SWEEP_FROM = '2026-10-18'; // soát dòng BAN gõ tay chọn chu_hang = hộ kia từ ngày này
+const KYGUI_SWEEP_MS = 5 * 60000;
 
 function kyguiOn_() {
-  if (MEMO.__kyOn === undefined) MEMO.__kyOn = !!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(KYGUI_TAB);
+  if (MEMO.__kyOn === undefined) {
+    MEMO.__kyOn = ['15E', 'Y3C'].every(k => headerMap_(sheetValues_(KHO_SHEETS[k])[0] || [])[KYGUI_COL[k]] !== undefined);
+  }
   return MEMO.__kyOn;
 }
 
-/** Các dòng KYGUI → [{row, code, size, chu, at, qty}] (theo tên cột hàng 1). */
-function kyguiRows_() {
-  if (!MEMO.__ky) {
-    const data = sheetValues_(KYGUI_TAB);
-    const col = headerMap_(data[0] || []);
-    requireColumns_(KYGUI_TAB, col, KYGUI_COLS);
-    MEMO.__ky = [];
-    for (let r = 1; r < data.length; r++) {
-      const code = String(data[r][col.product_code] || '').trim().toUpperCase();
-      if (!code) continue;
-      MEMO.__ky.push({ row: r + 1, code, size: normSize_(data[r][col.item_size]), chu: KHO_ALIASES[String(data[r][col.chu_hang] || '').trim().toUpperCase()] || '',
-        at: KHO_ALIASES[String(data[r][col.kho_dang_o] || '').trim().toUpperCase()] || '', qty: Number(data[r][col.so_luong]) || 0 });
-    }
+/** Dòng KHO (1-based) của mã + size ở kho, -1 nếu chưa có. */
+function kyguiKhoRow_(at, code, size) {
+  const data = sheetValues_(KHO_SHEETS[at]);
+  const c = headerMap_(data[0]);
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][c.product_code]).trim().toUpperCase() === code && normSize_(data[r][c.item_size]) === size) return r + 1;
   }
-  return MEMO.__ky;
+  return -1;
 }
 
-/** Số đang ký gửi: hàng của `chu` đang ở `at` (CTX.kyPending: thay đổi chưa ghi trong lô chạy thử). */
+/** Số đang ký gửi: hàng của `chu` đang ở kho `at` (CTX.kyPending: thay đổi chưa ghi trong lô chạy thử). */
 function kyguiQty_(chu, at, code, size) {
-  if (!kyguiOn_()) return 0;
+  if (!kyguiOn_() || chu === at) return 0;
   const k = chu + '|' + at + '|' + code + '|' + size;
-  const row = kyguiRows_().find(x => x.chu === chu && x.at === at && x.code === code && x.size === size);
-  return Math.max(0, (row ? row.qty : 0) + (((CTX.kyPending || {})[k]) || 0));
+  const r = kyguiKhoRow_(at, code, size);
+  let cur = 0;
+  if (r !== -1) {
+    const data = sheetValues_(KHO_SHEETS[at]);
+    cur = Number(data[r - 1][headerMap_(data[0])[KYGUI_COL[at]]]) || 0;
+  }
+  return Math.max(0, cur + (((CTX.kyPending || {})[k]) || 0));
 }
 
-/** Cộng / trừ KYGUI 1 ô (chủ × kho đang ở × mã × size). Chạy thật → trả op để huỷ được. */
+/** Cộng / trừ ký gửi 1 ô (cột cua_… của dòng KHO). Chưa có dòng KHO thì thêm dòng (tồn đầu 0). Trả op để huỷ được. */
 function kyguiAdjust_(chu, at, code, size, delta, dry) {
   const k = chu + '|' + at + '|' + code + '|' + size;
   if (!CTX.kyPending) CTX.kyPending = {};
   if (dry) { CTX.kyPending[k] = (CTX.kyPending[k] || 0) + delta; return null; }
-  const sheet = getSheet_(KYGUI_TAB);
-  const data = sheetValues_(KYGUI_TAB);
-  const col = headerMap_(data[0]);
-  const rows = kyguiRows_();
-  let row = rows.find(x => x.chu === chu && x.at === at && x.code === code && x.size === size);
-  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
-  if (row) {
-    const before = row.qty;
-    row.qty = before + delta;
-    sheet.getRange(row.row, col.so_luong + 1).setValue(row.qty);
-    sheet.getRange(row.row, col.cap_nhat + 1).setValue(now);
-    return { type: 'kygui', sheet: KYGUI_TAB, row: row.row, before, after: row.qty };
+  const sheetName = KHO_SHEETS[at];
+  const ops = [];
+  let r = kyguiKhoRow_(at, code, size);
+  if (r === -1) {
+    ops.push(appendKhoRow_({ kho: at, code, size, color: lookupColor_(code) }));
+    delete MEMO[sheetName];
+    r = kyguiKhoRow_(at, code, size);
   }
-  let last = data.length;
-  while (last > 1 && String(data[last - 1][col.product_code] || '').trim() === '') last--;
-  const r = last + 1;
-  if (r > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
-  const arr = new Array(data[0].length).fill('');
-  arr[col.product_code] = code; arr[col.item_size] = sizeValue_(size); arr[col.chu_hang] = chu; arr[col.kho_dang_o] = at; arr[col.so_luong] = delta; arr[col.cap_nhat] = now;
-  sheet.getRange(r, 1, 1, arr.length).setValues([arr]);
-  while (data.length < r - 1) data.push(new Array(arr.length).fill(''));
-  data[r - 1] = arr;
-  rows.push({ row: r, code, size, chu, at, qty: delta });
-  return { type: 'kygui', sheet: KYGUI_TAB, row: r, before: null, after: delta, created: KYGUI_COLS.slice() };
+  const sheet = getSheet_(sheetName);
+  const data = sheetValues_(sheetName);
+  const c = headerMap_(data[0]);
+  const colName = KYGUI_COL[at];
+  const before = Number(data[r - 1][c[colName]]) || 0;
+  const after = Math.max(0, before + delta);
+  sheet.getRange(r, c[colName] + 1).setValue(after || '');
+  data[r - 1][c[colName]] = after || '';
+  const op = { type: 'kygui', sheet: sheetName, row: r, col: colName, before, after };
+  return ops.length ? Object.assign(op, { pre: ops }) : op;
+}
+
+/**
+ * Soát dòng BAN gõ tay (mỗi 5 phút, không nhắn Zalo): chu_hang = hộ kia của kho bán, ky_gui_tru trống, ngày ≥ KYGUI_SWEEP_FROM
+ * → trừ cột cua_… của dòng KHO, ghi ky_gui_tru = "soat <giờ>" (thiếu ký gửi thì ghi thêm "thiếu n"). Dòng bot / app ghi đã có ky_gui_tru.
+ */
+function kyguiSweep_(force) {
+  const cache = CacheService.getScriptCache();
+  if (!force && Date.now() - Number(cache.get('ky_sweep') || 0) < KYGUI_SWEEP_MS) return 0;
+  cache.put('ky_sweep', String(Date.now()), 21600);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return 0;
+  try {
+    MEMO = {};
+    CTX = { seller: '', pending: {} };
+    if (!kyguiOn_()) return 0;
+    const ban = getSheet_('BAN');
+    const data = sheetValues_('BAN');
+    const c = headerMap_(data[0]);
+    if (c.chu_hang === undefined || c.ky_gui_tru === undefined) return 0;
+    const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    let n = 0;
+    const touched = {};
+    for (let r = 1; r < data.length; r++) {
+      const code = String(data[r][c.product_code] || '').trim().toUpperCase();
+      if (!code || String(data[r][c.ky_gui_tru] || '').trim()) continue;
+      const chu = KHO_ALIASES[String(data[r][c.chu_hang] || '').trim().toUpperCase()];
+      const kho = KHO_ALIASES[String(data[r][c.KHO] || '').trim().toUpperCase()];
+      if (!chu || !kho || chu === kho) continue;
+      const dk = dateKey_(data[r][c['Ngày']]);
+      if (!dk || dk < KYGUI_SWEEP_FROM) continue;
+      const size = normSize_(data[r][c.item_size]);
+      const qty = Number(data[r][c.item_quantity]) || 0;
+      const have = kyguiQty_(chu, kho, code, size);
+      kyguiAdjust_(chu, kho, code, size, -qty, false);
+      ban.getRange(r + 1, c.ky_gui_tru + 1).setValue('soat ' + now + (have < qty ? ' (thiếu ' + (qty - have) + ')' : ''));
+      touched[KHO_SHEETS[kho]] = true;
+      n++;
+    }
+    if (n) {
+      console.log('Soát ký gửi gõ tay: ' + n + ' dòng BAN');
+      queueSyncHint_(['BAN'].concat(Object.keys(touched)));
+    }
+    return n;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Chuyển kho from → to: trả hàng của `to` đang ký gửi ở `from` trước, phần còn lại thành ký gửi của `from` ở `to`. */
@@ -3835,7 +3877,8 @@ function kyguiSale_(code, color, price, size, qty, kho, channel, seller, dry, pa
   const ops = [];
   phan.forEach(ph => {
     if (ph.chu_hang !== kho) { const op = kyguiAdjust_(ph.chu_hang, kho, code, size, -ph.qty, dry); if (op) ops.push(op); }
-    if (!dry) ops.push(appendBan_(code, color, price, size, ph.qty, kho, channel, seller, ph.chu_hang, payment, phone));
+    if (!dry) ops.push(appendBan_(code, color, price, size, ph.qty, kho, channel, seller, ph.chu_hang, payment, phone,
+      ph.chu_hang !== kho ? 'bot ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') : ''));
   });
   return { ops, phan };
 }
@@ -3877,14 +3920,14 @@ function kyguiCheck_(code, size, kho) {
 // GHI SHEET
 // =====================================================================
 
-function appendBan_(code, color, price, size, qty, kho, channel, seller, chuHang, payment, phone) {
+function appendBan_(code, color, price, size, qty, kho, channel, seller, chuHang, payment, phone, kyTru) {
   // FSKU của BAN tự tính bằng ARRAYFORMULA → không ghi cột FSKU.
   // channel / seller chỉ ghi khi tab BAN đã có 2 cột đó (cột thêm cuối hàng tiêu đề).
   return appendByHeader_('BAN', {
     'Ngày': today_(), 'product_code': code, 'product_color': color,
     'Giá': price ? Number(price) : '', 'item_size': sizeValue_(size), 'item_quantity': qty, 'KHO': kho,
   }, null, { product_code: code, item_size: size, item_quantity: qty, KHO: kho },
-  { 'channel': channel || '', 'seller': seller || '', 'chu_hang': chuHang || '', 'payment_method': payment || '', 'customer_phone': phone || '' });
+  { 'channel': channel || '', 'seller': seller || '', 'chu_hang': chuHang || '', 'payment_method': payment || '', 'customer_phone': phone || '', 'ky_gui_tru': kyTru || '' });
 }
 
 function appendXuat_(code, color, size, qty, kho) {
