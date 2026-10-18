@@ -9,3 +9,4 @@ pillow>=10.0.0
 python-dotenv>=1.0.0
 brother_ql==0.9.4
 pyusb>=1.3.0
+certifi>=2023.0.0

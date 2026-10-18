@@ -3314,9 +3314,12 @@ Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đ�
         }
     }
 
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    # Kiểm SSL đầy đủ; Python.org trên Mac có thể thiếu kho chứng chỉ → dùng certifi trong venv (18/10)
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
 
     preferred_models = [
         "gemini-3.8-flash",
@@ -3329,11 +3332,11 @@ Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đ�
     used_model = None
 
     for model_name in preferred_models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"  # khoá đi qua header, không nằm trong URL (lọt log)
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
         )
         for attempt in range(2):
             try:
