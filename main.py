@@ -3817,12 +3817,12 @@ def print_main_menu():
              🚀 [bold white]HNC CONTROL CENTER - MAC MINI M4 ENGINE[/bold white]
   [yellow]Dự phòng — không chạy cùng lúc với nút trên web (/admin/san, Xuất MISA)[/yellow]
 ===================================================================
-  [1] [bold #FFD700]🏷️ TEM & KHO (in tem, đồng bộ SKU vào kho)[/bold #FFD700]
+  [1] [bold #FFD700]🏷️ TEM & KHO (in tem mã hàng, đồng bộ mã hàng vào Kho 15E / Kho Y3C)[/bold #FFD700]
   [2] [bold #FF6E40]🛍️  SHOPEE[/bold #FF6E40]
   [3] [bold #00E5FF]🎵 TIKTOK[/bold #00E5FF] [bold #FF1744]SHOP[/bold #FF1744]
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
   [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
-  [6] [bold #69F0AE]📸 AI TỰ ĐỘNG NHẬP SẢN PHẨM MỚI TỪ ẢNH[/bold #69F0AE]
+  [6] [bold #69F0AE]📸 AI TỰ ĐỘNG THÊM HÀNG HOÁ MỚI TỪ ẢNH[/bold #69F0AE]
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -3838,8 +3838,8 @@ def print_submenu_website():
              [bold #FFD700]🏷️ SUB-MENU: TEM & KHO[/bold #FFD700]
 -------------------------------------------------------------------
   [dim](Đã ẩn [1] đăng SP web cũ, [2] tồn web cũ, [3] cào ảnh web cũ — web mới đọc thẳng Sheet)[/dim]
-  [4] 🖨️  In Tem Barcode & QR Code (Ghi đè file IN.csv)
-  [5] 🔄 Đồng Bộ SKU Mới từ NHAP vào 2 Kho (KHO15E & KHOY3C)
+  [4] 🖨️  In Tem Mã Hàng (Barcode & QR, ghi đè file IN.csv)
+  [5] 🔄 Đồng Bộ Mã Hàng Mới Từ Phiếu Nhập Kho Vào Kho 15E / Kho Y3C
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -3854,8 +3854,8 @@ def print_submenu_shopee():
     menu_text = """-------------------------------------------------------------------
              [bold #FF6E40]🛍️  SUB-MENU: SHOPEE[/bold #FF6E40]
 -------------------------------------------------------------------
-  [1] 🛒 Xuất File Đăng Sản Phẩm Mới (Shopee Mass Upload)
-  [2] ⚡ Xuất File Cập Nhật Giá / Tồn Kho (Shopee Mass Update)
+  [1] 🛒 Xuất File Đăng Hàng Hoá Mới (Shopee Mass Upload)
+  [2] ⚡ Xuất File Cập Nhật Giá Bán / Tồn Kho (Shopee Mass Update)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -3870,8 +3870,8 @@ def print_submenu_tiktok():
     menu_text = """-------------------------------------------------------------------
              [bold #00E5FF]🎵[/bold #00E5FF] [bold #FF1744]SUB-MENU: TIKTOK SHOP[/bold #FF1744]
 -------------------------------------------------------------------
-  [1] 🎵 Xuất File Đăng Sản Phẩm Mới (TikTok Mass Upload - 38 Cột chuẩn)
-  [2] ⚡ Xuất File Cập Nhật (TikTok Mass Update: Giá, Tồn kho hoặc Tất cả)
+  [1] 🎵 Xuất File Đăng Hàng Hoá Mới (TikTok Mass Upload - 38 Cột chuẩn)
+  [2] ⚡ Xuất File Cập Nhật (TikTok Mass Update: Giá Bán, Tồn Kho hoặc Tất cả)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -3886,8 +3886,8 @@ def print_submenu_misa():
     menu_text = """-------------------------------------------------------------------
              [bold #29B6F6]📊 SUB-MENU: MISA eSHOP[/bold #29B6F6]
 -------------------------------------------------------------------
-  [1] 📊 Xuất File Danh Mục Hàng Hóa (MISA Import Danh Mục 2 tầng Cha - Con)
-  [2] 📥 Xuất File Nhập Kho Mua Hàng (MISA Nhập Kho - Tự động tách 15E / 3C)
+  [1] 📊 Xuất File Danh Mục Hàng Hoá (MISA: Mẫu → Mã hàng)
+  [2] 📥 Xuất File Phiếu Nhập Kho (MISA, tách Kho 15E / Kho Y3C, giá theo hoá đơn mua hàng)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""

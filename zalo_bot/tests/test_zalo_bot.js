@@ -198,7 +198,7 @@ eq('khách trả', rp('nhap TH2040D 40 15e khach tra'), ['NHẬP', 'TH2040D', '1
 eq('nhập thường không phải trả', rp('nhap TH2040D 40 15E'), ['NHẬP', 'TH2040D', '15E', false, '40']);
 eq('"tra hang" với lệnh bán → bỏ qua cờ', rp('ban TH2040D 40 15E tra hang')[3], false);
 txt = ctx.handleText_('nhap TH2040D 40 15E tra hang', true, '');
-eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /không xuất phiếu nhập MISA/.test(txt)], [true, true]);
+eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /không xuất phiếu nhập kho MISA/.test(txt)], [true, true]);
 txt = ctx.handleText_('Khách đổi ý\nnhap TH2040D 40 15E tra hang\nban TH2040D 41 YEN 800k', true, '');
 eq('trả hàng trong tin nhiều dòng', [/2 lệnh — 2 ghi được/.test(txt), /1\) ↩️ TRẢ HÀNG/.test(txt)], [true, true]);
 const realAppend = ctx.appendByHeader_;
@@ -243,7 +243,7 @@ eq('gom phiếu ngày + NCC + kho (bỏ KHO trống, TRA-, SL 0)', tks.map(t => 
 let ist = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets;
 eq('hoá đơn 12/09 ghép phiếu gần nhất trước đó (10/09), không ghép phiếu 05/08', ist.map(t => t.id + ':' + t.status), ['260920-TP-15E:chua', '260910-TP-15E:da', '260910-TP-Y3C:chua', '260805-TP-15E:chua']);
 txt = ctx.doInvoice_('hoadon', true).text;
-eq('danh sách chỉ phiếu từ 01/09 chưa có', [/PHIẾU CHƯA CÓ HOÁ ĐƠN: 2/.test(txt), /260920-TP-15E/.test(txt), /260910-TP-Y3C/.test(txt), /260805/.test(txt)], [true, true, true, false]);
+eq('danh sách chỉ phiếu từ 01/09 chưa có', [/PHIẾU NHẬP KHO CHƯA CÓ HOÁ ĐƠN MUA HÀNG: 2/.test(txt), /260920-TP-15E/.test(txt), /260910-TP-Y3C/.test(txt), /260805/.test(txt)], [true, true, true, false]);
 PROPS.HKD_15E = 'HKD A | 0312345678 | 15E Tăng Bạt Hổ';
 txt = ctx.doInvoice_('hoadon 260920-tp-15e', true).text;
 eq('câu nhắn soạn sẵn ghi rõ hộ + MST + hàng gọn theo mã cha', [/Đơn vị mua: HKD A/.test(txt), /MST: 0312345678/.test(txt), /\nTH2040 x 3\n/.test(txt), /Tổng: 3 sản phẩm\n/.test(txt), /×|\d\.000đ/.test(txt.split('Hàng hoá:')[1]), /kho 15E/.test(txt)], [true, true, true, true, false, true]);
@@ -366,7 +366,7 @@ PROPS.OWNER_CHAT_ID = 'owner1';
 PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
 pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-2').toString('base64'), mime: 'image/jpeg' });
 const p2 = pr.id;
-eq('V2 đọc phiếu: model 2.5 trước + Zalo báo phiếu chờ chia', [pr.ok, pr.model, GEMINI_CALLS, SENT.length - SENT0, /Có phiếu chờ chia: Chú Dũng PX3000 · 2 dòng · 13 đôi → https:\/\/giayhainancy\.vn\/admin\/app#phieu-PN/.test((SENT[SENT0] || {}).text || '')],
+eq('V2 đọc phiếu: model 2.5 trước + Zalo báo phiếu chờ chia', [pr.ok, pr.model, GEMINI_CALLS, SENT.length - SENT0, /Có phiếu nhập kho chờ chia: Chú Dũng PX3000 · 2 dòng · 13 đôi → https:\/\/giayhainancy\.vn\/admin\/app#phieu-PN/.test((SENT[SENT0] || {}).text || '')],
   [true, 'gemini-2.5-flash', 1, 1, true]);
 const sz = o => o; // sizes
 const v2 = {
@@ -547,13 +547,13 @@ mb = ctx.handleSale_({ ticket_id: 'M1', channel: 'web', seller: 'kris', lines: [
   khach: { ten: 'Chị B', sdt: '0909' }, lay_hoa_don: { ten_cty: 'Cty A', mst: '0312345678', dia_chi: '1 Lê Lợi', email: 'a@b.vn' }, thanh_toan: 'CK Techcombank', phi_ship: 30000 }, false);
 const misaMsgs = SENT.slice(s0).map(x => x.text);
 eq('lấy hoá đơn: gửi ngay 1 tin / hộ chủ hàng', [mb.ok, mb.misa, misaMsgs.length, misaMsgs.map(t => t.split('\n')[0])],
-  [true, { da_gui: 2 }, 2, ['🧾 HOÁ ĐƠN MISA – Hải Nancy (15E)', '🧾 HOÁ ĐƠN MISA – Yen Leather (Y3C)']]);
+  [true, { da_gui: 2 }, 2, ['🧾 HOÁ ĐƠN BÁN HÀNG (MISA) – Hải Nancy (15E)', '🧾 HOÁ ĐƠN BÁN HÀNG (MISA) – Yen Leather (Y3C)']]);
 eq('tin hoá đơn đủ ô: số CT, kênh, người bán, khách, MST, dòng mã MISA, thuế, tổng, thanh toán, ship',
   [/Số CT M1 · Kênh web · Người bán kris/.test(misaMsgs[0]), /Khách: Chị B · 0909/.test(misaMsgs[0]), /MST 0312345678/.test(misaMsgs[0]), /Email: a@b\.vn/.test(misaMsgs[0]),
    /1\. TH2040D41 · .* · Đôi · 1 × 800\.000/.test(misaMsgs[0]), /GTGT 1% · TNCN 0,5%/.test(misaMsgs[0]), /Tổng: 800\.000đ · Thanh toán: CK Techcombank · Ship: 30\.000đ/.test(misaMsgs[0])],
   [true, true, true, true, true, true, true]);
 const sumMsgs = ctx.dailyMisaSummary(true);
-eq('tin cuối ngày: theo hộ chủ hàng, bỏ dòng đã gửi riêng', [sumMsgs.every(m => !/M1/.test(m)), /Đã gửi riêng 2 dòng lấy hoá đơn/.test(sumMsgs[sumMsgs.length - 1]), sumMsgs.some(m => /^📒 MISA CUỐI NGÀY .* – Yen Leather \(Y3C\)/.test(m))], [true, true, true]);
+eq('tin cuối ngày: theo hộ chủ hàng, bỏ dòng đã gửi riêng', [sumMsgs.every(m => !/M1/.test(m)), /Đã gửi riêng 2 dòng lấy hoá đơn/.test(sumMsgs[sumMsgs.length - 1]), sumMsgs.some(m => /^📒 ĐƠN HÀNG CHO MISA CUỐI NGÀY .* – Yen Leather \(Y3C\)/.test(m))], [true, true, true]);
 eq('tin cuối ngày ghi hàng ký gửi theo chủ', sumMsgs.some(m => /Hải Nancy \(15E\)[\s\S]*ký gửi ở Y3C/.test(m)), true);
 
 // ---- Xuất file MISA qua bot ----
@@ -630,25 +630,25 @@ eq('sổ ký gửi đổi sau phiếu → không huỷ', /Ký gửi/.test(ctx.sa
 kyR[4] = 0;
 const s3 = SENT.length;
 hb = ctx.saleUndo_({ ticket_id: 'HB2', nguoi: 'ltckha@gmail.com', chu: true });
-eq('Chủ huỷ sau hạn + đã gửi tin hoá đơn → gửi tin HUỶ', [hb.ok, hb.chu, hb.misa_huy, /❌ HUỶ phiếu HB2/.test((SENT[s3] || {}).text || '')], [true, true, true, true]);
+eq('Chủ huỷ sau hạn + đã gửi tin hoá đơn → gửi tin HUỶ', [hb.ok, hb.chu, hb.misa_huy, /❌ HUỶ đơn hàng HB2/.test((SENT[s3] || {}).text || '')], [true, true, true, true]);
 eq('phiếu không có / cũ → báo rõ', /không có phiếu/.test(ctx.saleUndo_({ ticket_id: 'ZZZ', nguoi: 'nv@hn.vn' }).error), true);
 
 // ---- Điều khiển bằng số ----
 PROPS.OWNER_CHAT_ID = 'owner1';
 const z = (txt, chat) => ctx.handleText_(txt, false, chat || 'owner1', 'Kha');
 let zr = z('menu');
-eq('Chủ: menu đủ mục + số việc chờ', [/^📋 MENU HNC/.test(zr), /3 Phiếu nhập chờ chia \(\d+\)/.test(zr), /4 Hoá đơn NCC chưa có \(\d+\)/.test(zr), /5 Mã cần bổ sung \(\d+\)/.test(zr), /6 Huỷ/.test(zr)], [true, true, true, true, true]);
+eq('Chủ: menu đủ mục + số việc chờ', [/^📋 MENU HNC/.test(zr), /3 Phiếu nhập kho chờ chia \(\d+\)/.test(zr), /4 Hoá đơn mua hàng chưa có \(\d+\)/.test(zr), /5 Mã cần bổ sung \(\d+\)/.test(zr), /6 Huỷ/.test(zr)], [true, true, true, true, true]);
 zr = z('m', 'nv1');
-eq('Nhân viên: chỉ 1 2 6 9', [/1 Kiểm hàng/.test(zr), /3 Phiếu/.test(zr), /4 Hoá đơn/.test(zr), /6 Huỷ/.test(zr), /9 Hướng dẫn/.test(zr)], [true, false, false, true, true]);
+eq('Nhân viên: chỉ 1 2 6 9', [/1 Kiểm tồn kho/.test(zr), /3 Phiếu/.test(zr), /4 Hoá đơn/.test(zr), /6 Huỷ/.test(zr), /9 Hướng dẫn/.test(zr)], [true, false, false, true, true]);
 eq('nhân viên chọn 3 → chỉ Chủ', /chỉ Chủ/.test(z('3', 'nv1')), true);
 delete PROPS.ask_nv2;
 eq('tin số không có câu hỏi → menu', /^📋 MENU HNC/.test(z('2', 'nv2')), true);
 eq('chữ không hiểu → menu', /Mình chưa hiểu[\s\S]*MENU HNC/.test(z('xin chào cả nhà', 'nv3')), true);
 eq('"hd" vẫn là hướng dẫn lệnh chữ', /HƯỚNG DẪN BOT KHO HNC/.test(z('hd', 'nv3')), true);
 z('menu', 'nv1');
-eq('1 → hỏi mã; gõ mã → kiểm hàng', [/Gõ mã cần kiểm/.test(z('1', 'nv1')), /TH2040D/.test(z('TH2040D', 'nv1')), !PROPS.ask_nv1], [true, true, true]);
+eq('1 → hỏi mã; gõ mã → kiểm hàng', [/Gõ mã cần kiểm tồn kho/.test(z('1', 'nv1')), /TH2040D/.test(z('TH2040D', 'nv1')), !PROPS.ask_nv1], [true, true, true]);
 z('menu', 'nv1'); z('2', 'nv1');
-eq('2 → 3 báo cáo tuần này', /BÁN TUẦN/.test(z('3', 'nv1')) || /Tuần .*chưa có dòng bán/.test(z('3', 'nv1')), true);
+eq('2 → 3 báo cáo tuần này', /ĐƠN HÀNG TUẦN/.test(z('3', 'nv1')) || /Tuần .*chưa có dòng bán/.test(z('3', 'nv1')), true);
 z('menu', 'nv1');
 eq('0 → để sau, xoá câu hỏi', [/Để sau/.test(z('0', 'nv1')), !PROPS.ask_nv1], [true, true]);
 // 6 huỷ: phải nhắn 6 hai lần
@@ -700,20 +700,20 @@ eq('menu có 8 Dự phòng', /8 Dự phòng/.test(z('menu', 'nv9')), true);
 const banRow = DATA.BAN.length - 1;
 eq('nhân viên huỷ dòng cũ → chặn', /Chỉ Chủ/.test(z('huy TH2040D 40', 'nv9')), true);
 zr = z('huy TH2040D 40');
-eq('Chủ: liệt kê dòng bán khớp', /HUỶ DÒNG BÁN[\s\S]*TH2040D size 40 × 1 · Y3C/.test(zr), true);
+eq('Chủ: liệt kê dòng bán khớp', /HUỶ ĐƠN HÀNG[\s\S]*TH2040D size 40 × 1 · Y3C/.test(zr), true);
 zr = z('1');
-eq('nhắn 1 → huỷ dòng bán gần nhất', [/Đã huỷ dòng bán TH2040D size 40/.test(zr)], [true]);
+eq('nhắn 1 → huỷ dòng bán gần nhất', [/Đã huỷ đơn hàng TH2040D size 40/.test(zr)], [true]);
 // Chọn số sau khi bán: đổi cách trả; Chủ huỷ dòng bán qua menu 6
 zr = z('ban TH2040D 41 YEN 800k', 'nv8');
 eq('bán xong → hỏi cách trả bằng số', /Nhắn số: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ/.test(zr), true);
 zr = z('2', 'nv8');
 const lastPay = DATA.BAN.filter(r => r[1] === 'TH2040D' && String(r[4]) === '41' && r[pIx('payment_method')]).slice(-1)[0];
-eq('nhắn 2 → ghi Chuyển khoản vào dòng vừa bán', [/Đã ghi cách trả: Chuyển khoản/.test(zr), lastPay && lastPay[pIx('payment_method')]], [true, 'Chuyển khoản']);
+eq('nhắn 2 → ghi Chuyển khoản vào dòng vừa bán', [/Đã ghi hình thức thanh toán: Chuyển khoản/.test(zr), lastPay && lastPay[pIx('payment_method')]], [true, 'Chuyển khoản']);
 z('ban TH2040D 40 YEN 700k');
 zr = z('6');
-eq('Chủ: menu 6 → 1 lệnh vừa rồi + các dòng bán 2 ngày', [/1 Lệnh vừa rồi/.test(zr), /2 Bán .* TH2040D size 40 × 1/.test(zr)], [true, true]);
+eq('Chủ: menu 6 → 1 lệnh vừa rồi + các dòng bán 2 ngày', [/1 Lệnh vừa rồi/.test(zr), /2 Đơn hàng .* TH2040D size 40 × 1/.test(zr)], [true, true]);
 zr = z('2');
-eq('chọn 2 → huỷ dòng bán đó', /Đã huỷ dòng bán TH2040D size 40/.test(zr), true);
+eq('chọn 2 → huỷ dòng bán đó', /Đã huỷ đơn hàng TH2040D size 40/.test(zr), true);
 
 // A1: web lỗi → giữ hàng chờ, thử lại, báo Chủ, báo khi chạy lại
 PROPS.SYNC_HINT_URL = 'https://web.example/api/sync-hint'; PROPS.SYNC_HINT_KEY = 'synckey_1234567890';
