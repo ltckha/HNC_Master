@@ -5,7 +5,7 @@ Bố cục lấy từ Minicode.lbx (khung 175.7 × 81.8 pt):
   - Tên       : x 4, y 2.4, 130.7 × 53.3 pt (trái trên, nhiều dòng)
   - Mã vạch   : CODE128 xoay 270°, x 138.4, y 8, 32.9 × 54.5 pt (mép phải), có số bên dưới vạch
   - Size Color: x 64.8, y 56, 69.6 × 17.6 pt (dưới giữa)
-  - Kho Y3C   : chữ nhỏ "Y3C" góc trái dưới (anh Kha 18/10: tem 2 kho in riêng, tem Y3C có dấu)
+  - Không in tên kho trên tem (anh Kha 18/10); 2 kho vẫn in 2 đợt riêng
 """
 from PIL import Image, ImageDraw, ImageFont
 
@@ -121,7 +121,7 @@ def _render_new(rec, kho, mau):
     d = ImageDraw.Draw(img)
     W, H = DOTS
     name, sc, price, code = str(rec.get('Tên', '')).strip(), str(rec.get('Size Color', '')).strip(), _price(rec), str(rec.get('Code128', '')).strip()
-    tag = ' · Y3C' if kho == 'Y3C' else ''
+    tag = ''  # không in tên kho trên tem (anh Kha 18/10)
     if mau == 'A':      # tên 2 dòng · màu-size trái, giá phải · mã vạch ngang dưới
         _fit_text(d, name, (8, 2, W - 16, 82), max_size=30, min_size=20)  # tên dài xuống dòng 2
         _one_line(d, sc + tag, 8, 92, W // 2, 30)
@@ -184,6 +184,4 @@ def _render_goc(rec, kho=''):
         sd.text((unit * 5, bw - human), code, font=_font(human - 2), fill=0)
         rot = strip.rotate(270, expand=True)
         img.paste(rot, (bx + max(0, (bw - rot.width) // 2), by))
-    if kho == 'Y3C':
-        d.text((_box(4, 70, 0, 0)[0], _box(4, 70, 0, 0)[1]), 'Y3C', font=_font(22), fill=0)
     return img.point(lambda v: 0 if v < 128 else 255, '1')
