@@ -2727,6 +2727,18 @@ def process_export_task(choice, loader):
         except Exception as e:
             print(f"[!] Không thể ghi đè file IN.csv: {e}")
         print(f"\n🏷️ {len(sel_recs)} dòng · {int(out_df['F6'].sum())} tem\n📁 {exported_filepath}")
+        # V34 mục 6: in thẳng trên QL-700 bằng cùng hàm dựng tem với dịch vụ in tự động (tools/label_print.py) — mỗi kho 1 đợt
+        if kho_want and input(f"In thẳng {int(out_df['F6'].sum())} tem kho {kho_want} trên máy QL-700 ngay? (y/Enter = không): ").strip().lower() == 'y':
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools'))
+            import label_print
+            res = label_print.print_records(out_df.astype(str).to_dict('records'), kho_want)
+            if res['ok']:
+                loader.update_status(sheet_name, sel_idx, status_col_idx, f"Done - {now_str}")
+                print(f"✅ Đã in {res['so_tem']} tem và đánh dấu đã in (web_label).")
+                return
+            print(f"❌ Chưa in được: {res['loi']}")
+        elif not kho_want:
+            print("ℹ️ In thẳng trên QL-700 cần chọn 1 kho (tem 2 kho in riêng).")
         if input("Mở P-touch in xong chưa? Đã in xong thì gõ y để đánh dấu (Enter = chưa): ").strip().lower() == 'y':
             loader.update_status(sheet_name, sel_idx, status_col_idx, f"Done - {now_str}")
             print("✅ Đã đánh dấu đã in (web_label).")

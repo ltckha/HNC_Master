@@ -1497,7 +1497,8 @@ function handleStock_(body, dryRun) {
   if (action === 'hoa_don') return invoiceAction_(body, seller, dryRun);
   if (action === 'in_tem') return labelPrint_(body, dryRun);
   if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem']).join(', ') };
+  if (action === 'kq_in_tem') return labelResult_(body);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -3795,7 +3796,27 @@ function labelPrint_(body, dryRun) {
   labelWrite_(folder, 'IN.csv', csv); // mẫu .lbx cũ vẫn đọc IN.csv
   out.file = 'IN_' + sel.kho + '.csv';
   out.link = f.getUrl();
+  if (body.tu_in !== false) {
+    // V34 mục 6: cờ cho Mac mini in thẳng trên QL-700 (tools/label_print.py); Mac in xong tự ghi web_label Done + IN_<kho>.ket_qua.json
+    out.luc = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+    labelWrite_(folder, 'IN_' + sel.kho + '.can_in', JSON.stringify({ kho: sel.kho, luc: out.luc, nguoi: String(body.seller || ''),
+      so_chung_tu: String(body.so_chung_tu || ''), ngay: String(body.ngay || ''), dong: out.rows.map(x => x.dong),
+      ma_hang: records.map(r => r.Code128), so_tem: soTem }));
+    out.tu_in = true;
+  }
   return out;
+}
+
+/** Kết quả lần in tự động gần nhất của kho (IN_<kho>.ket_qua.json do Mac mini ghi). */
+function labelResult_(body) {
+  const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
+  if (!kho) return { ok: false, action: 'kq_in_tem', error: 'kho phải là 15E hoặc Y3C' };
+  const folder = labelFolder_();
+  const pending = folder.getFilesByName('IN_' + kho + '.can_in').hasNext();
+  const it = folder.getFilesByName('IN_' + kho + '.ket_qua.json');
+  let kq = null;
+  if (it.hasNext()) { try { kq = JSON.parse(it.next().getBlob().getDataAsString()); } catch (e) { kq = null; } }
+  return { ok: true, action: 'kq_in_tem', kho, dang_cho_in: pending, ket_qua: kq };
 }
 
 function labelDone_(body, nguoi, dryRun) {

@@ -884,6 +884,14 @@ const lbFile = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.
 const lbCsv = lbFile ? Buffer.from(lbFile.bytes).toString() : '';
 eq('in_tem: ghi IN_15E.csv + IN.csv, cột như task 10', [lr.file, !!lbFile, lbCsv.split('\n')[0], /TH2040D40/.test(lbCsv), !!Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN.csv')],
   ['IN_15E.csv', true, 'QR code,Tên,Màu,Size,Size Color,F6,Code128,Gía', true, true]);
+const lbFlag = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_15E.can_in');
+const flagJ = lbFlag ? JSON.parse(Buffer.from(lbFlag.bytes).toString()) : {};
+eq('in_tem: ghi cờ IN_15E.can_in cho Mac in QL-700 (dòng, mã, số tem)', [lr.tu_in, flagJ.kho, flagJ.dong.length, flagJ.ma_hang[0], flagJ.so_tem, flagJ.luc === lr.luc], [true, '15E', 1, 'TH2040D40', 3, true]);
+let kq = ctx.handleStock_({ action: 'kq_in_tem', kho: '15E' }, false);
+eq('kq_in_tem: đang chờ in, chưa có kết quả', [kq.ok, kq.dang_cho_in, kq.ket_qua], [true, true, null]);
+IN_DIR.createFile({ name: 'IN_15E.ket_qua.json', bytes: Array.from(Buffer.from(JSON.stringify({ ok: true, so_tem_da_in: 3 }))), mime: 'application/json' });
+kq = ctx.handleStock_({ action: 'kq_in_tem', kho: 'TBH' }, false);
+eq('kq_in_tem: đọc ket_qua.json của Mac', [kq.kho, kq.ket_qua.so_tem_da_in], ['15E', 3]);
 lr = it({ ngay: '16/10/2026', kho: '15E' }, true);
 eq('in_tem theo ngày + kho: lấy cả dòng nhập Zalo không số chứng từ', lr.rows.some(r => r.ma_hang === 'TH2040N41'), true);
 eq('chưa bấm "Đã in" → web_label còn trống', lbRow[9], '');

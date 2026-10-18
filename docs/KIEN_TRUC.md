@@ -66,7 +66,7 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 
 **Drive** (`hnc_paths.py` khai 1 chỗ):
 - `My Drive/HNC/He_thong/` (cũ: `Spark/HNC_Master`): `HNC_Templates` (tpl_*), `HNC_Exported_Files` (file xuất, `channel_links.csv`, SPEC_FILL_AI_*), `Outputs`. Không thấy thì main.py dừng, không dùng thư mục local.
-- `My Drive/IN Mini Code/IN.csv`: tem Brother P-touch.
+- `My Drive/IN Mini Code/`: `IN.csv` (mẫu P-touch cũ), `IN_<kho>.csv` + cờ `IN_<kho>.can_in` (bot `in_tem`) → Mac mini in thẳng QL-700 qua USB (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, dựng tem `tools/label_render.py`, dùng chung với main.py task 10), in xong tự ghi `web_label` + `IN_<kho>.ket_qua.json`. Cần: QL-700 bật, cắm USB, tắt Editor Lite; python3.11 được macOS cho phép vào Google Drive.
 - `My Drive/HNC/Thue/2026/`: `Hoá đơn 2026` (bot đọc theo ID `INVOICE_FOLDER_ID`), `Phiếu mua hàng` (bot ghi theo ID `PN_FOLDER_ID`: `Chưa chia/<NCC>/`, rồi `<hộ>/<NCC>/`).
 
 ## Cửa của bot (doPost)
