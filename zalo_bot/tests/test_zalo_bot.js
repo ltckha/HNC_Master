@@ -898,6 +898,21 @@ eq('in_tem theo ngày + kho: lấy cả dòng nhập Zalo không số chứng t�
 eq('chưa bấm "Đã in" → web_label còn trống', lbRow[9], '');
 const dn = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
 eq('da_in_tem → web_label Done cho đúng dòng', [dn.ok, dn.so_dong, /^Done - /.test(lbRow[9]), lbRow2[9]], [true, 1, true, '']);
+// chon: số tem tuỳ chỉnh từng dòng
+lr = it({ so_chung_tu: 'NK000123', kho: '15E', chon: [{ dong: lbN - 2, so_tem: 5 }] }, true);
+eq('in_tem chon: so_tem tuỳ chỉnh + ten/mau/size/gia', [lr.ok, lr.so_tem, lr.rows[0].so_tem, lr.rows[0].mau, lr.rows[0].size], [true, 5, 5, 'Đen', '40']);
+lr = it({ ngay: '16/10/2026', kho: '15E', chon: [{ dong: lbN - 2, so_tem: 0 }, { dong: lbN, so_tem: 2 }] });
+const flag2 = JSON.parse(Buffer.from(Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_15E.can_in').bytes).toString());
+eq('in_tem chon: so_tem 0 bỏ dòng, cờ chỉ có dòng in', [lr.so_dong, flag2.dong, flag2.so_tem, flag2.ma_hang], [1, [lbN], 2, ['TH2040N41']]);
+// in_bu
+const ib = (b, dry) => ctx.handleStock_(Object.assign({ action: 'in_bu', seller: 'nv@hn.vn', kho: 'Y3C' }, b), !!dry);
+let bu = ib({ items: [{ ma_hang: 'th2040d40', so_tem: 2 }, { ma_hang: 'KHONGCO40', so_tem: 1 }] });
+eq('in_bu: mã không có → báo lỗi dòng, không in', [bu.ok, bu.rows[1].loi, !!Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_Y3C.can_in')], [false, 'mã không có trong SANPHAM', false]);
+bu = ib({ items: [{ ma_hang: 'TH2040D40', so_tem: 2 }] });
+const flagBu = JSON.parse(Buffer.from(Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_Y3C.can_in').bytes).toString());
+const logBu = Object.values(DFILES).find(x => x.folder === IN_DIR.getId() && x.name === 'IN_BU_nhat_ky.csv');
+eq('in_bu: cờ không có dòng NHAP, ghi nhật ký', [bu.ok, bu.so_tem, bu.rows[0].size, flagBu.dong, flagBu.in_bu, /TH2040D40,2/.test(Buffer.from(logBu.bytes).toString())], [true, 2, '40', [], true, true]);
+eq('in_bu không đụng web_label', lbRow2[9], '');
 eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da", nâu' }]).split('\n')[1].indexOf('"Giày ""da"", nâu"') !== -1, true);
 
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');

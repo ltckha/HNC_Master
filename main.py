@@ -2675,6 +2675,35 @@ def process_export_task(choice, loader):
         # V34 (anh Kha 18/10): in tem theo kho / số chứng từ / ngày — cùng cột và luật với cửa bot in_tem (LABEL_COLUMNS).
         # Tạo file KHÔNG tính là đã in: chỉ ghi web_label = Done khi trả lời "Đã in xong".
         product_map = get_product_info_map(loader)
+        if input("[1] Theo phiếu / ngày (mặc định)  [2] In bù theo mã hàng: ").strip() == '2':
+            # In bù (cùng luật cửa bot in_bu): mã + size → tem mẫu A, không đụng web_label NHAP
+            kho_want = {'1': '15E', '2': 'Y3C'}.get(input("Kho [1] 15E  [2] Y3C: ").strip(), '')
+            if not kho_want:
+                print("ℹ️ Cần chọn 1 kho.")
+                return
+            raw = input("Mã hàng + size, mỗi mã cách nhau dấu phẩy, thêm xN nếu in N tem (vd HT1121D40x2, HT1121D41): ").strip().upper()
+            keys = {k.upper() for k in product_map}
+            recs, bad = [], []
+            for part in [p.strip().replace(' ', '') for p in raw.split(',') if p.strip()]:
+                m = re.match(r'^(.+?)(?:X(\d+))?$', part)
+                ma, n = m.group(1), int(m.group(2) or 1)
+                code = next((ma[:k] for k in range(len(ma), 0, -1) if ma[:k] in keys and re.match(r'^\d{0,2}(\.5)?$', ma[k:])), '')
+                if not code:
+                    bad.append(ma)
+                    continue
+                recs.append(label_record({'product_code': code, 'item_size': ma[len(code):], 'item_quantity': n}, product_map))
+            if bad:
+                print(f"❌ Mã không có trong SANPHAM: {', '.join(bad)} — không in.")
+                return
+            if not recs:
+                return
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools'))
+            import label_print
+            out_df = pd.DataFrame(recs, columns=LABEL_COLUMNS)
+            print(f"🏷️ In bù {len(recs)} mã · {int(out_df['F6'].sum())} tem kho {kho_want}")
+            res = label_print.print_records(out_df.astype(str).to_dict('records'), kho_want)
+            print("✅ Đã in." if res['ok'] else f"❌ Chưa in được: {res['loi']}")
+            return
         kho_pick = input("Kho in tem [1] 15E  [2] Y3C  [Enter] cả 2: ").strip()
         kho_want = {'1': '15E', '2': 'Y3C'}.get(kho_pick, '')
         filt = input("Số chứng từ (vd NK000045) hoặc ngày dd/mm/yyyy (lấy cả dòng nhập Zalo không số) — Enter = mọi dòng chưa in: ").strip().upper()

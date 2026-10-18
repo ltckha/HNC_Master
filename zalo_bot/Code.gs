@@ -1498,7 +1498,8 @@ function handleStock_(body, dryRun) {
   if (action === 'in_tem') return labelPrint_(body, dryRun);
   if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
   if (action === 'kq_in_tem') return labelResult_(body);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem']).join(', ') };
+  if (action === 'in_bu') return labelExtraPrint_(body, dryRun);
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -3719,8 +3720,13 @@ function labelSelect_(body) {
   if (!kho) return { error: 'kho phải là 15E hoặc Y3C' };
   const so = String(body.so_chung_tu || '').trim().toUpperCase();
   const ngay = body.ngay ? invoiceDate_(body.ngay) : '';
-  const rowsWanted = Array.isArray(body.dong) ? body.dong.map(Number) : null;
-  if (!so && !ngay && !rowsWanted) return { error: 'cần so_chung_tu, ngay (dd/mm/yyyy) hoặc dong' };
+  // chon:[{dong, so_tem}] (app xem trước, anh Kha 18/10): chỉ các dòng so_tem > 0, in đúng số tem đó. dong:[{dong, so_tem}] hiểu như chon.
+  const chonList = Array.isArray(body.chon) ? body.chon : (Array.isArray(body.dong) && body.dong.length && typeof body.dong[0] === 'object' ? body.dong : null);
+  const soTemOf = {};
+  if (chonList) chonList.forEach(x => { const n = Math.max(0, Math.round(Number(x && x.so_tem) || 0)); if (n > 0) soTemOf[Number(x.dong)] = n; });
+  const rowsWanted = chonList ? Object.keys(soTemOf).map(Number) : (Array.isArray(body.dong) ? body.dong.map(Number) : null);
+  if (chonList && !rowsWanted.length) return { error: 'chon không có dòng nào so_tem > 0' };
+  if (!so && !ngay && !rowsWanted) return { error: 'cần so_chung_tu, ngay (dd/mm/yyyy), dong hoặc chon' };
   const nh = sheetValues_('NHAP');
   const c = headerMap_(nh[0]);
   const dayKey = ngay ? ngay.split('/').reverse().join('-') : '';
@@ -3735,7 +3741,7 @@ function labelSelect_(body) {
     else if (so) { if (doc !== so) continue; }
     else if (dateKey_(nh[r][c['Ngày chứng từ (*)']]) !== dayKey) continue;
     out.push({ row: r + 1, code, size: normSize_(nh[r][c.item_size]), color: String(nh[r][c.product_color] || '').trim(),
-      qty: Number(nh[r][c['Số lượng (*)']]) || 1, da_in: c.web_label !== undefined && /^Done/i.test(String(nh[r][c.web_label] || '')) });
+      qty: soTemOf[r + 1] || Number(nh[r][c['Số lượng (*)']]) || 1, da_in: c.web_label !== undefined && /^Done/i.test(String(nh[r][c.web_label] || '')) });
   }
   return { kho, rows: out };
 }
@@ -3790,22 +3796,67 @@ function labelPrint_(body, dryRun) {
   const records = sel.rows.map(labelRecord_);
   const soTem = records.reduce((t, r) => t + r.F6, 0);
   const out = { ok: true, action: 'in_tem', kho: sel.kho, dry_run: dryRun, so_dong: records.length, so_tem: soTem,
-    rows: sel.rows.map((x, i) => ({ dong: x.row, ma_hang: records[i].Code128, so_tem: records[i].F6, da_in: x.da_in })) };
+    rows: sel.rows.map((x, i) => Object.assign({ dong: x.row, da_in: x.da_in }, labelRowInfo_(records[i]))) };
   if (dryRun) return out;
+  return labelSend_(out, records, body, sel.kho, out.rows.map(x => x.dong));
+}
+
+function labelRowInfo_(rec) {
+  return { ma_hang: rec.Code128, ten: rec['Tên'], mau: rec['Màu'], size: rec.Size, gia: rec['Gía'], so_tem: rec.F6 };
+}
+
+/** Ghi IN_<kho>.csv (+ IN.csv) và cờ IN_<kho>.can_in cho Mac mini in QL-700; dongs = dòng NHAP Mac sẽ đánh dấu Done (in bù: []). */
+function labelSend_(out, records, body, kho, dongs) {
   const folder = labelFolder_();
   const csv = labelCsv_(records);
-  const f = labelWrite_(folder, 'IN_' + sel.kho + '.csv', csv);
+  const f = labelWrite_(folder, 'IN_' + kho + '.csv', csv);
   labelWrite_(folder, 'IN.csv', csv); // mẫu .lbx cũ vẫn đọc IN.csv
-  out.file = 'IN_' + sel.kho + '.csv';
+  out.file = 'IN_' + kho + '.csv';
   out.link = f.getUrl();
+  out.luc = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
   if (body.tu_in !== false) {
-    // V34 mục 6: cờ cho Mac mini in thẳng trên QL-700 (tools/label_print.py); Mac in xong tự ghi web_label Done + IN_<kho>.ket_qua.json
-    out.luc = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
-    labelWrite_(folder, 'IN_' + sel.kho + '.can_in', JSON.stringify({ kho: sel.kho, luc: out.luc, nguoi: String(body.seller || ''),
-      so_chung_tu: String(body.so_chung_tu || ''), ngay: String(body.ngay || ''), dong: out.rows.map(x => x.dong),
-      ma_hang: records.map(r => r.Code128), so_tem: soTem }));
+    // V34 mục 6: Mac in xong tự ghi web_label Done cho dongs + IN_<kho>.ket_qua.json
+    labelWrite_(folder, 'IN_' + kho + '.can_in', JSON.stringify({ kho, luc: out.luc, nguoi: String(body.seller || ''),
+      so_chung_tu: String(body.so_chung_tu || ''), ngay: String(body.ngay || ''), dong: dongs, in_bu: !!out.in_bu,
+      ma_hang: records.map(r => r.Code128), so_tem: records.reduce((t, r) => t + r.F6, 0) }));
     out.tu_in = true;
   }
+  return out;
+}
+
+/** in_bu: in thêm tem theo mã hàng (mã + size), không đụng web_label NHAP; ghi nhật ký IN_BU_nhat_ky.csv. */
+function labelExtraPrint_(body, dryRun) {
+  MEMO = {};
+  const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
+  if (!kho) return { ok: false, action: 'in_bu', error: 'kho phải là 15E hoặc Y3C' };
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!items.length) return { ok: false, action: 'in_bu', error: 'cần items:[{ma_hang, so_tem}]' };
+  labelRecord_({ code: '', size: '', qty: 1 }); // nạp bảng SANPHAM
+  const sp = MEMO.__labelSp;
+  const rows = [], records = [];
+  items.forEach((it, i) => {
+    const ma = String(it && it.ma_hang || '').trim().toUpperCase().replace(/\s+/g, '');
+    const n = Math.round(Number(it && it.so_tem) || 0);
+    let code = '';
+    for (let k = ma.length; k > 0; k--) { if (sp[ma.slice(0, k)] && /^\d{0,2}(\.5)?$/.test(ma.slice(k))) { code = ma.slice(0, k); break; } }
+    if (!ma || n < 1) { rows.push({ dong: i + 1, ma_hang: ma, so_tem: n, loi: 'cần ma_hang và so_tem ≥ 1' }); return; }
+    if (!code) { rows.push({ dong: i + 1, ma_hang: ma, so_tem: n, loi: 'mã không có trong SANPHAM' }); return; }
+    const rec = labelRecord_({ code, size: ma.slice(code.length), qty: n });
+    records.push(rec);
+    rows.push(Object.assign({ dong: i + 1 }, labelRowInfo_(rec)));
+  });
+  const bad = rows.filter(r => r.loi);
+  const out = { ok: !bad.length, action: 'in_bu', in_bu: true, kho, dry_run: dryRun, so_dong: records.length,
+    so_tem: records.reduce((t, r) => t + r.F6, 0), rows };
+  if (bad.length) { out.error = bad.length + ' dòng lỗi — không in dòng nào'; return out; }
+  if (dryRun) return out;
+  labelSend_(out, records, body, kho, []);
+  const folder = labelFolder_();
+  const logName = 'IN_BU_nhat_ky.csv';
+  const it = folder.getFilesByName(logName);
+  const lines = records.map(r => [out.luc, String(body.seller || ''), kho, r.Code128, r.F6].join(',')).join('\n') + '\n';
+  if (it.hasNext()) { const f = it.next(); f.setContent(f.getBlob().getDataAsString() + lines); }
+  else folder.createFile(Utilities.newBlob('luc,nguoi,kho,ma_hang,so_tem\n' + lines, 'text/csv', logName));
   return out;
 }
 
