@@ -50,7 +50,8 @@ def find_printer():
     """Địa chỉ USB của QL-700 (brother_ql + pyusb). None nếu không thấy."""
     from brother_ql.backends.helpers import discover
     devs = [d for d in discover(backend_identifier='pyusb') if 'usb://' in str(d.get('identifier', ''))]
-    return devs[0]['identifier'] if devs else None
+    # Bỏ phần số serial (QL-700 có máy trả serial lỗi ký tự) — chỉ có 1 máy in Brother cắm vào
+    return devs[0]['identifier'].split('_')[0] if devs else None
 
 
 def print_records(records, kho, dry=False):
