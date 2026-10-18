@@ -23,6 +23,8 @@ import label_render  # noqa: E402
 MODEL = 'QL-700'
 KHOS = ('15E', 'Y3C')
 SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
+CAT = 'cuoi_dot'  # 'cuoi_dot' = in liền cả đợt, cắt 1 lần ở cuối (anh Kha 18/10, như P-touch) · 'moi_tem' = cắt từng tem
+BATCH_MAX = 255   # máy chỉ đếm "cắt sau N tem" tới 255 → đợt dài hơn thì chia
 MAX_AGE_MIN = 30  # cờ cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
 ERR_HINT = 'Không thấy máy in QL-700: kiểm máy đã bật, cắm USB vào Mac mini, và đã TẮT Editor Lite (giữ nút Editor Lite tới khi đèn tắt).'
 
@@ -31,9 +33,38 @@ def folder():
     return os.path.dirname(in_csv_path())
 
 
+def _read_text(path, tries=3):
+    """Đọc file Drive; file mới trên mây (dataless) có lúc báo lỗi lần đầu → chờ rồi thử lại."""
+    for i in range(tries):
+        try:
+            with open(path, encoding='utf-8-sig', newline='') as f:
+                return f.read()
+        except OSError:
+            if i == tries - 1:
+                raise
+            time.sleep(2)
+
+
 def read_csv(path):
-    with open(path, encoding='utf-8-sig', newline='') as f:
-        return list(csv.DictReader(f))
+    return list(csv.DictReader(_read_text(path).splitlines()))
+
+
+def batch_raster(model, n, cut_each):
+    """BrotherQLRaster cho 1 đợt n tem trong 1 lệnh: các trang nối nhau (0x0C), chỉ trang cuối kết thúc (0x1A);
+    cut_each=False → cắt sau n tem + cắt ở cuối = 1 lần cắt cho cả đợt."""
+    from brother_ql.raster import BrotherQLRaster
+
+    class _Batch(BrotherQLRaster):
+        page = 0
+
+        def add_cut_every(self, k=1):
+            super().add_cut_every(1 if cut_each else n)
+
+        def add_print(self, last_page=True):
+            super().add_print(last_page=self.page >= n - 1)
+            self.page += 1
+
+    return _Batch(model)
 
 
 def csv_matches(req, records):
@@ -71,7 +102,6 @@ def print_records(records, kho, dry=False):
             im.save(f'/tmp/tem_thu_{kho}_{i + 1}.png')
         return {'ok': True, 'so_tem': len(images), 'loi': '', 'thu': True}
     try:
-        from brother_ql.raster import BrotherQLRaster
         from brother_ql.conversion import convert
         from brother_ql.backends.helpers import send
     except ImportError as e:
@@ -79,17 +109,22 @@ def print_records(records, kho, dry=False):
     ident = find_printer()
     if not ident:
         return {'ok': False, 'so_tem': len(images), 'loi': ERR_HINT}
-    qlr = BrotherQLRaster(MODEL)
-    instructions = convert(qlr=qlr, images=images, label=label_render.LABEL_ID, rotate='0', threshold=70.0,
-                           dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
-    try:
-        st = send(instructions=instructions, printer_identifier=ident, backend_identifier='pyusb', blocking=True)
-    except Exception as e:  # mất kết nối giữa chừng
-        return {'ok': False, 'so_tem': len(images), 'loi': f'lỗi gửi tới máy in: {e}'}
-    errs = (st.get('printer_state') or {}).get('errors') or []
-    if errs or not st.get('did_print'):
-        return {'ok': False, 'so_tem': len(images), 'loi': 'máy in báo: ' + (', '.join(errs) if errs else str(st.get('outcome')))}
-    return {'ok': True, 'so_tem': len(images), 'loi': ''}
+    done = 0
+    for k in range(0, len(images), BATCH_MAX):
+        part = images[k:k + BATCH_MAX]
+        qlr = batch_raster(MODEL, len(part), CAT == 'moi_tem')
+        instructions = convert(qlr=qlr, images=part, label=label_render.LABEL_ID, rotate='0', threshold=70.0,
+                               dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
+        try:
+            st = send(instructions=instructions, printer_identifier=ident, backend_identifier='pyusb', blocking=True)
+        except Exception as e:  # mất kết nối giữa chừng
+            return {'ok': False, 'so_tem': len(images), 'da_gui': done > 0, 'so_tem_da_in': done, 'loi': f'lỗi gửi tới máy in: {e}'}
+        # QL-700 không phải lúc nào cũng báo "in xong" trong 10 giây → chỉ coi là lỗi khi máy báo lỗi thật (hết giấy, kẹt…)
+        errs = (st.get('printer_state') or {}).get('errors') or []
+        if errs:
+            return {'ok': False, 'so_tem': len(images), 'da_gui': True, 'so_tem_da_in': done, 'loi': 'máy in báo: ' + ', '.join(errs)}
+        done += len(part)
+    return {'ok': True, 'so_tem': len(images), 'da_gui': True, 'so_tem_da_in': done, 'loi': ''}
 
 
 def mark_done(rows, codes):
@@ -122,12 +157,15 @@ def process_flag(kho, dry=False):
     d = folder()
     flag = os.path.join(d, f'IN_{kho}.can_in')
     out = os.path.join(d, f'IN_{kho}.ket_qua.json')
-    try:
-        req = json.load(open(flag, encoding='utf-8'))
-    except (OSError, ValueError):
-        req = {}
     csv_path = os.path.join(d, f'IN_{kho}.csv')
-    records = read_csv(csv_path) if os.path.exists(csv_path) else []
+    try:
+        req = json.loads(_read_text(flag) or '{}')
+        records = read_csv(csv_path) if os.path.exists(csv_path) else []
+    except (OSError, ValueError) as e:
+        # Không đọc được file Drive: vẫn ghi kết quả để app không chờ suông; giữ cờ, lần sau thử lại
+        return write_result(out, {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': '', 'so_tem': 0,
+                                  'so_tem_da_in': 0, 'ok': False, 'loi': f'chưa đọc được file in từ Google Drive ({e}), đang thử lại',
+                                  'dong_da_danh_dau': []})
     expired = False
     if req.get('luc') and not dry:
         try:
@@ -144,14 +182,18 @@ def process_flag(kho, dry=False):
         res = print_records(records, kho, dry=dry)
     result = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': req.get('luc', ''),
               'so_chung_tu': req.get('so_chung_tu', ''), 'ngay': req.get('ngay', ''), 'so_tem': res['so_tem'],
-              'so_tem_da_in': res['so_tem'] if res['ok'] else 0, 'ok': res['ok'], 'loi': res['loi'], 'dong_da_danh_dau': []}
+              'so_tem_da_in': res.get('so_tem_da_in', res['so_tem'] if res['ok'] else 0), 'ok': res['ok'], 'loi': res['loi'], 'dong_da_danh_dau': []}
     if res['ok'] and not dry:
         try:
             result['dong_da_danh_dau'] = mark_done([int(x) for x in req.get('dong', [])], {r.get('Code128', '').strip().upper() for r in records})
         except Exception as e:
             result['loi'] = f'in xong nhưng chưa đánh dấu được trên Sheet: {e}'
-        if os.path.exists(flag):
-            os.remove(flag)
+    if res.get('da_gui') and not dry and os.path.exists(flag):
+        os.remove(flag)  # đã gửi máy in thì không thử lại nữa (tránh in trùng); lỗi giữa chừng → người dùng bấm In lại
+    return write_result(out, result)
+
+
+def write_result(out, result):
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=1)
     print(json.dumps(result, ensure_ascii=False))

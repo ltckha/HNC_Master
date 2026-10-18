@@ -41,10 +41,10 @@ def write_job(luc=None, so_tem=3, codes=('TH2040D40',)):
         json.dump({'kho': '15E', 'luc': luc or datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'dong': [120], 'ma_hang': list(codes), 'so_tem': so_tem}, f)
 
 
-def fake_print(ok, loi=''):
+def fake_print(ok, loi='', da_gui=None):
     def _p(records, kho, dry=False):
         calls['print'] += 1
-        return {'ok': ok, 'so_tem': sum(int(r['F6']) for r in records), 'loi': loi}
+        return {'ok': ok, 'so_tem': sum(int(r['F6']) for r in records), 'loi': loi, 'da_gui': ok if da_gui is None else da_gui}
     return _p
 
 
@@ -75,6 +75,20 @@ eq('CSV chưa khớp cờ → chờ', [label_print.process_flag('15E'), calls['p
 write_job(luc=(datetime.now() - timedelta(minutes=45)).strftime('%Y-%m-%d %H:%M:%S'))
 r = label_print.process_flag('15E')
 eq('cờ cũ → bỏ, không in, không đánh dấu', [r['ok'], calls['print'] == n_print, os.path.exists(flag), len(calls['mark']) == n_mark], [False, True, False, True])
+
+# 5. Đã gửi máy in rồi mới báo lỗi (hết giấy giữa chừng) → không đánh dấu, xoá cờ (không in lặp)
+label_print.print_records = fake_print(False, 'máy in báo: hết giấy', da_gui=True)
+write_job()
+r = label_print.process_flag('15E')
+eq('lỗi sau khi gửi: xoá cờ, không đánh dấu', [r['ok'], os.path.exists(flag), len(calls['mark']) == n_mark], [False, False, True])
+
+# 6. Cắt cuối đợt: 1 lệnh, trang nối 0x0C, chỉ trang cuối 0x1A, "cắt sau N tem" = N
+from brother_ql.conversion import convert  # noqa: E402
+imgs = [img] * 4
+data = convert(qlr=label_print.batch_raster('QL-700', 4, False), images=imgs, label='62x29', rotate='0', cut=True)
+eq('cắt cuối đợt: ESC i A 4, 1 lần kết thúc', [data.count(b'\x1biA\x04'), data.count(b'\x1biA\x01'), data.endswith(b'\x1a')], [4, 0, True])
+data1 = convert(qlr=label_print.batch_raster('QL-700', 4, True), images=imgs, label='62x29', rotate='0', cut=True)
+eq('cắt từng tem: ESC i A 1', data1.count(b'\x1biA\x01'), 4)
 
 if fails:
     sys.exit(1)

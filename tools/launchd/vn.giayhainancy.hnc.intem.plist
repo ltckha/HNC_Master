@@ -1,20 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<!-- V34 mục 6: in tem tự động trên Brother QL-700 (tools/label_print.py). Cài: cp vào ~/Library/LaunchAgents rồi launchctl bootstrap gui/$(id -u) -->
+<!-- V34 mục 6: in tem tự động QL-700. Cài bằng tools/launchd/cai_in_tem.sh (thay __APP__ bằng ~/Applications/HNC_InTem.app) -->
 <dict>
   <key>Label</key><string>vn.giayhainancy.hnc.intem</string>
   <key>ProgramArguments</key>
-  <array>
-    <string>/Users/khan/Developer/HNC_Master/venv/bin/python</string>
-    <string>/Users/khan/Developer/HNC_Master/tools/label_print.py</string>
-  </array>
-  <key>WorkingDirectory</key><string>/Users/khan/Developer/HNC_Master</string>
+  <array><string>/usr/bin/open</string><string>-g</string><string>-W</string><string>__APP__</string></array>
   <key>StartInterval</key><integer>20</integer>
   <key>WatchPaths</key>
   <array><string>/Users/khan/Library/CloudStorage/GoogleDrive-ltckha@gmail.com/My Drive/IN Mini Code</string></array>
   <key>StandardOutPath</key><string>/Users/khan/Library/Logs/hnc_in_tem.log</string>
   <key>StandardErrorPath</key><string>/Users/khan/Library/Logs/hnc_in_tem.log</string>
-  <key>EnvironmentVariables</key><dict><key>PYTHONWARNINGS</key><string>ignore</string></dict>
 </dict>
 </plist>
