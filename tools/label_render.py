@@ -76,7 +76,84 @@ def _fit_text(draw, text, box, max_size=40, min_size=14):
         draw.text((x, y + i * (min_size + 4)), ln, font=f, fill=0)
 
 
-def render_label(rec, kho=''):
+MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá)
+
+
+def _barcode_h(img, code, y, h, human=24):
+    """CODE128 nằm ngang, rộng nhất có thể (module 3–5 điểm), căn giữa, chừa vùng trắng 10 module mỗi bên."""
+    d = ImageDraw.Draw(img)
+    mods = code128_modules(code)
+    total = sum(int(m) for m in mods) + 20
+    unit = max(2, min(5, DOTS[0] // total))
+    x = (DOTS[0] - unit * total) // 2 + unit * 10
+    bar = True
+    for m in mods:
+        w = int(m) * unit
+        if bar:
+            d.rectangle([x, y, x + w - 1, y + h - human - 4], fill=0)
+        x += w
+        bar = not bar
+    f = _font(human)
+    tw = d.textlength(code, font=f)
+    d.text(((DOTS[0] - tw) // 2, y + h - human), code, font=f, fill=0)
+
+
+def _one_line(draw, text, x, y, w, size, bold_min=14):
+    """1 dòng chữ, thu nhỏ đến khi vừa w."""
+    for s in range(size, bold_min - 1, -2):
+        f = _font(s)
+        if draw.textlength(text, font=f) <= w:
+            draw.text((x, y), text, font=f, fill=0)
+            return s
+    f = _font(bold_min)
+    while text and draw.textlength(text + '…', font=f) > w:
+        text = text[:-1]
+    draw.text((x, y), text + '…', font=f, fill=0)
+    return bold_min
+
+
+def _price(rec):
+    return str(rec.get('Gía') or rec.get('Giá') or '').strip()
+
+
+def _render_new(rec, kho, mau):
+    img = Image.new('L', DOTS, 255)
+    d = ImageDraw.Draw(img)
+    W, H = DOTS
+    name, sc, price, code = str(rec.get('Tên', '')).strip(), str(rec.get('Size Color', '')).strip(), _price(rec), str(rec.get('Code128', '')).strip()
+    tag = ' · Y3C' if kho == 'Y3C' else ''
+    if mau == 'A':      # tên 2 dòng · màu-size trái, giá phải · mã vạch ngang dưới
+        _fit_text(d, name, (8, 2, W - 16, 82), max_size=30, min_size=20)  # tên dài xuống dòng 2
+        _one_line(d, sc + tag, 8, 92, W // 2, 30)
+        f = _font(38)
+        d.text((W - 8 - d.textlength(price, font=f), 86), price, font=f, fill=0)
+        if code:
+            _barcode_h(img, code, 138, 130)
+    elif mau == 'B':    # giá thật to trên cùng · tên 1 dòng · mã vạch ngang dưới
+        f = _font(56)
+        d.text((8, 0), price, font=f, fill=0)
+        pw = d.textlength(price, font=f)
+        _one_line(d, sc + tag, int(pw) + 24, 16, W - int(pw) - 32, 30)
+        _one_line(d, name, 8, 66, W - 16, 26)
+        if code:
+            _barcode_h(img, code, 104, 164)
+    else:               # C: gọn, không tên · mã + size to · giá · mã vạch cao nhất
+        _one_line(d, sc + tag, 8, 4, W // 2 + 40, 34)
+        f = _font(44)
+        d.text((W - 8 - d.textlength(price, font=f), 0), price, font=f, fill=0)
+        if code:
+            _barcode_h(img, code, 60, 208, human=28)
+    return img.point(lambda v: 0 if v < 128 else 255, '1')
+
+
+def render_label(rec, kho='', mau=None):
+    mau = mau or MAU_MAC_DINH
+    if mau in ('A', 'B', 'C'):
+        return _render_new(rec, kho, mau)
+    return _render_goc(rec, kho)
+
+
+def _render_goc(rec, kho=''):
     """rec: 1 dòng tem (cột LABEL_COLUMNS: 'Tên', 'Size Color', 'Code128'…) → ảnh 1-bit 696 × 271 cho brother_ql."""
     img = Image.new('L', DOTS, 255)
     d = ImageDraw.Draw(img)
