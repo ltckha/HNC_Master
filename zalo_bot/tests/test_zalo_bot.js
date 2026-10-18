@@ -292,6 +292,7 @@ eq('chuyển kho dry-run', [sr.ok, sr.results[0].from, sr.results[0].to], [true,
 eq('chuyển kho cùng kho → lỗi', stk({ action: 'chuyen_kho', ticket_id: 'S5', from: '15E', to: 'TBH', lines: [{ code: 'TH2040D', size: 40 }] }, true).ok, false);
 sr = stk({ action: 'chuyen_vi_tri', ticket_id: 'S6', warehouse: 'Y3C', location: 'th2', lines: [{ code: 'TH2040D' }] }, true);
 eq('chuyển vị trí TH2 (thùng)', [sr.ok, sr.results[0].location], [true, 'TH2']);
+eq('chuyen_vi_tri: dòng khác kho phiếu → từ chối', /phiếu ghi kho Y3C/.test(stk({ action: 'chuyen_vi_tri', ticket_id: 'S7b', warehouse: 'Y3C', location: 'B1', lines: [{ code: 'TH2040D', warehouse: '15E' }] }, true).results[0].error), true);
 eq('vị trí sai dạng', /vị trí phải dạng/.test(stk({ action: 'chuyen_vi_tri', ticket_id: 'S7', warehouse: 'Y3C', location: 'X9', lines: [{ code: 'TH2040D' }] }, true).results[0].error), true);
 // Ghi thật xuất + chống trùng + huỷ
 const xuatLen = DATA.XUAT.length;

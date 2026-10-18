@@ -1611,6 +1611,9 @@ function stockLine_(action, body, ln, i, dry) {
   const kho = KHO_ALIASES[String(ln.warehouse || body.warehouse || '').trim().toUpperCase()];
   const location = String(ln.location || body.location || '').trim().toUpperCase();
   if (!kho) return fail('warehouse phải là 15E hoặc Y3C');
+  // Dòng khác kho chung → từ chối, không đoán (18/10: app ghi nhầm vị trí HT1121D vào KHO15E)
+  const khoChung = KHO_ALIASES[String(body.warehouse || '').trim().toUpperCase()];
+  if (ln.warehouse && body.warehouse && khoChung !== kho) return fail('dòng ghi kho ' + kho + ' nhưng phiếu ghi kho ' + (khoChung || body.warehouse) + ' — chọn lại kho rồi gửi lại');
   if (!LOCATION_RE.test(location)) return fail('vị trí phải dạng K12, B2, T4, S1, TH2 (K kệ, B bàn, T tủ, S sọc, TH thùng)');
   res.warehouse = kho;
   res.location = location;
