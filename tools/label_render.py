@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 LABEL_ID = '62x29'          # brother_ql: nhãn cắt sẵn 62 × 29 mm
 DOTS = (696, 271)           # vùng in của nhãn 62x29 ở 300 dpi (brother_ql dots_printable)
 PAPER_PT = (175.7, 81.8)    # khung mẫu P-touch
-FONT_PATHS = ['/System/Library/Fonts/Helvetica.ttc', '/System/Library/Fonts/Supplemental/Arial.ttf']
+FONT_PATHS = [('/System/Library/Fonts/Helvetica.ttc', 1), ('/System/Library/Fonts/Supplemental/Arial Bold.ttf', 0)]  # chữ đậm (anh Kha 18/10)
 
 # CODE128: mẫu vạch 0–106 (bộ chuẩn), mỗi số là độ rộng vạch / khoảng trắng xen kẽ
 CODE128 = ['212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213', '221312', '231212', '112232',
@@ -35,9 +35,9 @@ def code128_modules(text):
 
 
 def _font(size):
-    for p in FONT_PATHS:
+    for p, idx in FONT_PATHS:
         try:
-            return ImageFont.truetype(p, size)
+            return ImageFont.truetype(p, size, index=idx)
         except OSError:
             continue
     return ImageFont.load_default()
