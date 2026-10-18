@@ -135,7 +135,8 @@ def process_flag(kho, dry=False):
             pass
     if expired:
         res = {'ok': False, 'so_tem': int(req.get('so_tem') or 0), 'loi': f'yêu cầu in quá {MAX_AGE_MIN} phút chưa in được, đã bỏ — bấm In tem lại'}
-        os.remove(flag)
+        if os.path.exists(flag):
+            os.remove(flag)
     elif req.get('ma_hang') and not dry and not csv_matches(req, records):
         return None  # Drive chưa đồng bộ xong IN_<kho>.csv, lần sau thử lại
     else:
@@ -148,7 +149,8 @@ def process_flag(kho, dry=False):
             result['dong_da_danh_dau'] = mark_done([int(x) for x in req.get('dong', [])], {r.get('Code128', '').strip().upper() for r in records})
         except Exception as e:
             result['loi'] = f'in xong nhưng chưa đánh dấu được trên Sheet: {e}'
-        os.remove(flag)
+        if os.path.exists(flag):
+            os.remove(flag)
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=1)
     print(json.dumps(result, ensure_ascii=False))
