@@ -837,6 +837,26 @@ eq('hoa_don xem: kèm tin xin hoá đơn soạn sẵn (không giá)', [hx2.thieu
 const hkd0 = PROPS.HKD_15E; PROPS.HKD_15E = 'Hải Nancy||Đà Lạt';
 eq('hoa_don xem: thiếu MST hộ → thieu_mst, không có tin', [ha({ che_do: 'xem', phieu: hdT.id }, true).thieu_mst, ha({ che_do: 'xem', phieu: hdT.id }, true).tin_xin_hd], [true, '']);
 PROPS.HKD_15E = hkd0;
+// ds lọc trong bot + ms; trang_thai; tin (19/10)
+{ let d = ha({ che_do: 'ds', trang_thai: 'da', ho: 'TBH' }, true);
+  eq('ds lọc trang_thai + ho, có ms', [d.ok, d.phieu.length > 0 && d.phieu.every(p => p.trang_thai === 'da' && p.kho === '15E'), typeof d.ms], [true, true, 'number']);
+  eq('ds gioi_han cho da', ha({ che_do: 'ds', trang_thai: 'da', gioi_han: 1 }, true).phieu.length, 1);
+  eq('ds trang_thai sai → lỗi', ha({ che_do: 'ds', trang_thai: 'x' }, true).ok, false);
+  const chua = ha({ che_do: 'ds', trang_thai: 'chua' }, true).phieu;
+  const pid = chua[0].id;
+  let st = ha({ che_do: 'trang_thai', phieu: pid, trang_thai: 'khong' }, true);
+  eq('trang_thai chạy thử: không ghi', [st.ok, PROPS['hdon_' + pid]], [true, undefined]);
+  st = ha({ che_do: 'trang_thai', phieu: pid, trang_thai: 'khong' });
+  eq('trang_thai khong: như lệnh hoadon <mã> khong', [st.ok, JSON.parse(PROPS['hdon_' + pid]).s, ha({ che_do: 'ds', trang_thai: 'chua' }, true).phieu.some(p => p.id === pid)], [true, 'khong', false]);
+  ha({ che_do: 'trang_thai', phieu: pid, trang_thai: 'chua' });
+  eq('trang_thai da → lỗi (dùng ghi)', ha({ che_do: 'trang_thai', phieu: pid, trang_thai: 'da' }, true).ok, false);
+  const same = chua.filter(p => p.ncc === chua[0].ncc && p.kho === chua[0].kho).slice(0, 2).map(p => p.id);
+  const tn = ha({ che_do: 'tin', phieu: same }, true);
+  eq('tin: gộp phiếu cùng NCC + hộ thành 1 tin, không có giá', [tn.ok, tn.tin.length, /xuất hoá đơn/.test(tn.tin_xin_hd || ''), /\d{3}\.\d{3}đ/.test(tn.tin_xin_hd || '')], [true, 1, true, false]);
+  PROPS.HKD_15E = 'Hải Nancy||Đà Lạt';
+  const tn2 = ha({ che_do: 'tin', phieu: hdT.id }, true);
+  eq('tin: thiếu MST → thieu_mst + loi_tin', [tn2.thieu_mst, !!tn2.loi_tin, tn2.tin_xin_hd], [true, true, '']);
+  PROPS.HKD_15E = hkd0; }
 GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX4000', ngay: '2026-10-17', dong: [{ ma_ncc: 'TH', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
 const p5 = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-9').toString('base64') }).id;
 const x5 = pn({ action: 'xac_nhan', id: p5, ticket_id: 'V9', ncc_xuat_hd: false, dong: [{ dong: 1, ma_hnc: 'CXED', kho: 'Y3C', sizes: { '40': 1 } }] });
