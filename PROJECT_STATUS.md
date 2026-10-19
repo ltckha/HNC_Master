@@ -53,7 +53,7 @@
 
 1. **Thảo luận trước khi thực hiện**: Luôn luôn phân tích, đề xuất phương án và nhận xác nhận từ User trước khi sửa code (`.agents/rules/always_discuss_first.md`).
 2. **Git theo luật chung**: commit cục bộ; chỉ push khi anh Kha nhắn "đẩy" hoặc bấm `push_all.command` (`~/Developer/Ecosystem-Hub/docs/LUAT_CHUNG.md` luật 1).
-3. **Phối hợp phiên**: việc HNC do phiên "Điều phối hệ sinh thái Kha" giao; Cowork chỉ qua Điều phối; không trao đổi trực tiếp với Antigravity (LUAT_CHUNG luật 2, 7, 9).
+3. **Phối hợp phiên**: việc HNC do phiên "Điều phối hệ sinh thái Kha" giao; Cowork chỉ qua Điều phối (LUAT_CHUNG luật 2, 9).
 4. **Dò quét Header Động (Dynamic Scanner)**: Dò quét an toàn theo tên biến/cột (hàng tiêu đề kỹ thuật = hàng CUỐI có tên kỹ thuật trong 5 hàng đầu: SANPHAM/NHAP hàng 2, các tab khác hàng 1) với cơ chế alias tiếng Việt, tuyệt đối không đoán mò số cột (`.agents/rules/always_map_columns_by_header.md`).
 5. **Google Sheets Cloud Native**: Dữ liệu đọc/ghi trực tiếp qua Google Sheets API, đảm bảo một nguồn dữ liệu chuẩn xác duy nhất (Single Source of Truth).
 6. **Cơ chế Kiểm soát Chất lượng (Strict QA Gate)**: Khi thiếu các trường bắt buộc, tự động bỏ qua không xuất file và gắn cờ cảnh báo cụ thể lên Sheet.
