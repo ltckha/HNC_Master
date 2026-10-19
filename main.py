@@ -3049,44 +3049,52 @@ def process_media_management(loader, auto_ingest=True):
 
 
 def load_sub_dictionary(loader):
-    """Trích xuất danh mục chuẩn từ sheet SUB để khóa chặt Schema cho Gemini AI."""
+    """Trích xuất danh mục chuẩn từ sheet SUB để khóa chặt Schema cho Gemini AI. Đọc theo tên cột hàng 1 (luật 4)."""
     df_sub, _ = loader.load_sheet('SUB')
+    head = [str(h).strip() for h in df_sub.iloc[0].values]
 
-    def get_col_values(df, col_idx):
+    def cell(r, name):
+        if name not in head:
+            return ''
+        v = df_sub.iloc[r, head.index(name)]
+        v = str(v).strip() if pd.notna(v) else ''
+        return '' if v == 'nan' else v
+
+    def get_col_values(name):
         res = []
-        if col_idx < len(df.columns):
-            for r in range(1, len(df)):
-                val = str(df.iloc[r, col_idx]).strip() if pd.notna(df.iloc[r, col_idx]) else ''
-                if val and val != 'nan' and val not in res:
-                    res.append(val)
+        for r in range(1, len(df_sub)):
+            val = cell(r, name)
+            if val and val not in res:
+                res.append(val)
         return res
 
-    # Chỉ lấy các ngành hàng có Mã nhóm hàng hóa ở Cột B
+    # Ngành của tiệm: có Mã nhóm hàng hóa, bỏ dòng ngành Shopee lẻ (loai_dong = shopee, anh Kha 19/10 — khớp bot productCategories_)
     valid_categories = []
     category_map = {}
     for r in range(1, len(df_sub)):
-        cname = str(df_sub.iloc[r, 0]).strip() if pd.notna(df_sub.iloc[r, 0]) else ''
-        cid = str(df_sub.iloc[r, 1]).strip() if pd.notna(df_sub.iloc[r, 1]) else ''
-        if cname and cid and cid != 'nan' and cname not in valid_categories:
+        cname, cid = cell(r, 'Tên Ngành Hàng'), cell(r, 'Mã nhóm hàng hóa')
+        if cell(r, 'loai_dong').lower() == 'shopee':
+            continue
+        if cname and cid and cname not in valid_categories:
             valid_categories.append(cname)
             category_map[cname] = cid
 
     return {
         'categories': valid_categories,
         'category_map': category_map,
-        'features': get_col_values(df_sub, 13),        # Col N: Đặc điểm
-        'brands': get_col_values(df_sub, 14),          # Col O: Thương hiệu
-        'materials': get_col_values(df_sub, 15),       # Col P: Chất liệu
-        'highlights': get_col_values(df_sub, 16),      # Col Q: Nhấn mạnh
-        'strap_materials': get_col_values(df_sub, 17), # Col R: Chất liệu quai
-        'sole_materials': get_col_values(df_sub, 18),  # Col S: Chất liệu đế
-        'inner_linings': get_col_values(df_sub, 19),   # Col T: Lót trong
-        'insole_surfaces': get_col_values(df_sub, 20), # Col U: Mặt lót đế
-        'toe_shapes': get_col_values(df_sub, 21),      # Col V: Dáng giày mũi
-        'bottom_parts': get_col_values(df_sub, 22),    # Col W: Phần dưới giày
-        'outfit_matches': get_col_values(df_sub, 23),  # Col X: Kết hợp trang phục
-        'usages': get_col_values(df_sub, 24),          # Col Y: Sử dụng
-        'suppliers': get_col_values(df_sub, 35)        # Col AJ: Nhà cung cấp
+        'features': get_col_values('Đặc điểm'),
+        'brands': get_col_values('Thương hiệu'),
+        'materials': get_col_values('Chất liệu'),
+        'highlights': get_col_values('Nhấn mạnh'),
+        'strap_materials': get_col_values('Chất liệu quai:'),
+        'sole_materials': get_col_values('Chất liệu đế:'),
+        'inner_linings': get_col_values('Lót trong:'),
+        'insole_surfaces': get_col_values('Mặt lót đế:'),
+        'toe_shapes': get_col_values('Mũi giày:'),
+        'bottom_parts': get_col_values('Gót giày:'),
+        'outfit_matches': get_col_values('Kết hợp trang phục:'),
+        'usages': get_col_values('Sử dụng:'),
+        'suppliers': get_col_values('supplier')
     }
 
 

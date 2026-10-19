@@ -61,7 +61,7 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 - `KHO15E`, `KHOY3C`: tồn = `opening_quantity` + NHAP − XUAT − BAN (công thức SUMIF theo FSKU). Bot / main.py thêm dòng SKU mới, bot sửa `product_location`.
 - `NHAP` (hàng 2 là tiêu đề kỹ thuật), `XUAT`, `BAN` (`channel`, `seller`, `chu_hang`): bot ghi; main.py đánh dấu `web_stock`, `web_label`, `misa_stock`, `kho_sync`.
 - Ký gửi giữa 2 hộ (18/10): cột `KHO15E.cua_Y3C`, `KHOY3C.cua_15E` (thay tab KYGUI, nay là `KYGUI_cu`); `BAN.ky_gui_tru` đánh dấu dòng đã trừ; bot soát dòng gõ tay mỗi 5 phút.
-- `SUB`: ngành hàng, NCC (Mã / Tên đối tượng, thuế), % giá sàn, kích thước. Chỉ đọc.
+- `SUB`: ngành hàng, NCC (Mã / Tên đối tượng, thuế), % giá sàn, kích thước. Chỉ đọc. Cột `loai_dong` (19/10): `nganh` = ngành của tiệm (44 dòng), `shopee` = ngành Shopee lẻ "1000xx - …" chỉ để tra mã (96 dòng); danh sách ngành (bot `productCategories_`, main.py `load_sub_dictionary`, form web) bỏ dòng `shopee`.
 - `META` (key / value / updated_at): `shopee_last_update`, `tiktok_last_update`.
 
 **Drive** (`hnc_paths.py` khai 1 chỗ):

@@ -2119,12 +2119,13 @@ function appendSanphamMin_(m) {
   return { type: 'row', sheet: 'SANPHAM', row, hr: hr + 1, cols, check: { product_code: m.code }, guard: { code: m.code } };
 }
 
-/** Các ngành trong SUB (cột Tên Ngành Hàng). */
+/** Các ngành của tiệm trong SUB (cột Tên Ngành Hàng), bỏ dòng ngành Shopee lẻ (cột loai_dong = shopee, anh Kha 19/10). */
 function productCategories_() {
   if (!MEMO.__cats) {
     const sub = sheetValues_('SUB');
     const c = headerMap_(sub[0] || []);
-    MEMO.__cats = c['Tên Ngành Hàng'] === undefined ? [] : uniq_(sub.slice(1).map(r => String(r[c['Tên Ngành Hàng']] || '').trim()).filter(Boolean));
+    const isShopee = r => c.loai_dong !== undefined && String(r[c.loai_dong] || '').trim().toLowerCase() === 'shopee';
+    MEMO.__cats = c['Tên Ngành Hàng'] === undefined ? [] : uniq_(sub.slice(1).filter(r => !isShopee(r)).map(r => String(r[c['Tên Ngành Hàng']] || '').trim()).filter(Boolean));
   }
   return MEMO.__cats;
 }

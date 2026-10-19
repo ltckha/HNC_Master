@@ -922,5 +922,13 @@ eq('in_bu: cờ không có dòng NHAP, ghi nhật ký', [bu.ok, bu.so_tem, bu.ro
 eq('in_bu không đụng web_label', lbRow2[9], '');
 eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da", nâu' }]).split('\n')[1].indexOf('"Giày ""da"", nâu"') !== -1, true);
 
+// SUB.loai_dong (19/10): dòng ngành Shopee lẻ không vào danh sách ngành của tiệm
+{ const sub0 = DATA.SUB.map(r => r.slice());
+  const li = DATA.SUB[0].length; DATA.SUB[0][li] = 'loai_dong'; DATA.SUB[1][li] = 'nganh'; DATA.SUB[2][li] = 'nganh';
+  const shp = new Array(li + 1).fill(''); shp[DATA.SUB[0].indexOf('Tên Ngành Hàng')] = '100070 - Giày Dép Nam/Khác/'; shp[li] = 'shopee';
+  DATA.SUB.push(shp);
+  vm.runInContext('this.productCategories_=productCategories_; MEMO={};', ctx);
+  eq('ngành của tiệm bỏ dòng loai_dong = shopee', ctx.productCategories_(), ['Giày tây nam', 'Giày mọi nam']);
+  DATA.SUB = sub0; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
