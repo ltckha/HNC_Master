@@ -285,6 +285,19 @@ function parseMessage_(textRaw, known) {
 
   const used = {}; // chỉ số token đã dùng cho kho / vị trí / giá / mã
 
+  // ---- Mã dính size (tem quét ra "AP048N-40", gõ "AP048N40" / "ap048n/40", 19/10): tách mã + size TRƯỚC khi khớp mã (chưa token nào đánh dấu used) ----
+  // Chỉ tách khi cả token không phải mã đã biết, phần đầu đúng 1 mã đã biết và phần đuôi là size hợp lệ (20–49, có thể ,5)
+  if (known && known.codes) {
+    for (let i = toks.length - 1; i >= 0; i--) {
+      const t = toks[i];
+      const whole = t.replace(/[^a-z0-9]/g, '').toUpperCase();
+      if (!whole || known.codes.has(whole) || (known.bases && known.bases.has(whole))) continue;
+      const m = t.match(/^([a-z0-9]+?)[-_\/.]?([2-4]\d(?:[.,]5)?)$/);
+      if (m && known.codes.has(m[1].toUpperCase())) toks.splice(i, 1, m[1], m[2]);
+    }
+  }
+
+
   // ---- Kênh bán (chỉ khi bán ngoài cửa hàng): shopee / tiktok / web. Trống = bán tại cửa hàng theo KHO ----
   if (action === ACTIONS.SELL) {
     toks.forEach((t, i) => {
@@ -3977,10 +3990,10 @@ function labelExtraPrint_(body, dryRun) {
     const ma = String(it && it.ma_hang || '').trim().toUpperCase().replace(/\s+/g, '');
     const n = Math.round(Number(it && it.so_tem) || 0);
     let code = '';
-    for (let k = ma.length; k > 0; k--) { if (sp[ma.slice(0, k)] && /^\d{0,2}(\.5)?$/.test(ma.slice(k))) { code = ma.slice(0, k); break; } }
+    for (let k = ma.length; k > 0; k--) { if (sp[ma.slice(0, k)] && /^[-_\/.]?\d{0,2}(\.5)?$/.test(ma.slice(k))) { code = ma.slice(0, k); break; } }
     if (!ma || n < 1) { rows.push({ dong: i + 1, ma_hang: ma, so_tem: n, loi: 'cần ma_hang và so_tem ≥ 1' }); return; }
     if (!code) { rows.push({ dong: i + 1, ma_hang: ma, so_tem: n, loi: 'mã không có trong SANPHAM' }); return; }
-    const rec = labelRecord_({ code, size: ma.slice(code.length), qty: n });
+    const rec = labelRecord_({ code, size: ma.slice(code.length).replace(/^[-_\/.]/, ''), qty: n });
     records.push(rec);
     rows.push(Object.assign({ dong: i + 1 }, labelRowInfo_(rec)));
   });

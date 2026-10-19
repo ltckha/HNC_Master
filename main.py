@@ -2687,11 +2687,12 @@ def process_export_task(choice, loader):
             for part in [p.strip().replace(' ', '') for p in raw.split(',') if p.strip()]:
                 m = re.match(r'^(.+?)(?:X(\d+))?$', part)
                 ma, n = m.group(1), int(m.group(2) or 1)
-                code = next((ma[:k] for k in range(len(ma), 0, -1) if ma[:k] in keys and re.match(r'^\d{0,2}(\.5)?$', ma[k:])), '')
+                # Mã dính size có dấu nối (tem quét "AP048N-40", "AP048N_40", "ap048n/40") — cùng luật bot parseMessage_ (19/10)
+                code = next((ma[:k] for k in range(len(ma), 0, -1) if ma[:k] in keys and re.match(r'^[-_/.]?\d{0,2}(\.5)?$', ma[k:])), '')
                 if not code:
                     bad.append(ma)
                     continue
-                recs.append(label_record({'product_code': code, 'item_size': ma[len(code):], 'item_quantity': n}, product_map))
+                recs.append(label_record({'product_code': code, 'item_size': ma[len(code):].lstrip('-_/.'), 'item_quantity': n}, product_map))
             if bad:
                 print(f"❌ Mã không có trong SANPHAM: {', '.join(bad)} — không in.")
                 return

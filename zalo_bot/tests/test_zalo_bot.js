@@ -117,6 +117,11 @@ const parse = t => { const p = ctx.parseMessage_(t, ctx.knownCodes_()); return [
 // ---- Phân tích tin nhắn ----
 eq('kiểm hàng', parse('TH2040D 40'), ['KIỂM TRA HÀNG', 'TH2040D', '', '', '40x1']);
 eq('mã không màu', parse('TH2040'), ['KIỂM TRA HÀNG', 'TH2040', '', '', '']);
+// Mã dính size (tem quét AP048N-40, 19/10): tách mã + size
+['ban TH2040D40 YEN', 'ban TH2040D-40 YEN', 'ban th2040d_40 yen', 'ban TH2040D/40 YEN', 'ban TH2040D.40 YEN'].forEach(t =>
+  eq('mã dính size: ' + t, parse(t), ['BÁN', 'TH2040D', 'Y3C', '', '40x1']));
+eq('mã dính size + kiểm hàng', parse('TH2040D-41'), ['KIỂM TRA HÀNG', 'TH2040D', '', '', '41x1']);
+eq('mã gốc số đuôi không bị tách', parse('TH2040 40'), ['KIỂM TRA HÀNG', 'TH2040', '', '', '40x1']);
 eq('bán k', parse('ban TH2040D 40 YEN 800k'), ['BÁN', 'TH2040D', 'Y3C', '800000', '40x1']);
 eq('giá trước mã', parse('bán 800000 TH2040D 40 yen'), ['BÁN', 'TH2040D', 'Y3C', '800000', '40x1']);
 eq('tr', parse('Bán TH2040D 40/2 3c 1tr2'), ['BÁN', 'TH2040D', 'Y3C', '1200000', '40x2']);
