@@ -1,6 +1,6 @@
 # 📜 CLAUDE.md - SỔ TAY VẬN HÀNH DỰ ÁN HNC_MASTER (HNC CONTROL CENTER)
 
-> **Chào Claude, bạn đang cùng Kha Lưu (Project Owner) và Antigravity vận hành HNC Control Center.**  
+> **Chào Claude, bạn đang cùng Kha Lưu (Project Owner) vận hành HNC Control Center.**  
 > Tài liệu này là **Hiến pháp tối cao** bắt buộc bạn phải đọc và tuân thủ 100% trong suốt quá trình làm việc trong repository này.
 
 ---
@@ -15,10 +15,9 @@
    - Commit cục bộ; chỉ push khi anh Kha nhắn **"đẩy"** hoặc bấm `push_all.command` cuối ngày → quét bí mật rồi push thẳng `main`.
    - Cấm `git commit -am`, `git add -A`, `git add .`. Luôn `git add` từng file.
 
-3. **PHỐI HỢP CÁC PHIÊN (theo LUAT_CHUNG luật 2, 7, 9):**
+3. **PHỐI HỢP CÁC PHIÊN (theo LUAT_CHUNG luật 2, 9):**
    - Phiên **"Điều phối hệ sinh thái Kha"** lập kế hoạch và giao việc HNC; hộp thư Cowork chỉ đi qua Điều phối.
    - Phiên **"Thực thi – HNC_Master"** (Claude Code trên Mac mini M4) sửa code, chạy lệnh, xuất file, đồng bộ Google Sheets.
-   - Không trao đổi trực tiếp với Antigravity.
 
 4. **MỖI REPO MỘT PHIÊN THỰC THI:**
    - Chỉ phiên **"Thực thi – HNC_Master"** được sửa code và commit trong repo này.
@@ -27,6 +26,14 @@
 5. **TRI THỨC BRAND — NGUỒN DUY NHẤT LÀ AUTO-VIDEO-FACTORY:**
    - Tên chuẩn, mã brand, bí danh lấy từ `Auto-Video-Factory/knowledge/brands/`. Tab Sheet `brands` được sinh ra từ đó.
    - Không viết cứng danh sách brand trong repo này. Cần thêm/sửa brand → nhắn phiên "Thực thi – Auto-Video-Factory".
+
+6. **ĐỌC / GHI CỘT THEO TÊN TIÊU ĐỀ (LUAT_CHUNG luật 4):**
+   - Không dùng chỉ số cột cố định (`row[3]`, `col 5`); quét tiêu đề hàng 1 (SANPHAM: hàng 2) và tìm theo tên.
+   - Thiếu cột bắt buộc thì báo lỗi rõ ràng, không ghi vào cột khác.
+
+7. **THƯ MỤC DRIVE HỆ THỐNG CHỈ CHỨA DỮ LIỆU:**
+   - `My Drive/HNC/He_thong` (khai ở `hnc_paths.py`) chỉ chứa `HNC_Templates`, `HNC_Exported_Files`, `Outputs` (và `HNC_Control_Center.xlsx`).
+   - Không đưa code, tài liệu, luật hay file phát sinh của project lên Drive; mã nguồn và tài liệu nằm ở `/Users/khan/Developer/HNC_Master`.
 
 ---
 
