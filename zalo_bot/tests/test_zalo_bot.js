@@ -668,11 +668,15 @@ ctx.MEMO = {};
 const dueIds = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets.filter(t => t.status === 'chua').map(t => t.id);
 vm.runInContext('this.navInvoiceShow_=navInvoiceShow_;', ctx);
 if (dueIds.length) {
+  // Ca "không có giá ở đâu cả": bỏ tạm giá nhập SANPHAM (từ 19/10 dòng trống giá phiếu lấy giá nhập SANPHAM)
+  const spHr = DATA.SANPHAM.findIndex(r => r.indexOf('purchase_price') !== -1), spPc = DATA.SANPHAM[spHr].indexOf('purchase_price');
+  const spBuy0 = DATA.SANPHAM.map(r => r[spPc]); DATA.SANPHAM.forEach((r, i) => { if (i > spHr) r[spPc] = ''; });
   ctx.navInvoiceShow_('owner1', dueIds, 0);
   zr = z('1');
   eq('4: nhắn 1 → hỏi số hoá đơn', /gõ số hoá đơn/.test(zr), true);
   zr = z('0001234');
   eq('4: gõ số HĐ khi dòng chưa có giá phiếu → báo nhập trên app, sang phiếu kế', [/chưa có giá phiếu/.test(zr), /Phiếu 2\//.test(zr) || /Đã duyệt hết/.test(zr)], [true, true]);
+  DATA.SANPHAM.forEach((r, i) => { r[spPc] = spBuy0[i]; });
 } else eq('4: có phiếu để duyệt', dueIds.length > 0, true);
 const s4 = SENT.length;
 PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
@@ -837,6 +841,21 @@ eq('hoa_don xem: kèm tin xin hoá đơn soạn sẵn (không giá)', [hx2.thieu
 const hkd0 = PROPS.HKD_15E; PROPS.HKD_15E = 'Hải Nancy||Đà Lạt';
 eq('hoa_don xem: thiếu MST hộ → thieu_mst, không có tin', [ha({ che_do: 'xem', phieu: hdT.id }, true).thieu_mst, ha({ che_do: 'xem', phieu: hdT.id }, true).tin_xin_hd], [true, '']);
 PROPS.HKD_15E = hkd0;
+// Thiếu đơn giá phiếu → giá nhập SANPHAM (19/10)
+{ const spHr = DATA.SANPHAM.findIndex(r => r.indexOf('purchase_price') !== -1), spc = DATA.SANPHAM[spHr];
+  const spRow = DATA.SANPHAM.find(r => r[spc.indexOf('product_code')] === 'TH2040D'), buy0 = spRow[spc.indexOf('purchase_price')];
+  spRow[spc.indexOf('purchase_price')] = 450000; const buy = 450000;
+  const spRowN = DATA.SANPHAM.find(r => r[spc.indexOf('product_code')] === 'TH2040N'), buyN0 = spRowN[spc.indexOf('purchase_price')];
+  spRowN[spc.indexOf('purchase_price')] = 460000;
+  const n0 = DATA.NHAP.length;
+  const rn = ctx.handleStock_({ action: 'nhap', ticket_id: 'GP1', seller: 'nv@hn.vn', so_chung_tu: 'NK000555', lines: [{ code: 'TH2040D', size: 44, qty: 1, warehouse: '15E' }] }, false);
+  const row = DATA.NHAP.slice(n0).find(r => r[2] === 'TH2040D' && String(r[5]) === '44');
+  eq('nhập app không giá → don_gia_phieu = giá nhập SANPHAM', [rn.ok, buy > 0, row && Number(row[hdIx('don_gia_phieu')])], [true, true, buy]);
+  const tk = (ctx.MEMO = {}, ctx.invoiceTickets_().find(t => (t.rows || []).indexOf(hdRowN) !== -1));
+  const blank = DATA.NHAP[hdRowN - 1][hdIx('don_gia_phieu')]; DATA.NHAP[hdRowN - 1][hdIx('don_gia_phieu')] = '';
+  const xv = ha({ che_do: 'xem', phieu: hdT.id }, true).dong.find(d => d.dong === hdRowN);
+  eq('hoa_don xem: dòng trống giá phiếu → giá nhập SANPHAM, có cờ', [xv.don_gia_phieu > 0, xv.gia_tu_sanpham], [true, true]);
+  DATA.NHAP[hdRowN - 1][hdIx('don_gia_phieu')] = blank; spRow[spc.indexOf('purchase_price')] = buy0; spRowN[spc.indexOf('purchase_price')] = buyN0; }
 // ds lọc trong bot + ms; trang_thai; tin (19/10)
 { let d = ha({ che_do: 'ds', trang_thai: 'da', ho: 'TBH' }, true);
   eq('ds lọc trang_thai + ho, có ms', [d.ok, d.phieu.length > 0 && d.phieu.every(p => p.trang_thai === 'da' && p.kho === '15E'), typeof d.ms], [true, true, 'number']);

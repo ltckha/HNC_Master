@@ -3736,6 +3736,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     idx_n_size = DynamicHeaderScanner.get_col_idx(map_nhap, 'item_size', default=5)
     idx_n_qty = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số lượng (*)', default=6)
     idx_n_fsku = DynamicHeaderScanner.get_col_idx(map_nhap, 'FSKU', default=7)
+    idx_n_price = DynamicHeaderScanner.get_col_idx(map_nhap, 'don_gia_phieu')  # giá nhập SANPHAM khi chưa có giá phiếu (anh Kha 19/10, khớp bot appendNhap_)
 
     c_n_kho = col_to_letter(idx_n_kho) if idx_n_kho is not None else 'E'
     c_n_code = col_to_letter(idx_n_code) if idx_n_code is not None else 'C'
@@ -3758,6 +3759,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_n_size is not None: row[idx_n_size] = sz
             if idx_n_qty is not None: row[idx_n_qty] = 1
             if idx_n_fsku is not None: row[idx_n_fsku] = f'=CONCATENATE({c_n_kho}{cur_nhap_row}; {c_n_code}{cur_nhap_row}; {c_n_size}{cur_nhap_row})'
+            if idx_n_price is not None and parse_number(data.get('purchase_price')) > 0: row[idx_n_price] = int(parse_number(data.get('purchase_price')))
             nhap_new_rows.append(row)
             nhap_count += 1
 

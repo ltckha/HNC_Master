@@ -3809,7 +3809,8 @@ function invoiceRows_(t) {
     const row = nh[rn - 1];
     const misa = String(v(row, 'misa_stock') || '').trim();
     return { dong: rn, ma: String(v(row, 'product_code') || '').trim().toUpperCase(), size: normSize_(v(row, 'item_size')), sl: Number(v(row, 'Số lượng (*)')) || 0,
-      don_gia_phieu: moneyValue_(v(row, 'don_gia_phieu')), don_gia_hd: moneyValue_(v(row, 'don_gia_hd')), so_hd: String(v(row, 'so_hd') || '').trim(),
+      don_gia_phieu: moneyValue_(v(row, 'don_gia_phieu')) || spPurchasePrice_(v(row, 'product_code')), // trống → giá nhập SANPHAM (19/10)
+      gia_tu_sanpham: !moneyValue_(v(row, 'don_gia_phieu')) && spPurchasePrice_(v(row, 'product_code')) > 0, don_gia_hd: moneyValue_(v(row, 'don_gia_hd')), so_hd: String(v(row, 'so_hd') || '').trim(),
       ngay_hd: v(row, 'ngay_hd') instanceof Date ? Utilities.formatDate(v(row, 'ngay_hd'), TZ, 'dd/MM/yyyy') : String(v(row, 'ngay_hd') || ''), misa,
       gia_da_xuat: moneyValue_(v(row, 'don_gia_phieu')) };
   });
@@ -4281,7 +4282,25 @@ function appendNhap_(code, color, size, qty, kho, isReturn) {
     const a1 = c => columnLetter_(col[c] + 1) + row;
     return { 'FSKU': '=CONCATENATE(' + a1('KHO') + '; ' + a1('product_code') + '; ' + a1('item_size') + ')' };
   }, { product_code: code, item_size: size, 'Số lượng (*)': qty, KHO: kho },
-  CTX.receiptId && !isReturn && CTX.donGiaPhieu ? { don_gia_phieu: CTX.donGiaPhieu } : null);
+  isReturn ? null : (g => (g ? { don_gia_phieu: g } : null))((CTX.receiptId && CTX.donGiaPhieu) || spPurchasePrice_(code)));
+}
+
+/** Giá nhập theo mã (SANPHAM.purchase_price, tiêu đề hàng 2) — dòng NHAP thiếu đơn giá phiếu thì lấy giá này (anh Kha 19/10). 0 = chưa có. */
+function spPurchasePrice_(code) {
+  if (!MEMO.__spBuy) {
+    MEMO.__spBuy = {};
+    const sp = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let i = 0; i < Math.min(2, sp.length); i++) if (sp[i].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = i; break; }
+    const c = headerMap_(sp[hr]);
+    if (c.purchase_price !== undefined) {
+      for (let i = hr + 1; i < sp.length; i++) {
+        const k = String(sp[i][c.product_code] || '').trim().toUpperCase();
+        if (k) MEMO.__spBuy[k] = moneyValue_(sp[i][c.purchase_price]);
+      }
+    }
+  }
+  return MEMO.__spBuy[String(code || '').trim().toUpperCase()] || 0;
 }
 
 /**
