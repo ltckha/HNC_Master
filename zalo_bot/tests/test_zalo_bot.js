@@ -519,6 +519,12 @@ kr = tf('K3', 'Y3C', '15E', 40, 2);
 eq('ghi: KYGUI 15E ở Y3C = 0, Y3C ở 15E = 1', [kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [0, 1]);
 kr = kyStk({ action: 'huy', ticket_id: 'K4', undo_ticket_id: 'K3' });
 eq('huỷ chuyển kho → ký gửi trả lại như trước', [kr.ok, kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [true, 1, 0]);
+// Chuyển hàng ký gửi về kho của hộ chủ: tồn kho nguồn còn đúng bằng số ký gửi → không báo đỏ (19/10, ca 2032D 39)
+{ const y40 = DATA.KHOY3C.find(x => x[1] === 'TH2040D' && String(x[3]) === '40'), qi = DATA.KHOY3C[0].indexOf('current_quantity'), q0 = y40[qi];
+  y40[qi] = 1;
+  const kb = tf('K3b', 'Y3C', '15E', 40, 1, true);
+  eq('chuyển ký gửi về kho chủ: trả về chủ, không cảnh báo sổ ký gửi', [kb.ok, kb.results[0].ky_gui[0].loai, JSON.stringify(kb.results[0]).indexOf('Sổ ký gửi')], [true, 'tra_ve_chu', -1]);
+  y40[qi] = q0; }
 // Trả hàng về đúng chủ
 kr = kyStk({ action: 'tra_hang', ticket_id: 'K5', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] });
 eq('trả hàng không kèm chủ → theo dòng BAN gần nhất (Y3C)', [kr.ok, kr.results[0].chu_hang, kyRow('15E', 'Y3C', 41)[4]], [true, 'Y3C', 0]);

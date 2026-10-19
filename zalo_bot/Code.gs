@@ -989,7 +989,8 @@ function doMovement_(p, action, kho, dryRun) {
     const pk = kho + p.code + s.size;
     CTX.pending[pk] = (CTX.pending[pk] || 0) + (action === ACTIONS.IN ? -s.qty : s.qty);
     written.push((s.size ? 'size ' + s.size : 'không size') + ' × ' + s.qty);
-    if (action !== ACTIONS.IN) { const w = kyguiCheck_(p.code, s.size, kho); if (w) warnings.push(w); }
+    // Chuyển kho về đúng kho của hộ chủ: phần chuyển trả ký gửi trước (kyguiTransfer_ chạy sau) → kiểm với số ký gửi còn lại
+    if (action !== ACTIONS.IN) { const w = kyguiCheck_(p.code, s.size, kho, p.transferTo === (kho === 'Y3C' ? '15E' : 'Y3C') ? s.qty : 0); if (w) warnings.push(w); }
   }
   const nhapDoc = CTX.nhapDoc || '';
   CTX.nhapDoc = '';
@@ -1029,6 +1030,7 @@ function doTransfer_(p, dryRun) {
     return { text: '❓ Chuyển kho cần ghi "tu ... den ...".\nNhắn lại: chuyen kho ' + (p.code || 'TH2040D') + ' 40 tu YEN den TBH' };
   }
   if (p.khoFrom === p.khoTo) return { text: '❓ Kho nguồn và kho đích giống nhau (' + p.khoFrom + ').' };
+  p.transferTo = p.khoTo;
   const out = doMovement_(p, ACTIONS.OUT, p.khoFrom, dryRun);
   if (!out.ok) return out;
   const inn = doMovement_(p, ACTIONS.IN, p.khoTo, dryRun);
@@ -1600,6 +1602,7 @@ function stockLine_(action, body, ln, i, dry) {
     if (!from || !to || from === to) return fail('from / to phải là 2 kho khác nhau (15E, Y3C)');
     res.from = from;
     res.to = to;
+    p.transferTo = to;
     const out = doMovement_(p, ACTIONS.OUT, from, dry);
     if (!out.ok) return fail(clean(out.text));
     const inn = doMovement_(p, ACTIONS.IN, to, dry);
@@ -4110,10 +4113,10 @@ function kyguiReturn_(code, size, qty, kho, hint, dry) {
 }
 
 /** Cảnh báo (không chặn): tổng ký gửi đang ở kho > tồn kho đó. pendingStock: số đã trừ / cộng trong lô chưa ghi. */
-function kyguiCheck_(code, size, kho) {
+function kyguiCheck_(code, size, kho, traVe) {
   if (!kyguiOn_()) return '';
   const other = kho === 'Y3C' ? '15E' : 'Y3C';
-  const ky = kyguiQty_(other, kho, code, size);
+  const ky = Math.max(0, kyguiQty_(other, kho, code, size) - (traVe || 0));
   if (ky <= 0) return '';
   const rows = findKhoRows_(kho, code, [size]);
   const stock = (rows.length ? Number(rows[0].current_quantity) || 0 : 0) - (((CTX.pending || {})[kho + code + size]) || 0);
