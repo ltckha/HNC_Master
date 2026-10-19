@@ -1204,7 +1204,60 @@ function doReport_(p) {
   });
   lines.push('  Tổng: ' + totalQty + ' đôi — ' + money_(totalRev));
   if (noPrice) lines.push('  (' + noPrice + ' dòng chưa có giá, không tính doanh thu)');
+  const dup = saleDupRows_(dayKey);
+  if (dup.rows.length) lines.push('  ⚠️ Có thể bán trùng: ' + dup.rows.length + ' dòng (dòng Sheet ' + dup.rows.join(', ') + ') — vẫn cộng vào tổng, kiểm trên web' +
+    (dup.ignoreOk ? '' : ' (chưa đọc được danh sách "không phải trùng" của web)'));
   return { text: lines.join('\n') };
+}
+
+/**
+ * Bán trùng (anh Kha 19/10, cùng luật web allsales.ts): dòng BAN gõ tay (seller không có "@") trùng ngày + mã + size + kho
+ * với dòng bot ghi từ phiếu app / đơn web (seller là email) → "có thể bán trùng". Chỉ báo, vẫn cộng tổng, không xoá.
+ * Bỏ qua khoá Chủ đã bấm "Không phải trùng" trên web: ngày|mã|size|kho|dòng (settings ban_khong_trung).
+ */
+function saleDupRows_(dayKey) {
+  const data = sheetValues_('BAN');
+  const col = headerMap_(data[0]);
+  if (col.seller === undefined || col.product_code === undefined) return { rows: [], ignoreOk: true };
+  const keyOf = r => {
+    const kho = KHO_ALIASES[String(data[r][col.KHO] || '').trim().toUpperCase()] || String(data[r][col.KHO] || '').trim();
+    return dayKey + '|' + String(data[r][col.product_code] || '').trim().toUpperCase() + '|' + (normSize_(data[r][col.item_size]) || '-') + '|' + kho;
+  };
+  const app = {}, hand = [];
+  for (let r = 1; r < data.length; r++) {
+    if (dateKey_(data[r][col['Ngày']]) !== dayKey || !String(data[r][col.product_code] || '').trim()) continue;
+    if (/@/.test(String(data[r][col.seller] || ''))) app[keyOf(r)] = true; else hand.push(r);
+  }
+  const cand = hand.filter(r => app[keyOf(r)]);
+  if (!cand.length) return { rows: [], ignoreOk: true };
+  const ign = saleDupIgnore_();
+  return { rows: cand.filter(r => !ign.keys[keyOf(r) + '|' + (r + 1)]).map(r => r + 1), ignoreOk: ign.ok };
+}
+
+/** Danh sách "Không phải trùng" của web: POST <gốc web>/api/bot-callback {loai:"ds_ban_khong_trung"} ký HMAC như callback; nhớ 10 phút. */
+function saleDupIgnore_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('ban_khong_trung');
+  if (hit) { try { return { ok: true, keys: JSON.parse(hit) }; } catch (e) { /* đọc lại */ } }
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('BOT_CALLBACK_KEY') || props.getProperty('WEB_NOTIFY_KEY') || '';
+  const url = props.getProperty('WEB_CALLBACK_URL') || (webOrigin_() ? webOrigin_() + '/api/bot-callback' : '');
+  if (key.length < 16 || !url) return { ok: false, keys: {} };
+  try {
+    const luc = new Date().toISOString();
+    const payload = JSON.stringify({ loai: 'ds_ban_khong_trung', luc });
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload,
+      headers: { 'x-bot-time': luc, 'x-bot-sig': hmacHex_(key, luc + '.' + payload) } });
+    if (res.getResponseCode() !== 200) return { ok: false, keys: {} };
+    const body = JSON.parse(res.getContentText() || '{}');
+    if (!Array.isArray(body.keys)) return { ok: false, keys: {} };
+    const keys = {};
+    body.keys.forEach(k => { keys[String(k)] = true; });
+    try { cache.put('ban_khong_trung', JSON.stringify(keys), 600); } catch (e) { /* quá cỡ cache: lần sau đọc lại */ }
+    return { ok: true, keys };
+  } catch (err) {
+    return { ok: false, keys: {} };
+  }
 }
 
 // =====================================================================

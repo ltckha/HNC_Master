@@ -930,5 +930,23 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   vm.runInContext('this.productCategories_=productCategories_; MEMO={};', ctx);
   eq('ngành của tiệm bỏ dòng loai_dong = shopee', ctx.productCategories_(), ['Giày tây nam', 'Giày mọi nam']);
   DATA.SUB = sub0; vm.runInContext('MEMO={};', ctx); }
+// Bán trùng trong "bc" (19/10, cùng luật web): gõ tay trùng ngày + mã + size + kho với dòng app (seller email)
+{ const bc = c => DATA.BAN[0].indexOf(c);
+  const mk = (seller, size, kho) => { const r = new Array(DATA.BAN[0].length).fill(''); r[bc('Ngày')] = '05/10/2026'; r[bc('product_code')] = 'TH2040D';
+    r[bc('item_size')] = size; r[bc('item_quantity')] = 1; r[bc('Giá')] = 800000; r[bc('KHO')] = kho; r[bc('seller')] = seller; return r; };
+  const n0 = DATA.BAN.length;
+  DATA.BAN.push(mk('nv@hn.vn', 40, '15E'), mk('Lan', '40', 'TBH'), mk('Lan', 41, '15E'));
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20);
+  let asked = 0; const f0 = ctx.UrlFetchApp.fetch;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-callback/.test(url)) { asked++; return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, keys: [] }) }; } return f0(url, opt); };
+  vm.runInContext('MEMO={};', ctx);
+  let t = ctx.handleText_('bc 05/10/2026', true, '');
+  eq('bc: báo có thể bán trùng đúng dòng gõ tay', /Có thể bán trùng: 1 dòng \(dòng Sheet (\d+)\)/.exec(t) && Number(/dòng Sheet (\d+)/.exec(t)[1]), n0 + 2);
+  delete CACHE.ban_khong_trung;
+  ctx.UrlFetchApp.fetch = (url, opt) => /bot-callback/.test(url) ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, keys: ['2026-10-05|TH2040D|40|15E|' + (n0 + 2)] }) } : f0(url, opt);
+  vm.runInContext('MEMO={};', ctx);
+  t = ctx.handleText_('bc 05/10/2026', true, '');
+  eq('bc: dòng Chủ đã bấm "Không phải trùng" thì bỏ qua', /bán trùng/.test(t), false);
+  ctx.UrlFetchApp.fetch = f0; DATA.BAN.splice(n0, 3); delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; delete CACHE.ban_khong_trung; }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
