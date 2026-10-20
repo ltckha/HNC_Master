@@ -1276,6 +1276,31 @@
     2
    ],
    "ra": "MAC-201026-1530#2"
+  },
+  {
+   "ten": "mã dòng gõ tay: web cấp TAY-<ngày>-<số hàng>",
+   "ham": "maDong",
+   "vao": [
+    "tay",
+    {
+     "ngay": "2026-10-20",
+     "dong": 2557
+    },
+    1
+   ],
+   "ra": "TAY-20261020-2557"
+  },
+  {
+   "ten": "mã dòng: ticket bắt đầu TAY- → bot không cấp (tránh trùng)",
+   "ham": "maDong",
+   "vao": [
+    "app",
+    {
+     "ticket": "TAY-x"
+    },
+    1
+   ],
+   "ra": ""
   }
  ]
 }

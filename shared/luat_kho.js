@@ -196,11 +196,15 @@ var LuatKho = (function () {
 
   /**
    * Mã dòng duy nhất (ma_dong) của dòng BAN / NHAP / XUAT mới (Bán hàng chốt 20/10): <mã thao tác duy nhất>#<thứ tự trong thao tác>.
-   * Không dùng số NK (2 phiếu cùng NCC cùng ngày chung số NK vẫn ra mã khác). nguon: 'phieu' | 'app' | 'web' | 'zalo' | 'mac'.
-   * d: { phieu_id?, ticket?, msg_id?, lan_chay? }; thuTu bắt đầu từ 1.
+   * Không dùng số NK (2 phiếu cùng NCC cùng ngày chung số NK vẫn ra mã khác). nguon: 'phieu' | 'app' | 'web' | 'zalo' | 'mac' | 'tay'.
+   * d: { phieu_id?, ticket?, msg_id?, lan_chay?, ngay? (yyyy-mm-dd), dong? (số hàng Sheet) }; thuTu bắt đầu từ 1 (tay: không dùng).
    */
   function maDong(nguon, d, thuTu) {
     d = d || {};
+    // Dòng gõ tay lúc dự phòng: web cấp khi nhập bù (Bán hàng 20/10) → TAY-<yyyyMMdd>-<số hàng Sheet>, không có #
+    if (nguon === 'tay') return d.ngay && d.dong ? 'TAY-' + String(d.ngay).replace(/-/g, '') + '-' + d.dong : '';
+    // Bot / main.py không bao giờ cấp gốc TAY- (tránh trùng mã web cấp)
+    if (/^TAY-/i.test(String(d.ticket || ''))) return '';
     var goc = nguon === 'phieu' ? d.phieu_id : nguon === 'zalo' ? 'Z-' + d.msg_id : nguon === 'mac' ? 'MAC-' + d.lan_chay : d.ticket;
     return goc && String(goc).indexOf('undefined') === -1 ? String(goc).trim() + '#' + thuTu : '';
   }

@@ -70,7 +70,10 @@ let CTX = {};
 // phiếu NCC → <phieu_id>#n · lệnh app / web → <ticket_id>#n · Zalo → Z-<message_id>#n · main.py → MAC-<lần chạy>#n. Luật: LuatKho.maDong.
 let ROW_SRC = null;
 let LAST_MSG_ID = '';
-function rowSrcStart_(nguon, goc) { ROW_SRC = { nguon, goc: String(goc || '').trim(), n: 0 }; }
+function rowSrcStart_(nguon, goc) {
+  goc = String(goc || '').trim();
+  ROW_SRC = { nguon, goc: /^TAY-/i.test(goc) ? '' : goc, n: 0 }; // gốc TAY- dành cho web cấp dòng gõ tay → bot không cấp
+}
 function rowSrcFields_(sheetName) {
   if (!ROW_SRC || ['BAN', 'NHAP', 'XUAT'].indexOf(sheetName) === -1) return {};
   if (!ROW_SRC.goc) return { nguon: ROW_SRC.nguon };

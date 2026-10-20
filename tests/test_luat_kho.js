@@ -123,7 +123,8 @@ const OLD = {
     return [].concat(...days.map(d => O.saleDupRows_(d).rows)).sort((a, b) => a - b);
   },
   maDong(nguon, d, n) {
-    // Cũ (bot rowSrcStart_ / rowSrcFields_): gốc theo thao tác, đếm thứ tự trong 1 thao tác
+    // Cũ (bot rowSrcStart_ / rowSrcFields_): gốc theo thao tác, đếm thứ tự trong 1 thao tác. 'tay' do web cấp (bot không có) → theo quy ước hợp đồng
+    if (nguon === 'tay') return 'TAY-' + d.ngay.replace(/-/g, '') + '-' + d.dong;
     const goc = nguon === 'phieu' ? d.phieu_id : nguon === 'zalo' ? 'Z-' + d.msg_id : nguon === 'mac' ? 'MAC-' + d.lan_chay : d.ticket;
     O.rowSrcStart_(nguon, goc);
     let f = {};

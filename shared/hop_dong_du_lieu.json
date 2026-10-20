@@ -476,10 +476,11 @@
      ]
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n · dòng gõ tay được web cấp khi nhập bù TAY-<yyyyMMdd>-<số hàng Sheet> (không có #). Không dùng số NK. Bot / main.py không bao giờ cấp gốc TAY-. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
-      "main.py"
+      "main.py",
+      "web"
      ],
      "du_kien": true
     },
@@ -544,10 +545,11 @@
      "cong_thuc": true
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n · dòng gõ tay được web cấp khi nhập bù TAY-<yyyyMMdd>-<số hàng Sheet> (không có #). Không dùng số NK. Bot / main.py không bao giờ cấp gốc TAY-. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
-      "main.py"
+      "main.py",
+      "web"
      ],
      "du_kien": true
     },
@@ -570,92 +572,107 @@
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Ngày bán, kiểu ngày của Sheet (bot ghi Date) hiển thị dd/MM/yyyy. Ghi qua API: chuỗi \"dd/MM/yyyy\" với USER_ENTERED, KHÔNG dùng ISO."
     },
     "product_code": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Mã con IN HOA, không khoảng trắng (vd TH2040D)."
     },
     "product_color": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Màu theo SANPHAM.product_color của mã (vd \"Đen\"); không có thì để trống."
     },
     "Giá": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "SỐ nguyên VND (800000); Sheet tự hiển thị \"800.000 đ\". Không ghi chuỗi có dấu chấm / \"đ\". Trống = chưa có giá."
     },
     "item_size": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Size: số nếu toàn chữ số (40), không thì chuỗi; không size để trống."
     },
     "item_quantity": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Số nguyên ≥ 1."
     },
     "KHO": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "\"15E\" hoặc \"Y3C\" (không ghi TBH / YEN / 3C)."
     },
     "FSKU": {
      "ghi": [
       "bot",
       "tay"
      ],
-     "cong_thuc": true
+     "cong_thuc": true,
+     "dinh_dang": "Công thức ARRAYFORMULA — KHÔNG ghi."
     },
     "channel": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Trống = bán tại quầy (cua_hang). Bán ngoài: web | shopee | tiktok | lazada | zalo | facebook (chữ thường)."
     },
     "seller": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "App / web: email người bán (chữ thường). Zalo: tên hiển thị Zalo. Gõ tay: tên người gõ hoặc trống."
     },
     "chu_hang": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "\"15E\" | \"Y3C\" — hộ chủ đôi giày (ký gửi: hộ kia). Trống = theo KHO."
     },
     "payment_method": {
      "ghi": [
       "bot",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Tiền mặt | Chuyển khoản | Thẻ | Ví | Ghi nợ (đúng chữ có dấu, như bot paymentMethod_). Trống = chưa ghi."
     },
     "customer_phone": {
      "ghi": [
       "bot",
       "tay"
      ],
-     "chi_chu": true
+     "chi_chu": true,
+     "dinh_dang": "Chỉ chữ số (0909123456); không có thì trống."
     },
     "ky_gui_tru": {
      "ghi": [
       "bot"
-     ]
+     ],
+     "dinh_dang": "Đánh dấu đã trừ ký gửi: \"bot yyyy-MM-dd HH:mm\" | \"soat yyyy-MM-dd HH:mm\" | \"app\"; trống = chưa trừ / không ký gửi."
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n · dòng gõ tay được web cấp khi nhập bù TAY-<yyyyMMdd>-<số hàng Sheet> (không có #). Không dùng số NK. Bot / main.py không bao giờ cấp gốc TAY-. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
-      "main.py"
+      "main.py",
+      "web"
      ],
      "du_kien": true
     },
