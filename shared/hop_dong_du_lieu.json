@@ -385,35 +385,40 @@
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "ten_hang_2": "product_code"
     },
     "product_color": {
      "ghi": [
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "ten_hang_2": "product_color"
     },
     "KHO": {
      "ghi": [
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "ten_hang_2": "KHO"
     },
     "item_size": {
      "ghi": [
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "ten_hang_2": "item_size"
     },
     "Số lượng (*)": {
      "ghi": [
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "ten_hang_2": "item_quantity"
     },
     "FSKU": {
      "ghi": [
@@ -421,7 +426,8 @@
       "main.py",
       "tay"
      ],
-     "cong_thuc": true
+     "cong_thuc": true,
+     "ten_hang_2": "FSKU"
     },
     "web_stock": {
      "ghi": [
@@ -477,7 +483,9 @@
      ],
      "du_kien": true
     }
-   }
+   },
+   "hang_ky_thuat": 2,
+   "ghi_chu": "Hàng 1 = tên chuẩn (bot, main.py đọc theo hàng 1). Hàng 2 là hàng kỹ thuật cũ: chỉ 6 cột có tên phụ (ten_hang_2), các ô khác ở hàng 2 là chữ trạng thái cũ — bỏ qua hàng 2 khi đọc dữ liệu. Không có cột misa_stock_15e / misa_stock_y3c (đã bỏ)."
   },
   "XUAT": {
    "y_nghia": "Xuất kho không bán (hỏng, tặng, chuyển kho phần xuất)",
