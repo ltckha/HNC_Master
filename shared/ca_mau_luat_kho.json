@@ -1,0 +1,1221 @@
+{
+ "phien_ban": "2026-10-20",
+ "ghi_chu": "Ca mẫu luật kho HNC — chạy: node tests/test_luat_kho.js (so code cũ zalo_bot/Code.gs và shared/luat_kho.js). Size nửa số (\"38,5\") chưa có ca: bot cũ đọc dấu phẩy thành danh sách size → cần anh chốt trước khi thêm.",
+ "ca": [
+  {
+   "ten": "tách mã + size: AP048N40",
+   "ham": "tachMaSize",
+   "vao": [
+    "AP048N40",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "AP048N",
+    "size": "40"
+   }
+  },
+  {
+   "ten": "tách mã + size: ap048n-40",
+   "ham": "tachMaSize",
+   "vao": [
+    "ap048n-40",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "AP048N",
+    "size": "40"
+   }
+  },
+  {
+   "ten": "tách mã + size: AP048N_40",
+   "ham": "tachMaSize",
+   "vao": [
+    "AP048N_40",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "AP048N",
+    "size": "40"
+   }
+  },
+  {
+   "ten": "tách mã + size: ap048n/40",
+   "ham": "tachMaSize",
+   "vao": [
+    "ap048n/40",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "AP048N",
+    "size": "40"
+   }
+  },
+  {
+   "ten": "tách mã + size: TH2040D.41",
+   "ham": "tachMaSize",
+   "vao": [
+    "TH2040D.41",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "TH2040D",
+    "size": "41"
+   }
+  },
+  {
+   "ten": "tách mã + size: TH2040D39",
+   "ham": "tachMaSize",
+   "vao": [
+    "TH2040D39",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "TH2040D",
+    "size": "39"
+   }
+  },
+  {
+   "ten": "tách mã + size: AP048N",
+   "ham": "tachMaSize",
+   "vao": [
+    "AP048N",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": null
+  },
+  {
+   "ten": "tách mã + size: TH2040",
+   "ham": "tachMaSize",
+   "vao": [
+    "TH2040",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": null
+  },
+  {
+   "ten": "tách mã + size: 32837",
+   "ham": "tachMaSize",
+   "vao": [
+    "32837",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": null
+  },
+  {
+   "ten": "tách mã + size: WLC1928N50",
+   "ham": "tachMaSize",
+   "vao": [
+    "WLC1928N50",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": null
+  },
+  {
+   "ten": "tách mã + size: KHONGCO40",
+   "ham": "tachMaSize",
+   "vao": [
+    "KHONGCO40",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": null
+  },
+  {
+   "ten": "tách mã + size: 32837D39",
+   "ham": "tachMaSize",
+   "vao": [
+    "32837D39",
+    [
+     "TH2040D",
+     "AP048N",
+     "WLC1928N",
+     "32837D"
+    ],
+    [
+     "TH2040",
+     "AP048",
+     "32837"
+    ]
+   ],
+   "ra": {
+    "ma": "32837D",
+    "size": "39"
+   }
+  },
+  {
+   "ten": "bán 1 đôi, không ký gửi",
+   "ham": "banTachChuHang",
+   "vao": [
+    "15E",
+    1,
+    0
+   ],
+   "ra": {
+    "phan": [
+     {
+      "chu_hang": "15E",
+      "qty": 1
+     }
+    ],
+    "doi_cot": []
+   }
+  },
+  {
+   "ten": "bán 1 đôi ký gửi của Y3C ở 15E",
+   "ham": "banTachChuHang",
+   "vao": [
+    "15E",
+    1,
+    1
+   ],
+   "ra": {
+    "phan": [
+     {
+      "chu_hang": "Y3C",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "15E",
+      "cot": "cua_Y3C",
+      "delta": -1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "bán 2 đôi ở Y3C: 1 ký gửi 15E + 1 của Y3C",
+   "ham": "banTachChuHang",
+   "vao": [
+    "Y3C",
+    2,
+    1
+   ],
+   "ra": {
+    "phan": [
+     {
+      "chu_hang": "15E",
+      "qty": 1
+     },
+     {
+      "chu_hang": "Y3C",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": -1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "bán 1 đôi, ký gửi 3 → chỉ trừ 1",
+   "ham": "banTachChuHang",
+   "vao": [
+    "Y3C",
+    1,
+    3
+   ],
+   "ra": {
+    "phan": [
+     {
+      "chu_hang": "15E",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": -1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "ký gửi âm / trống coi như 0",
+   "ham": "banTachChuHang",
+   "vao": [
+    "15E",
+    2,
+    -1
+   ],
+   "ra": {
+    "phan": [
+     {
+      "chu_hang": "15E",
+      "qty": 2
+     }
+    ],
+    "doi_cot": []
+   }
+  },
+  {
+   "ten": "huỷ bán ký gửi → cộng lại ô",
+   "ham": "huyBanKhoiPhuc",
+   "vao": [
+    [
+     {
+      "kho": "15E",
+      "cot": "cua_Y3C",
+      "delta": -1
+     }
+    ]
+   ],
+   "ra": [
+    {
+     "kho": "15E",
+     "cot": "cua_Y3C",
+     "delta": 1
+    }
+   ]
+  },
+  {
+   "ten": "huỷ bán thường → không đổi ô",
+   "ham": "huyBanKhoiPhuc",
+   "vao": [
+    []
+   ],
+   "ra": []
+  },
+  {
+   "ten": "15E → Y3C, không ký gửi → thành ký gửi 15E ở Y3C",
+   "ham": "chuyenKhoKyGui",
+   "vao": [
+    "15E",
+    "Y3C",
+    1,
+    0
+   ],
+   "ra": {
+    "ghi_chu": [
+     {
+      "loai": "thanh_ky_gui",
+      "chu_hang": "15E",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": 1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "chuyển về kho chủ (2032D 39: 15E → Y3C, ký gửi Y3C 1)",
+   "ham": "chuyenKhoKyGui",
+   "vao": [
+    "15E",
+    "Y3C",
+    1,
+    1
+   ],
+   "ra": {
+    "ghi_chu": [
+     {
+      "loai": "tra_ve_chu",
+      "chu_hang": "Y3C",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "15E",
+      "cot": "cua_Y3C",
+      "delta": -1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "Y3C → 15E 2 đôi: trả 1 về chủ, 1 thành ký gửi",
+   "ham": "chuyenKhoKyGui",
+   "vao": [
+    "Y3C",
+    "15E",
+    2,
+    1
+   ],
+   "ra": {
+    "ghi_chu": [
+     {
+      "loai": "tra_ve_chu",
+      "chu_hang": "15E",
+      "qty": 1
+     },
+     {
+      "loai": "thanh_ky_gui",
+      "chu_hang": "Y3C",
+      "qty": 1
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": -1
+     },
+     {
+      "kho": "15E",
+      "cot": "cua_Y3C",
+      "delta": 1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "chuyển 3 đôi, ký gửi 5 → trả cả 3",
+   "ham": "chuyenKhoKyGui",
+   "vao": [
+    "Y3C",
+    "15E",
+    3,
+    5
+   ],
+   "ra": {
+    "ghi_chu": [
+     {
+      "loai": "tra_ve_chu",
+      "chu_hang": "15E",
+      "qty": 3
+     }
+    ],
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": -3
+     }
+    ]
+   }
+  },
+  {
+   "ten": "trả hàng không kèm chủ → theo dòng BAN gần nhất (Y3C)",
+   "ham": "traHangChuHang",
+   "vao": [
+    "Y3C",
+    "TH2040D",
+    "41",
+    1,
+    "",
+    [
+     {
+      "code": "TH2040D",
+      "size": "41",
+      "kho": "Y3C",
+      "chu_hang": "15E"
+     },
+     {
+      "code": "TH2040D",
+      "size": "41",
+      "kho": "Y3C",
+      "chu_hang": "Y3C"
+     }
+    ]
+   ],
+   "ra": {
+    "chu_hang": "Y3C",
+    "doi_cot": []
+   }
+  },
+  {
+   "ten": "trả hàng kèm chủ 15E ở Y3C → cộng ký gửi",
+   "ham": "traHangChuHang",
+   "vao": [
+    "Y3C",
+    "TH2040D",
+    "41",
+    1,
+    "15E",
+    [
+     {
+      "code": "TH2040D",
+      "size": "41",
+      "kho": "Y3C",
+      "chu_hang": "15E"
+     },
+     {
+      "code": "TH2040D",
+      "size": "41",
+      "kho": "Y3C",
+      "chu_hang": "Y3C"
+     }
+    ]
+   ],
+   "ra": {
+    "chu_hang": "15E",
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": 1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "trả hàng: dòng BAN gần nhất là ký gửi 15E",
+   "ham": "traHangChuHang",
+   "vao": [
+    "Y3C",
+    "TH2040D",
+    "41",
+    1,
+    "",
+    [
+     {
+      "code": "TH2040D",
+      "size": "41",
+      "kho": "Y3C",
+      "chu_hang": "15E"
+     }
+    ]
+   ],
+   "ra": {
+    "chu_hang": "15E",
+    "doi_cot": [
+     {
+      "kho": "Y3C",
+      "cot": "cua_15E",
+      "delta": 1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "trả hàng: không có dòng BAN → chủ = kho",
+   "ham": "traHangChuHang",
+   "vao": [
+    "15E",
+    "AP048N",
+    "40",
+    2,
+    "",
+    []
+   ],
+   "ra": {
+    "chu_hang": "15E",
+    "doi_cot": []
+   }
+  },
+  {
+   "ten": "trả hàng: chủ gửi \"yen\" → Y3C",
+   "ham": "traHangChuHang",
+   "vao": [
+    "15E",
+    "AP048N",
+    "40",
+    1,
+    "yen",
+    []
+   ],
+   "ra": {
+    "chu_hang": "Y3C",
+    "doi_cot": [
+     {
+      "kho": "15E",
+      "cot": "cua_Y3C",
+      "delta": 1
+     }
+    ]
+   }
+  },
+  {
+   "ten": "cảnh báo: ký gửi 1, tồn 0",
+   "ham": "canhBaoKyGui",
+   "vao": [
+    1,
+    0,
+    0
+   ],
+   "ra": true
+  },
+  {
+   "ten": "cảnh báo: ký gửi 1, tồn 0, chuyển về chủ 1 → không",
+   "ham": "canhBaoKyGui",
+   "vao": [
+    1,
+    0,
+    1
+   ],
+   "ra": false
+  },
+  {
+   "ten": "cảnh báo: ký gửi 2, tồn 3 → không",
+   "ham": "canhBaoKyGui",
+   "vao": [
+    2,
+    3,
+    0
+   ],
+   "ra": false
+  },
+  {
+   "ten": "cảnh báo: không ký gửi → không",
+   "ham": "canhBaoKyGui",
+   "vao": [
+    0,
+    0,
+    0
+   ],
+   "ra": false
+  },
+  {
+   "ten": "số NK mới: lớn nhất kho + 1",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000040",
+      "kho": "15E",
+      "ngay_key": "2026-10-19",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "NK000045",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": "Tuấn Phong"
+     },
+     {
+      "so": "NK000027",
+      "kho": "Y3C",
+      "ngay_key": "2026-10-20",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "TRA-201026",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": ""
+     }
+    ],
+    [
+     "15E",
+     "Y3C"
+    ],
+    "Hoa Mai",
+    "2026-10-20"
+   ],
+   "ra": {
+    "15E": "NK000046",
+    "Y3C": "NK000028"
+   }
+  },
+  {
+   "ten": "số NK: cùng NCC cùng ngày → dùng chung",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000040",
+      "kho": "15E",
+      "ngay_key": "2026-10-19",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "NK000045",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": "Tuấn Phong"
+     },
+     {
+      "so": "NK000027",
+      "kho": "Y3C",
+      "ngay_key": "2026-10-20",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "TRA-201026",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": ""
+     }
+    ],
+    [
+     "15E"
+    ],
+    "Tuấn Phong",
+    "2026-10-20"
+   ],
+   "ra": {
+    "15E": "NK000045"
+   }
+  },
+  {
+   "ten": "số NK: cùng NCC khác ngày → số mới",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000040",
+      "kho": "15E",
+      "ngay_key": "2026-10-19",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "NK000045",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": "Tuấn Phong"
+     },
+     {
+      "so": "NK000027",
+      "kho": "Y3C",
+      "ngay_key": "2026-10-20",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "TRA-201026",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": ""
+     }
+    ],
+    [
+     "15E"
+    ],
+    "Chú Dũng",
+    "2026-10-20"
+   ],
+   "ra": {
+    "15E": "NK000046"
+   }
+  },
+  {
+   "ten": "số NK: NCC khác dấu / hoa thường vẫn khớp",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000040",
+      "kho": "15E",
+      "ngay_key": "2026-10-19",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "NK000045",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": "Tuấn Phong"
+     },
+     {
+      "so": "NK000027",
+      "kho": "Y3C",
+      "ngay_key": "2026-10-20",
+      "ncc": "Chú Dũng"
+     },
+     {
+      "so": "TRA-201026",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": ""
+     }
+    ],
+    [
+     "Y3C"
+    ],
+    "chu dung",
+    "2026-10-20"
+   ],
+   "ra": {
+    "Y3C": "NK000027"
+   }
+  },
+  {
+   "ten": "số NK: kho chưa có số nào",
+   "ham": "soNhapKho",
+   "vao": [
+    [],
+    [
+     "Y3C"
+    ],
+    "X",
+    "2026-10-20"
+   ],
+   "ra": {
+    "Y3C": "NK000001"
+   }
+  },
+  {
+   "ten": "giá MISA: có giá HĐ",
+   "ham": "giaMisa",
+   "vao": [
+    {
+     "don_gia_hd": 420000,
+     "don_gia_phieu": 410000,
+     "invoice_price": 400000,
+     "purchase_price": 390000,
+     "so_hd": "00055"
+    }
+   ],
+   "ra": {
+    "gia": 420000,
+    "nguon": "hd",
+    "gia_tam": false,
+    "gia_cu": false
+   }
+  },
+  {
+   "ten": "giá MISA: chưa HĐ → giá phiếu, giá tạm",
+   "ham": "giaMisa",
+   "vao": [
+    {
+     "don_gia_hd": "",
+     "don_gia_phieu": "415.000 đ",
+     "invoice_price": 400000,
+     "purchase_price": 390000,
+     "so_hd": ""
+    }
+   ],
+   "ra": {
+    "gia": 415000,
+    "nguon": "phieu",
+    "gia_tam": true,
+    "gia_cu": false
+   }
+  },
+  {
+   "ten": "giá MISA: không giá lô → invoice_price",
+   "ham": "giaMisa",
+   "vao": [
+    {
+     "invoice_price": "500.000 đ",
+     "purchase_price": 450000
+    }
+   ],
+   "ra": {
+    "gia": 500000,
+    "nguon": "invoice",
+    "gia_tam": true,
+    "gia_cu": true
+   }
+  },
+  {
+   "ten": "giá MISA: invoice trống → purchase_price",
+   "ham": "giaMisa",
+   "vao": [
+    {
+     "invoice_price": "",
+     "purchase_price": 450000
+    }
+   ],
+   "ra": {
+    "gia": 450000,
+    "nguon": "purchase",
+    "gia_tam": true,
+    "gia_cu": true
+   }
+  },
+  {
+   "ten": "giá MISA: không có giá nào",
+   "ham": "giaMisa",
+   "vao": [
+    {}
+   ],
+   "ra": {
+    "gia": 0,
+    "nguon": "",
+    "gia_tam": true,
+    "gia_cu": true
+   }
+  },
+  {
+   "ten": "đơn giá phiếu: có giá trên phiếu",
+   "ham": "donGiaPhieuMoi",
+   "vao": [
+    300000,
+    450000
+   ],
+   "ra": 300000
+  },
+  {
+   "ten": "đơn giá phiếu: thiếu → giá nhập SANPHAM",
+   "ham": "donGiaPhieuMoi",
+   "vao": [
+    "",
+    570000
+   ],
+   "ra": 570000
+  },
+  {
+   "ten": "đơn giá phiếu: không có → 0 (để trống)",
+   "ham": "donGiaPhieuMoi",
+   "vao": [
+    "",
+    ""
+   ],
+   "ra": 0
+  },
+  {
+   "ten": "tồn: đầu 0 + nhập 3 − xuất 1 − bán 1",
+   "ham": "tonKho",
+   "vao": [
+    "15ETH2040D40",
+    0,
+    [
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 2
+     },
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 1
+     },
+     {
+      "fsku": "Y3CTH2040D40",
+      "qty": 5
+     }
+    ],
+    [
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 1
+     }
+    ],
+    [
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 1
+     }
+    ]
+   ],
+   "ra": 1
+  },
+  {
+   "ten": "tồn: FSKU khác kho không cộng",
+   "ham": "tonKho",
+   "vao": [
+    "Y3CTH2040D40",
+    1,
+    [
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 2
+     },
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 1
+     },
+     {
+      "fsku": "Y3CTH2040D40",
+      "qty": 5
+     }
+    ],
+    [],
+    [
+     {
+      "fsku": "15ETH2040D40",
+      "qty": 1
+     }
+    ]
+   ],
+   "ra": 6
+  },
+  {
+   "ten": "tồn: có thể âm (bán quá tồn)",
+   "ham": "tonKho",
+   "vao": [
+    "15ETH2040D41",
+    0,
+    [],
+    [],
+    [
+     {
+      "fsku": "15ETH2040D41",
+      "qty": 2
+     }
+    ]
+   ],
+   "ra": -2
+  },
+  {
+   "ten": "FSKU = kho + mã + size (40.0 → 40)",
+   "ham": "fsku",
+   "vao": [
+    "15E",
+    "th2040d",
+    "40.0"
+   ],
+   "ra": "15ETH2040D40"
+  },
+  {
+   "ten": "bán trùng: gõ tay trùng ngày + mã + size + kho với app",
+   "ham": "banTrung",
+   "vao": [
+    [
+     {
+      "dong": 10,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": 40,
+      "kho": "15E",
+      "seller": "nv@hn.vn"
+     },
+     {
+      "dong": 11,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": "40",
+      "kho": "TBH",
+      "seller": "Lan"
+     },
+     {
+      "dong": 12,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": 41,
+      "kho": "15E",
+      "seller": "Lan"
+     },
+     {
+      "dong": 13,
+      "ngay_key": "2026-10-06",
+      "code": "TH2040D",
+      "size": 40,
+      "kho": "15E",
+      "seller": ""
+     }
+    ],
+    []
+   ],
+   "ra": [
+    11
+   ]
+  },
+  {
+   "ten": "bán trùng: Chủ đã bấm \"Không phải trùng\"",
+   "ham": "banTrung",
+   "vao": [
+    [
+     {
+      "dong": 10,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": 40,
+      "kho": "15E",
+      "seller": "nv@hn.vn"
+     },
+     {
+      "dong": 11,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": "40",
+      "kho": "TBH",
+      "seller": "Lan"
+     },
+     {
+      "dong": 12,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": 41,
+      "kho": "15E",
+      "seller": "Lan"
+     },
+     {
+      "dong": 13,
+      "ngay_key": "2026-10-06",
+      "code": "TH2040D",
+      "size": 40,
+      "kho": "15E",
+      "seller": ""
+     }
+    ],
+    [
+     "2026-10-05|TH2040D|40|15E|11"
+    ]
+   ],
+   "ra": []
+  },
+  {
+   "ten": "bán trùng: không có dòng app → không",
+   "ham": "banTrung",
+   "vao": [
+    [
+     {
+      "dong": 11,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": "40",
+      "kho": "TBH",
+      "seller": "Lan"
+     },
+     {
+      "dong": 12,
+      "ngay_key": "2026-10-05",
+      "code": "TH2040D",
+      "size": 41,
+      "kho": "15E",
+      "seller": "Lan"
+     },
+     {
+      "dong": 13,
+      "ngay_key": "2026-10-06",
+      "code": "TH2040D",
+      "size": 40,
+      "kho": "15E",
+      "seller": ""
+     }
+    ],
+    []
+   ],
+   "ra": []
+  },
+  {
+   "ten": "kho: \"yen\" → Y3C",
+   "ham": "khoChuan",
+   "vao": [
+    "yen"
+   ],
+   "ra": "Y3C"
+  },
+  {
+   "ten": "kho: \"TBH\" → 15E",
+   "ham": "khoChuan",
+   "vao": [
+    "TBH"
+   ],
+   "ra": "15E"
+  },
+  {
+   "ten": "kho: lạ → trống",
+   "ham": "khoChuan",
+   "vao": [
+    "abc"
+   ],
+   "ra": ""
+  },
+  {
+   "ten": "ngày dd/mm/yyyy → yyyy-mm-dd",
+   "ham": "ngayKey",
+   "vao": [
+    "5/10/2026"
+   ],
+   "ra": "2026-10-05"
+  },
+  {
+   "ten": "tiền \"1.250.000 đ\"",
+   "ham": "soTien",
+   "vao": [
+    "1.250.000 đ"
+   ],
+   "ra": 1250000
+  }
+ ]
+}
