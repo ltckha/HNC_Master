@@ -630,7 +630,7 @@
       "bot",
       "tay"
      ],
-     "dinh_dang": "Trống = bán tại quầy (cua_hang). Bán ngoài: web | shopee | tiktok | lazada | zalo | facebook (chữ thường)."
+     "dinh_dang": "Trống = bán tại quầy (cua_hang). Bán ngoài: web | shopee | tiktok | lazada | zalo | facebook (chữ thường). Đơn khách đặt qua điện thoại (giao hàng) ghi \"zalo\" (anh Kha 20/10) — không có giá trị dien_thoai."
     },
     "seller": {
      "ghi": [
@@ -651,7 +651,7 @@
       "bot",
       "tay"
      ],
-     "dinh_dang": "Tiền mặt | Chuyển khoản | Thẻ | Ví | Ghi nợ (đúng chữ có dấu, như bot paymentMethod_). Trống = chưa ghi."
+     "dinh_dang": "Tiền mặt | Chuyển khoản | Thẻ | Ví | Ghi nợ | COD (giao thu hộ — anh Kha 20/10), đúng chữ có dấu như bot paymentMethod_. Sàn (Shopee / TikTok / Lazada) = Chuyển khoản. Trống = chưa ghi."
     },
     "customer_phone": {
      "ghi": [

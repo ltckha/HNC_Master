@@ -2569,7 +2569,7 @@ function receiptByNhap_(kho, so) {
 const MISA_TAX_TEXT = 'Thuế: GTGT 1% · TNCN 0,5% (theo danh mục MISA)';
 const SALE_CHANNEL_LABEL = { '': 'quầy', cua_hang: 'quầy', web: 'web', shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', zalo: 'Zalo', facebook: 'Facebook' };
 
-/** Cách trả chữ tự do → giá trị chuẩn cột BAN.payment_method (trùng danh sách MISA: Tiền mặt / Chuyển khoản / Thẻ / Ví / Ghi nợ). */
+/** Cách trả chữ tự do → giá trị chuẩn cột BAN.payment_method (Tiền mặt / Chuyển khoản / Thẻ / Ví / Ghi nợ / COD). */
 function paymentMethod_(text) {
   const n = norm_(text || '');
   if (!n) return '';
@@ -2577,7 +2577,8 @@ function paymentMethod_(text) {
   if (/\bthe\b|\bcard\b|\bpos\b/.test(n)) return 'Thẻ';
   if (/\bvi\b|momo|zalopay|shopeepay/.test(n)) return 'Ví';
   if (/\bno\b|ghi no|cong no/.test(n)) return 'Ghi nợ';
-  if (/\bcod\b|shopee|tiktok|lazada|san/.test(n)) return 'Chuyển khoản'; // tiền về qua sàn / ship thu hộ
+  if (/\bcod\b|thu\s*ho|ship\s*thu/.test(n)) return 'COD'; // giao thu hộ: tách riêng để đối soát tiền đơn vị giao trả (anh Kha 20/10)
+  if (/shopee|tiktok|lazada|san/.test(n)) return 'Chuyển khoản'; // tiền về qua sàn
   return 'Tiền mặt';
 }
 

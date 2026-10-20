@@ -1045,5 +1045,8 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   const w1 = WRITES.length; z('che do'); z('1'); z('1');
   eq('đổi lại master', WRITES.slice(w1).some(w => w.sheet === 'META' && w.v === 'master'), true);
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// Hình thức trả tiền chuẩn (COD tách riêng, anh Kha 20/10)
+vm.runInContext('this.paymentMethod_=paymentMethod_;', ctx);
+eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản', ['COD', 'ship thu hộ', 'Shopee', 'CK Techcombank', ''].map(ctx.paymentMethod_), ['COD', 'COD', 'Chuyển khoản', 'Chuyển khoản', '']);
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
