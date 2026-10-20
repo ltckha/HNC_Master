@@ -496,7 +496,13 @@
     }
    },
    "hang_ky_thuat": 2,
-   "ghi_chu": "Hàng 1 = tên chuẩn (bot, main.py đọc theo hàng 1). Hàng 2 là hàng kỹ thuật cũ: chỉ 6 cột có tên phụ (ten_hang_2), các ô khác ở hàng 2 là chữ trạng thái cũ — bỏ qua hàng 2 khi đọc dữ liệu. Không có cột misa_stock_15e / misa_stock_y3c (đã bỏ)."
+   "ghi_chu": "Hàng 1 = tên chuẩn (bot, main.py đọc theo hàng 1). Hàng 2 là hàng kỹ thuật cũ: chỉ 6 cột có tên phụ (ten_hang_2), các ô khác ở hàng 2 là chữ trạng thái cũ — bỏ qua hàng 2 khi đọc dữ liệu. Không có cột misa_stock_15e / misa_stock_y3c (đã bỏ).",
+   "cong_thuc_mau": {
+    "ghi_chu": "Dòng NHAP mới: FSKU là công thức từng dòng (như bot appendNhap_).",
+    "hien_tai": {
+     "FSKU": "=CONCATENATE(E{r}; C{r}; F{r})"
+    }
+   }
   },
   "XUAT": {
    "y_nghia": "Xuất kho không bán (hỏng, tặng, chuyển kho phần xuất)",
@@ -561,6 +567,9 @@
       "main.py"
      ]
     }
+   },
+   "cong_thuc_mau": {
+    "ghi_chu": "FSKU là ARRAYFORMULA ở hàng 2 — KHÔNG ghi cột FSKU."
    }
   },
   "BAN": {
@@ -682,6 +691,9 @@
       "main.py"
      ]
     }
+   },
+   "cong_thuc_mau": {
+    "ghi_chu": "FSKU là ARRAYFORMULA ở hàng 2 — KHÔNG ghi cột FSKU."
    }
   },
   "KHO15E": {
@@ -739,6 +751,17 @@
       "bot"
      ]
     }
+   },
+   "cong_thuc_mau": {
+    "ghi_chu": "Dòng KHO mới (như bot appendKhoRow_): {r} = số hàng; chữ cột lấy theo TÊN cột lúc ghi (luật 4) — \"hien_tai\" là chữ cột hôm nay. Ghi bằng USER_ENTERED. Cột khác: product_code, product_color, item_size (số), opening_quantity = 0, product_location trống, cua_… trống.",
+    "theo_ten": {
+     "15E": "=CONCATENATE(${15E}$1;{product_code}{r};{item_size}{r})",
+     "current_quantity": "={opening_quantity}{r} + SUMIF(NHAP!{NHAP.FSKU}:{NHAP.FSKU}; {15E}{r}; NHAP!{NHAP.Số lượng (*)}:{NHAP.Số lượng (*)}) - SUMIF(XUAT!{XUAT.FSKU}:{XUAT.FSKU}; {15E}{r}; XUAT!{XUAT.item_quantity}:{XUAT.item_quantity}) - SUMIF(BAN!{BAN.FSKU}:{BAN.FSKU}; {15E}{r}; BAN!{BAN.item_quantity}:{BAN.item_quantity})"
+    },
+    "hien_tai": {
+     "15E": "=CONCATENATE($A$1;B{r};D{r})",
+     "current_quantity": "=E{r} + SUMIF(NHAP!H:H; A{r}; NHAP!G:G) - SUMIF(XUAT!G:G; A{r}; XUAT!F:F) - SUMIF(BAN!H:H; A{r}; BAN!F:F)"
+    }
    }
   },
   "KHOY3C": {
@@ -795,6 +818,17 @@
      "ghi": [
       "bot"
      ]
+    }
+   },
+   "cong_thuc_mau": {
+    "ghi_chu": "Dòng KHO mới (như bot appendKhoRow_): {r} = số hàng; chữ cột lấy theo TÊN cột lúc ghi (luật 4) — \"hien_tai\" là chữ cột hôm nay. Ghi bằng USER_ENTERED. Cột khác: product_code, product_color, item_size (số), opening_quantity = 0, product_location trống, cua_… trống.",
+    "theo_ten": {
+     "Y3C": "=CONCATENATE(${Y3C}$1;{product_code}{r};{item_size}{r})",
+     "current_quantity": "={opening_quantity}{r} + SUMIF(NHAP!{NHAP.FSKU}:{NHAP.FSKU}; {Y3C}{r}; NHAP!{NHAP.Số lượng (*)}:{NHAP.Số lượng (*)}) - SUMIF(XUAT!{XUAT.FSKU}:{XUAT.FSKU}; {Y3C}{r}; XUAT!{XUAT.item_quantity}:{XUAT.item_quantity}) - SUMIF(BAN!{BAN.FSKU}:{BAN.FSKU}; {Y3C}{r}; BAN!{BAN.item_quantity}:{BAN.item_quantity})"
+    },
+    "hien_tai": {
+     "Y3C": "=CONCATENATE($A$1;B{r};D{r})",
+     "current_quantity": "=E{r} + SUMIF(NHAP!H:H; A{r}; NHAP!G:G) - SUMIF(XUAT!G:G; A{r}; XUAT!F:F) - SUMIF(BAN!H:H; A{r}; BAN!F:F)"
     }
    }
   },
@@ -1121,6 +1155,78 @@
     },
     "du_phong_xuat_hang": {
      "y_nghia": "Dòng key: hàng cuối XUAT lúc đổi sổ kho sang Dự phòng.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_ton": {
+     "y_nghia": "Dòng key: tồn tính ở web | master (P3). Bot kiểm hàng hỏi web /api/bot-ton, lỗi thì dùng Sheet.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_hh": {
+     "y_nghia": "Dòng key: hàng hoá + giá sửa trên admin web | master (P4). Bot / Mac không tạo / sửa SANPHAM.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_ton_luc": {
+     "y_nghia": "Dòng key: lúc đổi.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_ton_boi": {
+     "y_nghia": "Dòng key: ai đổi.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_hh_luc": {
+     "y_nghia": "Dòng key: lúc đổi.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_hh_boi": {
+     "y_nghia": "Dòng key: ai đổi.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "du_phong_ton_tu": {
+     "y_nghia": "Dòng key: giờ đổi tồn về Dự phòng.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "du_phong_hh_tu": {
+     "y_nghia": "Dòng key: giờ đổi hàng hoá về Dự phòng.",
      "ghi": [
       "web",
       "main.py",
