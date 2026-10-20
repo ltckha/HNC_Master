@@ -359,6 +359,32 @@
       "main.py"
      ]
     }
+   },
+   "cong_thuc_mau": {
+    "ghi_chu": "Dòng SANPHAM mới (như bot appendSanphamMin_, tạo mã): chép công thức của dòng trên (thay {r} = số hàng mới), TRỪ cột đã có giá trị bên dưới. Ngành (Tên Ngành Hàng) trống → để trống \"Giới tính\" và product_category_id (tránh female / #N/A). \"hien_tai\" = chữ cột hôm nay.",
+    "hien_tai": {
+     "parent_product_code": "=LEFT(W{r}; LEN(W{r})-1)",
+     "Giới tính": "=IF(REGEXMATCH(B{r};\"nam\");\"male\";\"female\")",
+     "(cột S không tên)": "=countif($W:$W;W{r})",
+     "CON_NAME": "=CONCATENATE(B{r};\" \";C{r};\" \";D{r};\" \";H{r};\" \";I{r};\" \";W{r})",
+     "CON_DES": "=CONCATENATE(T{r};\". \";$J$2;J{r};\". \";$K$2;K{r};\". \";$L$2;L{r};\". \";$M$2;M{r};\". \";$N$2;N{r};\". \";$O$2;O{r};\". \";$P$2;P{r};\". \";$Q$2;Q{r};\". \";R{r})",
+     "product_name": "=T{r}",
+     "product_category_id": "=index(SUB!$B$2:$B$126;match(B{r};SUB!$A$2:$A$126;0);1)",
+     "product_description": "=U{r}"
+    },
+    "gia_tri": {
+     "product_code": "mã mới IN HOA (mã gốc + chữ màu)",
+     "product_color": "màu",
+     "product_price": "giá bán (số)",
+     "chep_tu_ma_cung_goc": "nếu đã có mã cùng mã cha (parent_product_code = mã gốc, hoặc bỏ chữ cuối): chép Tên Ngành Hàng, Đặc điểm, Chất liệu, Nhấn mạnh, Chất liệu quai:, Chất liệu đế:, Lót trong:, Mặt lót đế:, Dáng giày mũi:, Phần dưới giày:, Kết hợp trang phục:, Sử dụng:, Bonus:, Thương hiệu, product_unit, product_origin (KHÔNG chép giá, ảnh, cờ đã đăng)",
+     "Tên Ngành Hàng": "ngành chọn (nếu có) — ghi đè bản chép",
+     "product_unit": "\"Đôi\" nếu chưa có",
+     "product_origin": "\"Việt Nam\" nếu chưa có (anh Kha 16/10)",
+     "Size": "dãy size nối dấu phẩy, vd \"38,39,40\"",
+     "purchase_price": "giá nhập trên phiếu (nếu có)",
+     "invoice_price": "để trống (anh điền / hoá đơn ghi)",
+     "supplier": "tên NCC của phiếu (nếu có)"
+    }
    }
   },
   "NHAP": {
