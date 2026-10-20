@@ -214,7 +214,8 @@
      "ghi": [
       "tay",
       "bot",
-      "main.py"
+      "main.py",
+      "web"
      ],
      "chi_chu": true
     },
@@ -229,7 +230,8 @@
      "ghi": [
       "tay",
       "main.py",
-      "bot"
+      "bot",
+      "web"
      ],
      "chi_chu": true
     },
@@ -381,9 +383,9 @@
      "product_unit": "\"Đôi\" nếu chưa có",
      "product_origin": "\"Việt Nam\" nếu chưa có (anh Kha 16/10)",
      "Size": "dãy size nối dấu phẩy, vd \"38,39,40\"",
-     "purchase_price": "giá nhập trên phiếu (nếu có)",
-     "invoice_price": "để trống (anh điền / hoá đơn ghi)",
-     "supplier": "tên NCC của phiếu (nếu có)"
+     "purchase_price": "giá nhập trên phiếu / nhập tay, không có thì giá của mã cùng mã cha (web 20/10: chỉ Chủ thấy ô này). Cần cho chuỗi giá MISA và giá điền sẵn don_gia_phieu.",
+     "invoice_price": "để trống (hoá đơn ghi / anh điền).",
+     "supplier": "NCC của phiếu / chọn tay, không có thì NCC của mã cùng mã cha. BẮT BUỘC cho MISA nhập kho (trống → dòng bị loại \"Thiếu NCC\") và gom phiếu hoá đơn."
     }
    }
   },
