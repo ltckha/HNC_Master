@@ -635,6 +635,7 @@ function navHandle_(text, chatId, dryRun) {
   if (t === 'menu' || t === 'm') return { text: navMenu_(chatId) };
   if (/^(du\s*phong|dự\s*phòng)$/.test(t)) return { text: DU_PHONG_TEXT + '\nNhắn số: 9 Menu' };
   if (/^(che\s*do|chế\s*độ)$/.test(t)) return navCheDo_(chatId);
+  if (/^(thu\s*web|thử\s*web)$/.test(t)) return navThuWeb_(chatId);
   if (!/^\d$/.test(t)) {
     const a = navGetAsk_(chatId);
     if (a && a.k === 'check') navClearAsk_(chatId); // gõ mã sau "1 Kiểm hàng" → chạy kiểm hàng như thường
@@ -1552,6 +1553,15 @@ function navCheDo_(chatId) {
   const lab = v => (v === 'web' ? 'WEB (web ghi)' : 'DỰ PHÒNG (bot / Mac ghi Sheet)');
   return { text: CHE_DO_SO.map(m => '🧭 ' + m.ten + ': ' + lab(metaMode_(m.key))).join('\n') + '\nNhắn số: ' +
     CHE_DO_SO.map((m, i) => (2 * i + 1) + ' ' + m.ten + ' → Dự phòng · ' + (2 * i + 2) + ' → Web').join(' · ') + ' · 0 Để sau' };
+}
+
+/** Lệnh Zalo "thu web" (Chủ, CHỈ ĐỌC): kiểm khoá ký bot ↔ web bản chính trước khi đổi sổ sang Web — gửi /api/bot-lenh {loai:"ma", body:{ma:"THUKHOA"}}. */
+function navThuWeb_(chatId) {
+  if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ dùng lệnh này.\nNhắn số: 9 Menu' };
+  const w = webForward_({ loai: 'ma', ma: 'THUKHOA', body: { ma: 'THUKHOA' } });
+  const m = String(w.error || '').match(/lỗi (\d{3})/);
+  const ok = w.ok || (!w.error && w.web) || /chưa đổi/i.test(String(w.text || ''));
+  return { text: (ok ? '✓ Web nhận khoá (200) — đổi sổ sang Web được.' : '⚠ Web từ chối' + (m ? ' (' + m[1] + ')' : '') + ': ' + (w.error || 'không rõ') + ' — CHƯA đổi sổ, báo Thực thi Website.') + '\nNhắn số: 9 Menu' };
 }
 
 /** Mốc lúc đổi sang Dự phòng: hàng cuối có mã của tab (như web) → web nhập bù dòng ghi sau mốc. */

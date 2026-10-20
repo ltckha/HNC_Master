@@ -1258,5 +1258,15 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
 { vm.runInContext('MEMO={};', ctx);
   const r = ctx.handleSale_({ ticket_id: 'NS1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: '-', qty: 1, warehouse: 'Y3C', price: 800000 }] }, true);
   eq('bán size "-" → không báo "size không hợp lệ"', JSON.stringify(r).indexOf('size không hợp lệ'), -1); }
+// Lệnh "thu web" (Chủ, chỉ đọc): web 200 → nhận khoá; 403 → từ chối
+{ const f0 = ctx.UrlFetchApp.fetch; let code = 200; const sent = [];
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return { getResponseCode: () => code, getContentText: () => code === 200 ? '{"ok":false,"text":"Mã chưa đổi"}' : '{"ok":false}' }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.BAN.length;
+  eq('thu web 200 → "Web nhận khoá", gửi loai ma THUKHOA, không ghi', [/Web nhận khoá \(200\)/.test(z('thu web')), sent[0] && sent[0].loai, sent[0] && sent[0].body.ma, DATA.BAN.length], [true, 'ma', 'THUKHOA', n0]);
+  code = 403;
+  eq('thu web 403 → "Web từ chối (403)"', /Web từ chối \(403\)/.test(z('thu web')), true);
+  eq('nhân viên "thu web" → chặn', /Chỉ Chủ/.test(ctx.handleText_('thu web', false, 'nvTW')), true);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
