@@ -85,7 +85,11 @@ EXPORT_DIR = os.path.join(GDRIVE_DIR, "HNC_Exported_Files")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 SPREADSHEET_NAME = "HNC_Control_Center"
 # Mở theo ID (tên file Sheet đã đổi thành "HNC_Master" 17/10/2026 → mở theo tên bị lỗi SpreadsheetNotFound)
-SPREADSHEET_ID = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"
+SPREADSHEET_ID_THAT = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"
+# P0 (20/10): HNC_SHEET_ID trỏ Sheet bản thử (vd HNC_Master_BAN_THU) để thử; không đặt = Sheet thật
+SPREADSHEET_ID = os.getenv("HNC_SHEET_ID", "").strip() or SPREADSHEET_ID_THAT
+# Chế độ Web (META che_do = web): sổ gốc ở web → menu Mac không ghi các tab này (chỉ xem / xuất file). Mặc định master = như cũ.
+WEB_MODE_LOCKED_TABS = {'BAN', 'NHAP', 'XUAT', 'KHO15E', 'KHOY3C', 'SANPHAM'}
 # Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
 SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
@@ -341,6 +345,28 @@ class EngineDataLoader:
         self._sync_tabs = set()  # tab đã ghi trong tác vụ hiện tại → báo web chép lại khi tác vụ xong
         self._init_connection()
 
+    def che_do(self):
+        """META che_do: 'web' | 'master' (mặc định master — như hôm nay). Đọc 1 lần mỗi lần mở menu. Cùng luật bot webModeOn_."""
+        if getattr(self, '_che_do', None) is None:
+            self._che_do = 'master'
+            try:
+                rows = self.spreadsheet.worksheet('META').get_all_values()
+                head = [str(h).strip() for h in (rows[0] if rows else [])]
+                if 'key' in head and 'value' in head:
+                    ck, cv = head.index('key'), head.index('value')
+                    for r in rows[1:]:
+                        if len(r) > max(ck, cv) and r[ck].strip() == 'che_do':
+                            self._che_do = 'web' if r[cv].strip().lower() == 'web' else 'master'
+            except Exception:
+                pass  # không đọc được META → giữ master
+        return self._che_do
+
+    def _write_ok(self, sheet_name):
+        if sheet_name in WEB_MODE_LOCKED_TABS and self.is_google_api and self.che_do() == 'web':
+            print(f"⛔ Đang chế độ Web (sổ gốc ở web): menu Mac không ghi tab {sheet_name}. Làm trên web / app, hoặc đổi META che_do = master khi web hỏng.")
+            return False
+        return True
+
     def _mark_sync(self, sheet_name):
         if sheet_name in SYNC_WATCH_TABS:
             self._sync_tabs.add(sheet_name)
@@ -443,6 +469,8 @@ class EngineDataLoader:
 
     def update_status(self, sheet_name, row_indices, col_idx, status_text_or_list):
         """Cập nhật chữ 'Done - YYYY-MM-DD HH:mm' hoặc danh sách trạng thái riêng từng dòng lên Google Sheet."""
+        if not self._write_ok(sheet_name):
+            return False
         if not row_indices:
             return True
 
@@ -476,6 +504,8 @@ class EngineDataLoader:
 
     def update_batch_image_results(self, sheet_name, batch_records):
         """Batch update tất cả các dòng ảnh cào được vào Google Sheet (tránh vượt quota API)."""
+        if not self._write_ok(sheet_name):
+            return False
         if not batch_records:
             return True
 
@@ -515,6 +545,8 @@ class EngineDataLoader:
 
     def update_batch_media_results(self, sheet_name, batch_records):
         """Batch update các cột content_path, content_url, content_files vào Google Sheet siêu tốc."""
+        if not self._write_ok(sheet_name):
+            return False
         if not batch_records or not self.is_google_api:
             return False
         try:
@@ -566,6 +598,8 @@ class EngineDataLoader:
 
     def append_rows_to_sheet(self, sheet_name, new_rows):
         """Append các dòng mới vào cuối bảng Google Sheet (với công thức USER_ENTERED)."""
+        if not self._write_ok(sheet_name):
+            return False
         if not new_rows:
             return True
 
@@ -581,6 +615,8 @@ class EngineDataLoader:
 
     def insert_rows_with_exact_range(self, sheet_name, new_rows, start_row):
         """Ghi các dòng mới vào đúng tọa độ A{start_row}:{last_col}{end_row} (tránh 100% lỗi lệch cột của append_rows)."""
+        if not self._write_ok(sheet_name):
+            return False
         if not new_rows or not self.is_google_api:
             return False
         try:
@@ -4122,8 +4158,32 @@ def handle_submenu_media(loader):
         else: input("\nNhấn Enter để quay lại Sub-Menu...")
 
 
+MAC_LOCK_PATH = '/tmp/hnc_main_py.lock'
+
+
+def acquire_mac_lock():
+    """Khoá chống chạy menu Mac 2 cửa sổ cùng lúc (P0 mục 5): khoá file, tự nhả khi tắt menu / máy khởi động lại."""
+    import fcntl
+    fh = open(MAC_LOCK_PATH, 'w')
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    fh.write(str(os.getpid()))
+    fh.flush()
+    return fh
+
+
 def main():
+    lock = acquire_mac_lock()
+    if lock is None:
+        print("⛔ Menu HNC đang mở ở cửa sổ khác — dùng cửa sổ đó (tránh 2 cửa sổ cùng ghi Sheet).")
+        return
     loader = EngineDataLoader()
+    if SPREADSHEET_ID != SPREADSHEET_ID_THAT:
+        print(f"🧪 ĐANG DÙNG SHEET BẢN THỬ ({SPREADSHEET_ID}) — không phải sổ thật.")
+    if loader.is_google_api and loader.che_do() == 'web':
+        print("🌐 Chế độ Web: sổ gốc ở web — menu Mac chỉ xem / xuất file, không ghi BAN / NHAP / XUAT / KHO / SANPHAM.")
 
     while True:
         os.system('clear' if os.name == 'posix' else 'cls')
