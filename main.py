@@ -4225,6 +4225,7 @@ def change_che_do(loader):
         ban = loader.spreadsheet.worksheet('BAN').get_all_values()
         ic = [str(h).strip() for h in ban[0]].index('product_code')
         pairs['du_phong_hang'] = str(max(i + 1 for i, r in enumerate(ban) if i == 0 or (len(r) > ic and r[ic].strip())))
+        pairs['du_phong_tu'] = pairs['che_do_luc']  # giờ mốc giữ lại sau khi đổi về Web (che_do_luc bị ghi đè)
     set_meta(loader, pairs)
     loader._mark_sync('META')
     print(f"✅ Đã đổi chế độ sổ gốc: {want.upper()}")

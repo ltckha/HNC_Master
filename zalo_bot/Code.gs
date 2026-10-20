@@ -1419,6 +1419,7 @@ function navCheDoPick_(n, chatId, d, dryRun) {
     let last = ban.length;
     while (last > 1 && String(ban[last - 1][c.product_code] || '').trim() === '') last--;
     pairs.du_phong_hang = String(last);
+    pairs.du_phong_tu = pairs.che_do_luc; // giờ mốc giữ lại sau khi đổi về Web
   }
   metaSet_(pairs);
   const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';

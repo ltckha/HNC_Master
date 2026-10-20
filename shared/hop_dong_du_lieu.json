@@ -1035,7 +1035,7 @@
      "du_kien": true
     },
     "che_do_luc": {
-     "y_nghia": "Dòng key: lúc đổi chế độ",
+     "y_nghia": "Dòng key: lúc đổi chế độ gần nhất, \"yyyy-MM-dd HH:mm:ss\" giờ VN (web chấp nhận cả ISO).",
      "ghi": [
       "bot",
       "main.py"
@@ -1070,6 +1070,15 @@
      "y_nghia": "Dòng key: số dòng web còn chờ chép sang Sheet (web ghi). Master mà > 0 → bot / main.py chưa ghi BAN / NHAP / XUAT.",
      "ghi": [
       "web"
+     ],
+     "du_kien": true
+    },
+    "du_phong_tu": {
+     "y_nghia": "Dòng key: giờ đổi sang Dự phòng \"yyyy-MM-dd HH:mm:ss\" (giờ VN), = che_do_luc lúc đổi; giữ nguyên khi đổi về Web. Web / main.py [7] / bot \"che do\" ghi khi đổi sang master.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
      ],
      "du_kien": true
     }
