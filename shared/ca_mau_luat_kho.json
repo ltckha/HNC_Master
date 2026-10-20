@@ -1561,6 +1561,14 @@
    "ra": {
     "Y3C": "NK000046"
    }
+  },
+  {
+   "ten": "size \"-\" của web = không size",
+   "ham": "chuanSize",
+   "vao": [
+    "-"
+   ],
+   "ra": ""
   }
  ]
 }

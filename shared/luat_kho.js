@@ -27,6 +27,7 @@ var LuatKho = (function () {
   /** Size như Sheet: 40, "40", "40.0" → "40"; trống → "". */
   function chuanSize(v) {
     var s = String(v === null || v === undefined ? '' : v).trim();
+    if (s === '-' || s === '—') return ''; // "-" của D1 = không size
     return s.slice(-2) === '.0' ? s.slice(0, -2) : s;
   }
 

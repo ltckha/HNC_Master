@@ -1254,5 +1254,9 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('mã Ẩn → hỏi web, "gộp vào" mã mới; mã thường không hỏi', [/Mã TH2040N đã gộp vào TH2040D/.test(t), asked], [true, 1]);
   row[wi] = old; ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// Size "-" từ web (không size) → bot nhận như không size (lỗi 19:27 NITBAM450V)
+{ vm.runInContext('MEMO={};', ctx);
+  const r = ctx.handleSale_({ ticket_id: 'NS1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: '-', qty: 1, warehouse: 'Y3C', price: 800000 }] }, true);
+  eq('bán size "-" → không báo "size không hợp lệ"', JSON.stringify(r).indexOf('size không hợp lệ'), -1); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

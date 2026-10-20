@@ -168,6 +168,7 @@ const OLD = {
     o[7] = 'Chưa thanh toán'; o[8] = d.sku; o[12] = d.kho_misa; o[14] = d.dvt; o[15] = d.sl; o[16] = d.don_gia; o[17] = amount; o[18] = ckRate; o[19] = ck; o[20] = vatRate; o[21] = tax; o[22] = amount - ck + tax;
     return { cot: o, loi: [] };
   },
+  chuanSize: v => O.normSize_(v),
   khoChuan: v => O.KHO_ALIASES[String(v).trim().toUpperCase()] || '',
   ngayKey: v => O.dateKey_(v),
   soTien: v => O.moneyValue_(v),

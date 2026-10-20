@@ -4971,6 +4971,7 @@ function requireColumns_(sheetName, col, names) {
 
 function normSize_(v) {
   const s = String(v === null || v === undefined ? '' : v).trim();
+  if (s === '-' || s === '—') return ''; // web (D1) dùng "-" cho không size (20/10) → không size
   return s.endsWith('.0') ? s.slice(0, -2) : s;
 }
 
