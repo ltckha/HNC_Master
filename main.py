@@ -3946,6 +3946,7 @@ def print_main_menu():
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
   [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
   [6] [bold #69F0AE]📸 AI TỰ ĐỘNG THÊM HÀNG HOÁ MỚI TỪ ẢNH[/bold #69F0AE]
+  [7] 🧭 Chế độ sổ gốc: xem / đổi MASTER (Mac, bot ghi Sheet) ↔ WEB (web ghi sổ)
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -4162,6 +4163,47 @@ def handle_submenu_media(loader):
         else: input("\nNhấn Enter để quay lại Sub-Menu...")
 
 
+def set_meta(loader, pairs):
+    """Ghi các khoá vào tab META (key | value | updated_at) theo tên cột; chưa có dòng thì thêm (cùng luật bot metaSet_)."""
+    ws = loader.spreadsheet.worksheet('META')
+    rows = ws.get_all_values()
+    head = [str(h).strip() for h in rows[0]]
+    for c in ('key', 'value', 'updated_at'):
+        if c not in head:
+            raise RuntimeError(f"Tab META thiếu cột {c}")
+    ck, cv, cu = head.index('key'), head.index('value'), head.index('updated_at')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    nxt = len(rows) + 1
+    cells = []
+    for k, v in pairs.items():
+        r = next((i + 1 for i in range(1, len(rows)) if len(rows[i]) > ck and rows[i][ck].strip() == k), None)
+        if r is None:
+            r = nxt
+            nxt += 1
+            cells.append(gspread.Cell(r, ck + 1, k))
+        cells += [gspread.Cell(r, cv + 1, v), gspread.Cell(r, cu + 1, now)]
+    ws.update_cells(cells, value_input_option='RAW')
+    loader._che_do = None
+
+
+def change_che_do(loader):
+    """Menu [7]: xem / đổi META che_do (master | web), hỏi xác nhận 2 lần — cùng luật lệnh Zalo "che do"."""
+    cur = loader.che_do()
+    print(f"🧭 Chế độ sổ gốc đang là: {'WEB (web ghi sổ)' if cur == 'web' else 'MASTER (Mac / bot ghi Sheet)'}"
+          + (" — SHEET BẢN THỬ" if SPREADSHEET_ID != SPREADSHEET_ID_THAT else ""))
+    pick = input("[1] MASTER (web hỏng, Mac / bot ghi Sheet)  [2] WEB  [Enter] giữ nguyên: ").strip()
+    want = {'1': 'master', '2': 'web'}.get(pick)
+    if not want or want == cur:
+        print("👌 Giữ nguyên.")
+        return
+    if input(f"⚠️ Gõ lại {pick} để đổi sang {want.upper()}: ").strip() != pick:
+        print("👌 Không đổi.")
+        return
+    set_meta(loader, {'che_do': want, 'che_do_luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'che_do_boi': f'mac {MAC_RUN_ID}'})
+    loader._mark_sync('META')
+    print(f"✅ Đã đổi chế độ sổ gốc: {want.upper()}")
+
+
 MAC_LOCK_PATH = '/tmp/hnc_main_py.lock'
 MAC_RUN_ID = datetime.now().strftime('%y%m%d-%H%M%S')  # mã lần mở menu → ma_dong MAC-<lần chạy>#n
 
@@ -4217,6 +4259,9 @@ def main():
             handle_submenu_misa(loader)
         elif choice_input == "5":
             handle_submenu_media(loader)
+        elif choice_input == "7":
+            change_che_do(loader)
+            input("\nNhấn Enter để quay lại Menu chính...")
         elif choice_input == "6":
             process_ai_product_ingestion(loader)
             if HAS_RICH: Prompt.ask("\n[dim]Nhấn Enter để quay lại Menu chính...[/dim]")

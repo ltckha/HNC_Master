@@ -622,6 +622,7 @@ function navHandle_(text, chatId, dryRun) {
   const t = String(text || '').trim().toLowerCase();
   if (t === 'menu' || t === 'm') return { text: navMenu_(chatId) };
   if (/^(du\s*phong|dự\s*phòng)$/.test(t)) return { text: DU_PHONG_TEXT + '\nNhắn số: 9 Menu' };
+  if (/^(che\s*do|chế\s*độ)$/.test(t)) return navCheDo_(chatId);
   if (!/^\d$/.test(t)) {
     const a = navGetAsk_(chatId);
     if (a && a.k === 'check') navClearAsk_(chatId); // gõ mã sau "1 Kiểm hàng" → chạy kiểm hàng như thường
@@ -648,6 +649,7 @@ function navHandle_(text, chatId, dryRun) {
       return { text: navMenu_(chatId) };
     case 'huy6': return navCancelPick_(n, chatId, a.d, dryRun);
     case 'web': return navWebPick_(n, chatId, a.d, dryRun);
+    case 'chedo': return navCheDoPick_(n, chatId, a.d, dryRun);
     case 'undo1':
       if (n !== 1) return { text: navMenu_(chatId) };
       navClearAsk_(chatId);
@@ -1334,17 +1336,61 @@ function handleSaleRequest_(e) {
 // (hoặc WEB_CMD_URL) ký HMAC như callback: x-bot-time = luc, x-bot-sig = hex HMAC-SHA256(khoá, luc + "." + body);
 // body {nguon: zalo | app_ban | app_kho, luc, dry_run, ...}; web trả {ok, text?, ket_qua?}. Lệnh xem (kiểm, bc) vẫn chạy ở bot.
 function webModeOn_() {
-  const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('BOT_CHUYEN_WEB') !== '1') return false;
+  if (PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') !== '1') return false;
+  return cheDo_() === 'web';
+}
+
+/** META che_do: 'web' | 'master' (mặc định master; không đọc được META → master). Cùng luật main.py loader.che_do(). */
+function cheDo_() {
   try {
     const meta = sheetValues_('META');
     const c = headerMap_(meta[0] || []);
-    if (c.key === undefined || c.value === undefined) return false;
+    if (c.key === undefined || c.value === undefined) return 'master';
     const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === 'che_do');
-    return !!r && String(r[c.value]).trim().toLowerCase() === 'web';
+    return r && String(r[c.value]).trim().toLowerCase() === 'web' ? 'web' : 'master';
   } catch (err) {
-    return false; // không đọc được META → giữ như cũ (master)
+    return 'master';
   }
+}
+
+/** Ghi các khoá vào tab META (key | value | updated_at) theo tên cột; chưa có dòng key thì thêm. */
+function metaSet_(pairs) {
+  const sheet = getSheet_('META');
+  const v = sheet.getDataRange().getValues();
+  const c = headerMap_(v[0] || []);
+  requireColumns_('META', c, ['key', 'value', 'updated_at']);
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+  let next = v.length + 1;
+  Object.keys(pairs).forEach(k => {
+    let row = v.findIndex((r, i) => i > 0 && String(r[c.key]).trim() === k) + 1;
+    if (row < 1) { row = next++; sheet.getRange(row, c.key + 1).setValue(k); }
+    sheet.getRange(row, c.value + 1).setValue(pairs[k]);
+    sheet.getRange(row, c.updated_at + 1).setValue(now);
+  });
+  delete MEMO.META;
+}
+
+/** Lệnh Zalo "che do" (Chủ): xem / đổi chế độ sổ gốc — menu số, nhắn 2 lần trong 10 phút mới đổi (luật 14). */
+function navCheDo_(chatId) {
+  if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ đổi chế độ sổ gốc.\nNhắn số: 9 Menu' };
+  navSetAsk_(chatId, 'chedo', {});
+  return { text: '🧭 Chế độ sổ gốc đang là: ' + (cheDo_() === 'web' ? 'WEB (web ghi sổ)' : 'MASTER (bot / Mac ghi Sheet)') +
+    '\nNhắn số: 1 Master — web hỏng, bot / Mac ghi Sheet · 2 Web — web ghi, bot chuyển lệnh · 0 Để sau' };
+}
+
+function navCheDoPick_(n, chatId, d, dryRun) {
+  if (n !== 1 && n !== 2) return { text: navMenu_(chatId) };
+  const want = n === 1 ? 'master' : 'web';
+  if (!(d.pending === n && Date.now() - (d.pt || 0) <= UNDO_SECONDS * 1000)) {
+    navSetAsk_(chatId, 'chedo', { pending: n, pt: Date.now() });
+    return { text: '⚠️ Đổi sang ' + want.toUpperCase() + ' — nhắn ' + n + ' lần nữa (trong 10 phút) để đổi · ' + NAV_FOOT };
+  }
+  navClearAsk_(chatId);
+  if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ đổi chế độ sang ' + want.toUpperCase() };
+  metaSet_({ che_do: want, che_do_luc: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), che_do_boi: 'zalo ' + (CTX.seller || chatId) });
+  const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';
+  return { text: '✅ Đã đổi chế độ sổ gốc: ' + want.toUpperCase() +
+    (want === 'web' && !sw ? '\n(Công tắc BOT_CHUYEN_WEB chưa bật → bot vẫn tự ghi như cũ.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };
 }
 
 function webForward_(payload) {

@@ -1033,5 +1033,17 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   const z = DATA.BAN.filter(r => /^Z-/.test(r[mi] || '')).pop();
   eq('Zalo: ma_dong = Z-<message_id>#1, nguon = zalo', z && [z[mi], z[ni]], ['Z-m777#1', 'zalo']);
   DATA.BAN.forEach(r => { r.splice(ni, 1); r.splice(mi, 1); }); }
+// Lệnh Zalo "che do" (Chủ, nhắn 2 lần) — viết sẵn, chưa deploy
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', '']];
+  eq('nhân viên gõ "che do" → chặn', /Chỉ Chủ/.test(ctx.handleText_('che do', false, 'nvCD')), true);
+  eq('Chủ gõ "che do" → đang MASTER + menu số', /MASTER[\s\S]*1 Master[\s\S]*2 Web/.test(z('che do')), true);
+  eq('nhắn 2 lần 1 → hỏi lại, chưa đổi', [/nhắn 2 lần nữa/.test(z('2')), DATA.META.some(r => r[0] === 'che_do')], [true, false]);
+  const w0 = WRITES.length;
+  const r2 = z('2');
+  const mw = WRITES.slice(w0).filter(w => w.sheet === 'META').map(w => w.v);
+  eq('nhắn 2 lần → ghi META che_do = web + lúc / bởi, báo công tắc chưa bật', [/Đã đổi[\s\S]*WEB/.test(r2), mw.indexOf('che_do') !== -1, mw.indexOf('web') !== -1, mw.indexOf('che_do_boi') !== -1, /BOT_CHUYEN_WEB chưa bật/.test(r2)], [true, true, true, true, true]);
+  const w1 = WRITES.length; z('che do'); z('1'); z('1');
+  eq('đổi lại master', WRITES.slice(w1).some(w => w.sheet === 'META' && w.v === 'master'), true);
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
