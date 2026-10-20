@@ -482,6 +482,14 @@
       "main.py"
      ],
      "du_kien": true
+    },
+    "nguon": {
+     "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
     }
    },
    "hang_ky_thuat": 2,
@@ -537,6 +545,14 @@
     },
     "ma_dong": {
      "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "nguon": {
+     "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
      "ghi": [
       "bot",
       "main.py"
@@ -637,6 +653,14 @@
     },
     "ma_dong": {
      "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "nguon": {
+     "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
      "ghi": [
       "bot",
       "main.py"
@@ -1073,5 +1097,10 @@
     }
    }
   }
+ },
+ "sheet_ban_thu": {
+  "id": "1QwH7Y1A45Pb9S0JbfDSkrP-VeUmD_cA6FsKdI4Gmxcw",
+  "ten": "HNC_Master_BAN_THU",
+  "ghi_chu": "Bản sao 20/10 (V115) để thử P0 mục 3–5 và diễn tập web; đã có cột ma_dong / nguon và META che_do = master. Không dùng bán thật."
  }
 }
