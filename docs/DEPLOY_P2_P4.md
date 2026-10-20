@@ -24,6 +24,11 @@ Bot thật đang @37 (deploy 20/10 13:4x, commit ee87f54). Bản mới = HEAD c�
 cd zalo_bot && clasp push --force && clasp create-deployment -i <deployment_id trong deploy.json> -d "HNC <ngày> <hash> P2-P4 master"
 ```
 
+## Tối hôm trước ngày chuyển (sau đóng cửa) — anh duyệt tại phiên Thực thi – HNC_Master
+- Ghi mốc dự phòng lên Sheet chính (giờ đó + hàng cuối BAN / NHAP / XUAT), để web nhập bù đúng dòng bot / Mac ghi sau mốc:
+  `venv/bin/python tools/ghi_moc_du_phong.py --sheet that` (chạy thử, xem số) → `… --sheet that --ghi`.
+- Bài học diễn tập 20/10: thiếu mốc thì web không nhập bù được dòng ghi lúc Dự phòng.
+
 ## Kiểm khoá ký trước khi đổi Sổ kho → Web (ngày chuyển, sau bước 1 web deploy)
 - Anh nhắn Zalo `thu web` (Chủ, chỉ đọc): bot gửi `/api/bot-lenh {loai:"ma", body:{ma:"THUKHOA"}}` ký WEB_NOTIFY_KEY → "✓ Web nhận khoá (200)" thì đổi sổ được; "⚠ Web từ chối (403)…" thì DỪNG, không đụng sổ.
 
