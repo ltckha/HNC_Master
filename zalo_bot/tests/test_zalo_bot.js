@@ -1141,5 +1141,21 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const r2 = ctx.handleStock_({ action: 'bo_sung_sp', seller: 'nv@hn.vn', product_code: 'TH2040D', cot: { 'Đặc điểm': 'x' } }, false);
   eq('hàng hoá Web: tao_ma / bo_sung_sp bị chặn, không ghi SANPHAM', [r1.ok, r1.hh_web, r2.ok, r2.hh_web, DATA.SANPHAM.length], [false, true, false, true, s0]);
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P2-3: xac_nhan web_ghi (sổ kho Web): bot tạo mã mới + đánh dấu phiếu, KHÔNG ghi NHAP, không chuyển ngược web
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_kho', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch; let fwd = 0;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { fwd++; return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } return f0(url, opt); };
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5000', ngay: '2026-10-20', dong: [{ ma_ncc: 'QQ', mo_ta: 'Giày QQ', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+  vm.runInContext('MEMO={};', ctx);
+  const pid = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-web-ghi').toString('base64') }).id;
+  const n0 = DATA.NHAP.length, s0 = DATA.SANPHAM.length;
+  vm.runInContext('MEMO={};', ctx);
+  const w = pn({ action: 'xac_nhan', id: pid, ticket_id: 'WG1', web_ghi: true, dong: [{ dong: 1, ma_hnc: 'QQ500D', kho: '15E', sizes: { '40': 1 } }],
+    ma_moi: [{ ma_hnc: 'QQ500D', mau: 'Đen', gia_ban: 500000, day_size: ['40'] }] });
+  eq('xac_nhan web_ghi: tạo mã mới, không ghi NHAP, trả ncc + giá dòng, không chuyển ngược web',
+    [w.ok, w.web_ghi, DATA.NHAP.length - n0, DATA.SANPHAM.length - s0, w.ncc, w.gia && w.gia[1], w.tao_moi.sanpham[0], fwd], [true, true, 0, 1, 'Chú Dũng', 300000, 'QQ500D', 0]);
+  vm.runInContext('MEMO={};', ctx);
+  eq('phiếu đã đánh dấu ghi → xac_nhan lại bị chặn', /phiếu đã ghi/.test(pn({ action: 'xac_nhan', id: pid, ticket_id: 'WG2', web_ghi: true, dong: [{ dong: 1, ma_hnc: 'QQ500D', kho: '15E', sizes: { '40': 1 } }] }).error || ''), true);
+  ctx.UrlFetchApp.fetch = f0; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

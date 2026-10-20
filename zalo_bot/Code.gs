@@ -1449,6 +1449,7 @@ function zaloStockBody_(text, seller) {
 
 function stockWebGate_(payload) {
   if (cheDoKho_() !== 'web') return null;
+  if (payload.body && payload.body.web_ghi === true) return null; // web tự gọi (xac_nhan / huy_nhap web_ghi) → bot làm phần của bot, không chuyển ngược
   payload.loai = 'kho'; // web chốt 20/10: {loai:'kho', body:<lệnh kho như app>, nguoi, chat_id, chu, dry_run, luc}
   if (payload.text !== undefined && !payload.body) {
     const zb = zaloStockBody_(payload.text, payload.nguoi);
@@ -2221,6 +2222,49 @@ function receiptDiscard_(body, nguoi) {
  *   ma_moi [{ma_hnc, ma_goc?, mau, day_size?:["38",…], ten_tam?, nganh?}] — mã chưa có SANPHAM: tạo dòng SANPHAM tối thiểu
  *          + dòng KHO 2 kho cho dãy size, rồi mới ghi NHAP. Mã có rồi mà thiếu dòng KHO (kho × size) cũng tạo dòng KHO.
  */
+/**
+ * xac_nhan web_ghi: true (P2-3, web chốt 20/10 — sổ kho Web): web ghi dòng NHAP + số NK ở D1; bot chỉ kiểm như cũ, TẠO MÃ MỚI
+ * (SANPHAM + dòng KHO có công thức), đánh dấu phiếu đã ghi, học bảng ghép mã NCC. KHÔNG ghi NHAP, không đổi tồn.
+ * Trả {ok, web_ghi, ncc, gia: {<dòng phiếu>: đơn giá phiếu}, tao_moi, ncc_xuat_hd}. Huỷ: huy_nhap web_ghi (bot xoá mã mới nếu chưa có giao dịch khác).
+ */
+function receiptConfirmWeb_(body, nguoi, dryRun, d, input, lines, plan, khoRows, taoMoi, canhBao, ticket, props) {
+  const gia = {};
+  d.dong.forEach(pl => { if (pl.don_gia) gia[pl.dong] = pl.don_gia; });
+  const base = { action: 'xac_nhan', web_ghi: true, id: d.id, ticket_id: ticket, ncc: d.ncc || '', gia, tao_moi: taoMoi, canh_bao: canhBao,
+    ncc_xuat_hd: body.ncc_xuat_hd !== false };
+  if (dryRun) return Object.assign({ ok: true, dry_run: true }, base);
+  MEMO = { __pnx: MEMO.__pnx };
+  const ops = [];
+  try {
+    plan.list.forEach(m => ops.push(appendSanphamMin_(m)));
+    khoRows.forEach(k => ops.push(appendKhoRow_(k)));
+  } catch (err) {
+    props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), partial: true }));
+    return Object.assign({ ok: false, partial: true, _sync: uniq_(ops.map(o => o.sheet)), error: 'Tạo mã dở (' + (err && err.message ? err.message : err) + ') — KHÔNG gửi lại, kiểm tra Sheet' }, base);
+  }
+  d.trang_thai = 'da_ghi';
+  d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, ma_moi: plan.list, canh_bao: canhBao, web_ghi: true,
+    rows: ops.map(o => o.sheet + '!' + o.row), ops };
+  receiptSave_(d);
+  try { receiptFileByHousehold_(d, lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()])); }
+  catch (err) { console.error('Không chuyển được ảnh phiếu sang thư mục hộ: ' + (err && err.message ? err.message : err)); }
+  if (d.ncc) {
+    const map = receiptMap_(d.ncc);
+    d.dong.forEach(pl => {
+      const codes = uniq_(lines.filter(l => l.src === pl.dong).map(l => l.code));
+      if (!codes.length || !receiptMapKey_(pl)) return;
+      const nm = plan.list.find(m => codes.indexOf(m.code) !== -1);
+      map[receiptMapKey_(pl)] = codes.length === 1 ? codes[0] : (nm ? nm.base : codes[0].slice(0, -1));
+    });
+    const txt = JSON.stringify(map);
+    if (txt.length < 8500) props.setProperty(receiptMapProp_(d.ncc), txt);
+  }
+  props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
+  pruneTickets_(props, 'stk_');
+  CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'phiếu nhập kho ' + d.id + ' (web ghi)', ops, pn: d.id }), UNDO_SECONDS);
+  return Object.assign({ ok: true, _sync: uniq_(ops.map(o => o.sheet)) }, base);
+}
+
 function receiptConfirm_(body, nguoi, dryRun) {
   const id = String(body.id || '').trim();
   const ticket = String(body.ticket_id || '').trim();
@@ -2272,6 +2316,7 @@ function receiptConfirm_(body, nguoi, dryRun) {
     if (!lines.length) return { ok: false, action: 'xac_nhan', id, ticket_id: ticket, error: 'không có dòng nào để ghi', canh_bao: canhBao };
     const khoRows = receiptKhoRowsPlan_(plan, lines);
     const taoMoi = { sanpham: plan.list.map(m => m.code), kho: khoRows.map(k => k.kho + ' ' + k.code + (k.size ? ' ' + k.size : '')) };
+    if (body.web_ghi === true) return receiptConfirmWeb_(body, nguoi, dryRun, d, input, lines, plan, khoRows, taoMoi, canhBao, ticket, props);
     const nk = receiptNkPlan_(uniq_(lines.map(l => KHO_ALIASES[String(l.warehouse || '').trim().toUpperCase()]).filter(Boolean)), d.ncc);
 
     // Lượt 1: chạy thử bằng đúng hàm "nhap" (mã mới coi như đã có)
