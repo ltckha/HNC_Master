@@ -361,10 +361,30 @@ class EngineDataLoader:
                 pass  # không đọc được META → giữ master
         return self._che_do
 
+    def cho_chep(self):
+        """META cho_chep = số dòng web còn chờ chép sang Sheet (web ghi). Đọc mới mỗi lần (giá trị đổi liên tục). Không có khoá → 0."""
+        try:
+            rows = self.spreadsheet.worksheet('META').get_all_values()
+            head = [str(h).strip() for h in (rows[0] if rows else [])]
+            if 'key' in head and 'value' in head:
+                ck, cv = head.index('key'), head.index('value')
+                for r in rows[1:]:
+                    if len(r) > max(ck, cv) and r[ck].strip() == 'cho_chep':
+                        return max(0, int(float(r[cv] or 0)))
+        except Exception:
+            pass
+        return 0
+
     def _write_ok(self, sheet_name):
         if sheet_name in WEB_MODE_LOCKED_TABS and self.is_google_api and self.che_do() == 'web':
             print(f"⛔ Đang chế độ Web (sổ gốc ở web): menu Mac không ghi tab {sheet_name}. Làm trên web / app, hoặc đổi META che_do = master khi web hỏng.")
             return False
+        # Master mà web còn dòng đang chép → chưa ghi BAN / NHAP / XUAT (cùng luật bot choChepBlock_)
+        if sheet_name in ('BAN', 'NHAP', 'XUAT') and self.is_google_api:
+            n = self.cho_chep()
+            if n > 0:
+                print(f"⏳ Còn {n} dòng web đang chép sang Sheet — chờ về 0 rồi chạy lại (chưa ghi tab {sheet_name}).")
+                return False
         return True
 
     def _mark_sync(self, sheet_name):

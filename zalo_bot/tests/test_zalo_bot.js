@@ -1048,5 +1048,17 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
 // Hình thức trả tiền chuẩn (COD tách riêng, anh Kha 20/10)
 vm.runInContext('this.paymentMethod_=paymentMethod_;', ctx);
 eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản', ['COD', 'ship thu hộ', 'Shopee', 'CK Techcombank', ''].map(ctx.paymentMethod_), ['COD', 'COD', 'Chuyển khoản', 'Chuyển khoản', '']);
+// META cho_chep > 0 (web còn chép) ở chế độ master → bot chưa ghi BAN / NHAP / XUAT
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['cho_chep', '2', '']]; vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.BAN.length;
+  const r = ctx.handleSale_({ ticket_id: 'CC1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] }, false);
+  eq('cho_chep 2 → app bán bị chặn, không ghi BAN', [r.ok, /Còn 2 dòng web đang chép/.test(r.error), DATA.BAN.length], [false, true, n0]);
+  vm.runInContext('MEMO={};', ctx);
+  eq('cho_chep 2 → Zalo bán báo chờ', /Còn 2 dòng web đang chép/.test(ctx.handleText_('ban TH2040D 40 YEN', false, 'nvCC')), true);
+  vm.runInContext('MEMO={};', ctx);
+  eq('cho_chep 2 → kiểm hàng vẫn chạy', /Còn 2 dòng/.test(ctx.handleText_('TH2040D 40', false, 'nvCC')), false);
+  DATA.META[1][1] = '0'; vm.runInContext('MEMO={};', ctx);
+  eq('cho_chep 0 → bán chạy thử được', ctx.handleSale_({ ticket_id: 'CC2', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] }, true).ok, true);
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

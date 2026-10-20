@@ -1,4 +1,5 @@
 """Thử P0 mục 4–5 trên Sheet BẢN THỬ (HNC_Master_BAN_THU, có ghi vào bản thử — không đụng Sheet thật).
+KHÔNG chạy lúc web đang diễn tập (bài này tạm đổi che_do); cuối bài trả META như lúc đầu.
 Chạy: venv/bin/python tests/test_p0_ban_thu.py"""
 import os
 import sys
@@ -28,7 +29,11 @@ def set_che_do(L, v):
 
 
 L = main.EngineDataLoader()
-eq('bản thử: che_do mặc định master', L.che_do(), 'master')
+# Bản thử dùng chung với web diễn tập → nhớ trạng thái META lúc đầu, cuối bài trả lại y nguyên
+_meta0 = {r[0]: r[1] for r in L.spreadsheet.worksheet('META').get_all_values()[1:] if r and r[0] in ('che_do', 'che_do_luc', 'che_do_boi', 'cho_chep')}
+main.set_meta(L, {'che_do': 'master', 'cho_chep': '0'})
+L = main.EngineDataLoader()
+eq('bản thử: che_do master', L.che_do(), 'master')
 eq('master: được ghi', L._write_ok('BAN'), True)
 n0 = len(L.spreadsheet.worksheet('BAN').get_all_values())
 set_che_do(L, 'web')
@@ -42,6 +47,14 @@ try:
 finally:
     set_che_do(L, 'master')
 eq('trả lại master', main.EngineDataLoader().che_do(), 'master')
+# META cho_chep (web ghi): > 0 → chưa ghi BAN / NHAP / XUAT; về 0 → ghi được
+main.set_meta(L, {'cho_chep': '3'})
+try:
+    eq('cho_chep 3 → chặn BAN', main.EngineDataLoader()._write_ok('BAN'), False)
+    eq('cho_chep 3 → KHO vẫn ghi được', main.EngineDataLoader()._write_ok('KHO15E'), True)
+finally:
+    main.set_meta(L, {'cho_chep': '0'})
+eq('cho_chep 0 → ghi được', main.EngineDataLoader()._write_ok('BAN'), True)
 # Menu [7] đổi che_do (gõ 2 lần)
 import builtins  # noqa: E402
 ans = iter(['2', '2'])
@@ -60,6 +73,8 @@ b = main.acquire_mac_lock()
 eq('khoá: cửa sổ 2 bị chặn', [a is not None, b is None], [True, True])
 a.close()
 eq('khoá: tắt cửa sổ 1 thì mở lại được', main.acquire_mac_lock() is not None, True)
+main.set_meta(L, _meta0 or {'che_do': 'master'})
+print('↩️ Trả META bản thử như lúc đầu:', _meta0)
 if fails:
     sys.exit(1)
 print('✅ test_p0_ban_thu đạt (Sheet bản thử)')

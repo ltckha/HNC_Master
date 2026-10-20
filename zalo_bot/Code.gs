@@ -169,6 +169,8 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
       const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const cmdLines = lines.filter(isBatchCommandLine_);
+      const isWriteCmd = cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
+      if (isWriteCmd && !dryRun) { const blk = choChepBlock_(); if (blk) return { reply: '⏳ ' + blk + '\nNhắn số: 9 Menu', syncTabs: [] }; }
       if (webModeOn_() && (cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1)) {
         const w = webForward_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
         return { reply: (w.ok ? (w.text || '✅ Web đã ghi.') : '⚠️ ' + (w.error || 'web chưa nhận')) + '\nNhắn số: 9 Menu', syncTabs: [] };
@@ -1356,6 +1358,26 @@ function cheDo_() {
   }
 }
 
+/** META cho_chep = số dòng web còn chờ chép sang Sheet (web ghi, P0 20/10). Không có khoá → 0. */
+function choChep_() {
+  try {
+    const meta = sheetValues_('META');
+    const c = headerMap_(meta[0] || []);
+    if (c.key === undefined || c.value === undefined) return 0;
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === 'cho_chep');
+    return r ? Math.max(0, Number(r[c.value]) || 0) : 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+/** Chế độ master mà web còn dòng đang chép → chưa cho ghi BAN / NHAP / XUAT (tránh lệch thứ tự). Trả câu báo, hoặc '' nếu ghi được. */
+function choChepBlock_() {
+  if (cheDo_() !== 'master') return '';
+  const n = choChep_();
+  return n > 0 ? 'Còn ' + n + ' dòng web đang chép sang Sheet — chờ về 0 rồi ghi lại.' : '';
+}
+
 /** Ghi các khoá vào tab META (key | value | updated_at) theo tên cột; chưa có dòng key thì thêm. */
 function metaSet_(pairs) {
   const sheet = getSheet_('META');
@@ -1418,6 +1440,7 @@ function webForward_(payload) {
 function handleSale_(body, dryRun) {
   if (webModeOn_()) return webForward_({ nguon: 'app_ban', dry_run: !!dryRun, body });
   rowSrcStart_(String(body.channel || '').trim().toLowerCase() === 'web' ? 'web' : 'app', body.ticket_id);
+  if (!dryRun) { const blk = choChepBlock_(); if (blk) return { ok: false, ticket_id: String(body.ticket_id || ''), error: blk, cho_chep: true }; }
   MEMO = {};
   CTX = { seller: '', pending: {} };
   const ticket = String(body.ticket_id || '').trim();
@@ -1664,6 +1687,10 @@ function handleStock_(body, dryRun) {
   MEMO = {};
   if (webModeOn_()) return webForward_({ nguon: 'app_kho', dry_run: !!dryRun, body });
   rowSrcStart_('app', PN_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1 && body.id ? body.id : (body.ticket_id || body.id));
+  if (!dryRun && STOCK_ACTIONS.concat(['xac_nhan', 'huy_nhap', 'huy']).indexOf(String(body.action || '').trim().toLowerCase()) !== -1) {
+    const blk = choChepBlock_();
+    if (blk) return { ok: false, action: String(body.action || ''), error: blk, cho_chep: true };
+  }
   CTX = { seller: '', pending: {} };
   const action = String(body.action || '').trim().toLowerCase();
   const ticket = String(body.ticket_id || '').trim();
