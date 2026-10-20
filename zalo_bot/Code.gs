@@ -931,7 +931,7 @@ function navInvoiceNumber_(text, chatId, d, dryRun) {
 function doCheck_(p) {
   // H8 đổi / gộp mã (hàng hoá ở web): mã không còn trên Sheet → hỏi web /api/bot-lenh {loai:"ma", ma} → {ok, ma_moi, loai}
   if (p.code && cheDoHh_() === 'web' && !codeExists_(p.code)) {
-    const m = webForward_({ loai: 'ma', ma: p.code });
+    const m = webForward_({ loai: 'ma', ma: p.code, body: { ma: p.code } });
     if (m.ok && m.ma_moi && String(m.ma_moi).toUpperCase() !== p.code) {
       const moi = String(m.ma_moi).trim().toUpperCase();
       const r = doCheck_(Object.assign({}, p, { code: moi, baseCode: '' }));
@@ -940,7 +940,8 @@ function doCheck_(p) {
   }
   if (cheDoTon_() === 'web' && (p.code || p.baseCode)) {
     const sizes = p.sizes.map(s => s.size);
-    const w = webForward_(Object.assign({ loai: 'ton', ma: p.code || p.baseCode }, sizes.length === 1 ? { size: sizes[0] } : {})); // web chốt: /api/bot-lenh loai "ton"
+    const q = Object.assign({ ma: p.code || p.baseCode }, sizes.length === 1 ? { size: sizes[0] } : {});
+    const w = webForward_(Object.assign({ loai: 'ton', body: q }, q)); // web chốt: /api/bot-lenh loai "ton", body {ma, size?}
     if (w.ok && Array.isArray(w.ton)) {
       const rows = w.ton.filter(t => !sizes.length || sizes.indexOf(normSize_(t.size)) !== -1);
       const byKho = {};
