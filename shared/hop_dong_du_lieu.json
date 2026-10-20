@@ -4,7 +4,7 @@
   "Hợp đồng dữ liệu Sheet HNC_Master (ID 1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0) cho bot, main.py, web (P0 phương án 3).",
   "Luật 4: đọc / ghi theo TÊN cột ở hang_tieu_de (SANPHAM = hàng 2, hàng 1 là tên nhóm); thiếu cột bắt buộc → báo lỗi, không ghi cột khác.",
   "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị.",
-  "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách) — web không nhận cột này trong dữ liệu đồng bộ công khai.",
+  "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách). Web giữ trong bảng riêng, chỉ vai Chủ; không ra trang khách, feed, AI hay nhân viên (luật web 20/10, repo web 1d7d80a). SĐT khách web đã có từ đơn / phiếu bán, vẫn che với AI.",
   "du_kien: cột / khoá chưa có trên Sheet thật, sẽ thêm sau 26/10 khi anh Kha xác nhận (thử trước trên Sheet bản sao).",
   "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json)."
  ],
