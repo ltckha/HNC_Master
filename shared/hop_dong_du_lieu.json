@@ -5,8 +5,8 @@
   "Luật 4: đọc / ghi theo TÊN cột ở hang_tieu_de (SANPHAM = hàng 2, hàng 1 là tên nhóm); thiếu cột bắt buộc → báo lỗi, không ghi cột khác.",
   "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị.",
   "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách). Web giữ trong bảng riêng, chỉ vai Chủ; không ra trang khách, feed, AI hay nhân viên (luật web 20/10, repo web 1d7d80a). SĐT khách web đã có từ đơn / phiếu bán, vẫn che với AI.",
-  "du_kien: cột / khoá chưa có trên Sheet thật, sẽ thêm sau 26/10 khi anh Kha xác nhận (thử trước trên Sheet bản sao).",
-  "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json)."
+  "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json).",
+  "du_kien: cột / khoá chưa có trên Sheet thật (20/10 đã thêm ma_dong / nguon và META che_do… trên Sheet thật, chế độ master; còn khoa_mac chưa dùng)."
  ],
  "tab": {
   "SANPHAM": {
@@ -481,16 +481,14 @@
       "bot",
       "main.py",
       "web"
-     ],
-     "du_kien": true
+     ]
     },
     "nguon": {
      "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     }
    },
    "hang_ky_thuat": 2,
@@ -550,16 +548,14 @@
       "bot",
       "main.py",
       "web"
-     ],
-     "du_kien": true
+     ]
     },
     "nguon": {
      "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     }
    }
   },
@@ -673,16 +669,14 @@
       "bot",
       "main.py",
       "web"
-     ],
-     "du_kien": true
+     ]
     },
     "nguon": {
      "y_nghia": "Đường ghi dòng: zalo | app | web | mac | tay. Dòng cũ để trống.",
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     }
    }
   },
@@ -1031,24 +1025,21 @@
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     },
     "che_do_luc": {
      "y_nghia": "Dòng key: lúc đổi chế độ gần nhất, \"yyyy-MM-dd HH:mm:ss\" giờ VN (web chấp nhận cả ISO).",
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     },
     "che_do_boi": {
      "y_nghia": "Dòng key: ai đổi",
      "ghi": [
       "bot",
       "main.py"
-     ],
-     "du_kien": true
+     ]
     },
     "khoa_mac": {
      "y_nghia": "Dòng key: khoá chống chạy main.py cùng lúc, hạn 10 phút",
@@ -1063,15 +1054,13 @@
       "web",
       "main.py",
       "bot"
-     ],
-     "du_kien": true
+     ]
     },
     "cho_chep": {
      "y_nghia": "Dòng key: số dòng web còn chờ chép sang Sheet (web ghi). Master mà > 0 → bot / main.py chưa ghi BAN / NHAP / XUAT.",
      "ghi": [
       "web"
-     ],
-     "du_kien": true
+     ]
     },
     "du_phong_tu": {
      "y_nghia": "Dòng key: giờ đổi sang Dự phòng \"yyyy-MM-dd HH:mm:ss\" (giờ VN), = che_do_luc lúc đổi; giữ nguyên khi đổi về Web. Web / main.py [7] / bot \"che do\" ghi khi đổi sang master.",
@@ -1079,8 +1068,7 @@
       "web",
       "main.py",
       "bot"
-     ],
-     "du_kien": true
+     ]
     }
    }
   },
