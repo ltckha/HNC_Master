@@ -1426,8 +1426,35 @@ const CHE_DO_SO = [
 // Đọc ảnh phiếu (doc_phieu), nháp, in tem, hoá đơn, xuất MISA, bổ sung SP, kiểm hàng vẫn chạy ở bot (chỉ sửa ô trạng thái NHAP, không thêm dòng).
 const HH_WEB_TEXT = 'Hàng hoá + giá đang sửa trên web (admin) — tạo mã / sửa thông tin mã trên web. Web hỏng: Chủ nhắn "che do" → 7 Hàng hoá → Dự phòng.';
 const KHO_WEB_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'huy', 'xac_nhan', 'huy_nhap'];
+/** Tin Zalo lệnh kho → body như app (cửa stock_key) để web ghi: nhap / tra_hang / xuat / chuyen_kho / chuyen_vi_tri. Lỗi → { error }. */
+function zaloStockBody_(text, seller) {
+  const all = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const cmds = all.length > 1 ? all.filter(isBatchCommandLine_) : all;
+  let body = null;
+  for (const l of cmds) {
+    const p = parseMessage_(l, knownCodes_());
+    const action = p.action === ACTIONS.IN ? (p.returnGoods ? 'tra_hang' : 'nhap') : p.action === ACTIONS.OUT ? 'xuat' : p.action === ACTIONS.TRANSFER ? 'chuyen_kho' : p.action === ACTIONS.MOVE_LOC ? 'chuyen_vi_tri' : '';
+    if (!action) continue;
+    if (!p.code) return { error: 'chưa rõ mã hàng trong "' + l + '"' };
+    if (body && body.action !== action) return { error: 'tin có nhiều loại lệnh kho — gửi mỗi loại 1 tin' };
+    body = body || { action, ticket_id: 'Z-' + (LAST_MSG_ID || Date.now()), seller: seller || '', lines: [] };
+    const kho = p.kho || '';
+    if (action === 'chuyen_kho') { body.from = p.khoFrom; body.to = p.khoTo; }
+    if (action === 'chuyen_vi_tri') { body.warehouse = kho; body.location = p.location; }
+    const sizes = p.sizes.length ? p.sizes : [{ size: '', qty: p.qty || 1 }];
+    sizes.forEach(sz => body.lines.push(Object.assign({ code: p.code, size: sz.size, qty: sz.qty || 1 }, action === 'chuyen_kho' || action === 'chuyen_vi_tri' ? {} : { warehouse: kho }, p.owner ? { chu_hang: p.owner } : {})));
+  }
+  return body || { error: 'không thấy lệnh kho' };
+}
+
 function stockWebGate_(payload) {
   if (cheDoKho_() !== 'web') return null;
+  payload.loai = 'kho'; // web chốt 20/10: {loai:'kho', body:<lệnh kho như app>, nguoi, chat_id, chu, dry_run, luc}
+  if (payload.text !== undefined && !payload.body) {
+    const zb = zaloStockBody_(payload.text, payload.nguoi);
+    if (zb.error) return { ok: false, kho_web: true, error: zb.error };
+    payload.body = zb;
+  }
   const b = payload.body || {};
   if (b.action === 'xac_nhan' && b.id) {
     payload.loai = 'phieu_ncc'; // kết quả đọc ảnh phiếu NCC gửi kèm (web chốt 20/10)

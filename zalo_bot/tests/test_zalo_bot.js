@@ -1090,7 +1090,12 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('kho Web: app nhập → chuyển web, không ghi NHAP', [r.ok, r.kho_web, sent[0] && sent[0].nguon, sent[0] && sent[0].body.action, DATA.NHAP.length], [true, true, 'app_kho', 'nhap', n0]);
   vm.runInContext('MEMO={};', ctx);
   const t = ctx.handleText_('nhap TH2040D 40 TBH', false, 'nvK');
-  eq('kho Web: Zalo nhập → web trả lời', [/web ghi phiếu kho rồi/.test(t), sent[sent.length - 1].nguon, DATA.NHAP.length], [true, 'zalo', n0]);
+  const zs = sent[sent.length - 1];
+  eq('kho Web: Zalo nhập → web trả lời; gửi body như app (loai kho)', [/web ghi phiếu kho rồi/.test(t), zs.nguon, zs.loai, zs.body.action, zs.body.lines[0].code, String(zs.body.lines[0].size), zs.body.lines[0].warehouse, DATA.NHAP.length], [true, 'zalo', 'kho', 'nhap', 'TH2040D', '40', '15E', n0]);
+  vm.runInContext('MEMO={};', ctx);
+  ctx.handleText_('chuyen kho TH2040D 40 tu YEN den TBH', false, 'nvK');
+  const zc = sent[sent.length - 1];
+  eq('kho Web: Zalo chuyển kho → body chuyen_kho from / to', [zc.body.action, zc.body.from, zc.body.to], ['chuyen_kho', 'Y3C', '15E']);
   webOk = false; vm.runInContext('MEMO={};', ctx);
   r = ctx.handleStock_({ action: 'xuat', ticket_id: 'K2', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] }, false);
   eq('kho Web: web lỗi → báo, không tự ghi', [r.ok, /503/.test(r.error), DATA.XUAT ? DATA.XUAT.length : 0], [false, true, DATA.XUAT ? DATA.XUAT.length : 0]);
