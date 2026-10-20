@@ -376,7 +376,23 @@ class EngineDataLoader:
             pass
         return 0
 
-    def _write_ok(self, sheet_name):
+    def che_do_kho(self):
+        """META che_do_kho: 'web' | 'master' (P2 — phiếu kho ghi D1). Mặc định master. Cùng luật bot cheDoKho_."""
+        if getattr(self, '_che_do_kho', None) is None:
+            self._che_do_kho = 'master'
+            try:
+                for r in self.spreadsheet.worksheet('META').get_all_values()[1:]:
+                    if len(r) > 1 and r[0].strip() == 'che_do_kho':
+                        self._che_do_kho = 'web' if r[1].strip().lower() == 'web' else 'master'
+            except Exception:
+                pass
+        return self._che_do_kho
+
+    def _write_ok(self, sheet_name, them_dong=False):
+        # Sổ kho ở web (P2): menu Mac không THÊM dòng NHAP / XUAT (phiếu kho do web ghi); sửa ô trạng thái (in tem, MISA) vẫn được
+        if them_dong and sheet_name in ('NHAP', 'XUAT') and self.is_google_api and self.che_do_kho() == 'web':
+            print(f"⛔ Sổ kho đang ở Web: menu Mac không thêm dòng {sheet_name}. Nhập / xuất trên web / app, hoặc đổi sổ kho về Dự phòng khi web hỏng.")
+            return False
         if sheet_name in WEB_MODE_LOCKED_TABS and self.is_google_api and self.che_do() == 'web':
             print(f"⛔ Đang chế độ Web (sổ gốc ở web): menu Mac không ghi tab {sheet_name}. Làm trên web / app, hoặc đổi META che_do = master khi web hỏng.")
             return False
@@ -619,7 +635,7 @@ class EngineDataLoader:
 
     def append_rows_to_sheet(self, sheet_name, new_rows):
         """Append các dòng mới vào cuối bảng Google Sheet (với công thức USER_ENTERED)."""
-        if not self._write_ok(sheet_name):
+        if not self._write_ok(sheet_name, them_dong=True):
             return False
         if not new_rows:
             return True
@@ -636,7 +652,7 @@ class EngineDataLoader:
 
     def insert_rows_with_exact_range(self, sheet_name, new_rows, start_row):
         """Ghi các dòng mới vào đúng tọa độ A{start_row}:{last_col}{end_row} (tránh 100% lỗi lệch cột của append_rows)."""
-        if not self._write_ok(sheet_name):
+        if not self._write_ok(sheet_name, them_dong=True):
             return False
         if not new_rows or not self.is_google_api:
             return False
@@ -3967,7 +3983,7 @@ def print_main_menu():
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
   [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
   [6] [bold #69F0AE]📸 AI TỰ ĐỘNG THÊM HÀNG HOÁ MỚI TỪ ẢNH[/bold #69F0AE]
-  [7] 🧭 Chế độ sổ gốc: xem / đổi MASTER (Mac, bot ghi Sheet) ↔ WEB (web ghi sổ)
+  [7] 🧭 Chế độ sổ gốc: sổ bán / sổ kho — DỰ PHÒNG (Mac, bot ghi Sheet) ↔ WEB (web ghi)
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -4208,28 +4224,38 @@ def set_meta(loader, pairs):
 
 
 def change_che_do(loader):
-    """Menu [7]: xem / đổi META che_do (master | web), hỏi xác nhận 2 lần — cùng luật lệnh Zalo "che do"."""
-    cur = loader.che_do()
-    print(f"🧭 Chế độ sổ gốc đang là: {'WEB (web ghi sổ)' if cur == 'web' else 'MASTER (Mac / bot ghi Sheet)'}"
-          + (" — SHEET BẢN THỬ" if SPREADSHEET_ID != SPREADSHEET_ID_THAT else ""))
-    pick = input("[1] MASTER (web hỏng, Mac / bot ghi Sheet)  [2] WEB  [Enter] giữ nguyên: ").strip()
-    want = {'1': 'master', '2': 'web'}.get(pick)
-    if not want or want == cur:
+    """Menu [7]: xem / đổi sổ bán (che_do) và sổ kho (che_do_kho) master ↔ web, gõ lại số mới đổi — cùng luật lệnh Zalo "che do"."""
+    lab = lambda v: 'WEB (web ghi)' if v == 'web' else 'DỰ PHÒNG (Mac / bot ghi Sheet)'
+    print(f"🧭 Sổ bán: {lab(loader.che_do())}\n🧭 Sổ kho: {lab(loader.che_do_kho())}" + (" — SHEET BẢN THỬ" if SPREADSHEET_ID != SPREADSHEET_ID_THAT else ""))
+    pick = input("[1] Bán → Dự phòng  [2] Bán → Web  [3] Kho → Dự phòng  [4] Kho → Web  [Enter] giữ nguyên: ").strip()
+    if pick not in ('1', '2', '3', '4'):
         print("👌 Giữ nguyên.")
         return
-    if input(f"⚠️ Gõ lại {pick} để đổi sang {want.upper()}: ").strip() != pick:
+    kho, want = pick in ('3', '4'), ('master' if pick in ('1', '3') else 'web')
+    if want == (loader.che_do_kho() if kho else loader.che_do()):
+        print("👌 Đang đúng chế độ đó rồi.")
+        return
+    if input(f"⚠️ Gõ lại {pick} để đổi {'sổ kho' if kho else 'sổ bán'} sang {want.upper()}: ").strip() != pick:
         print("👌 Không đổi.")
         return
-    pairs = {'che_do': want, 'che_do_luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'che_do_boi': f'mac {MAC_RUN_ID}'}
-    if want == 'master':
-        # Mốc như web: hàng cuối tab BAN lúc đổi Dự phòng → dòng gõ tay sau mốc được web nhập bù / đối chiếu (du_phong_hang, P0 20/10)
-        ban = loader.spreadsheet.worksheet('BAN').get_all_values()
-        ic = [str(h).strip() for h in ban[0]].index('product_code')
-        pairs['du_phong_hang'] = str(max(i + 1 for i, r in enumerate(ban) if i == 0 or (len(r) > ic and r[ic].strip())))
-        pairs['du_phong_tu'] = pairs['che_do_luc']  # giờ mốc giữ lại sau khi đổi về Web (che_do_luc bị ghi đè)
+    luc, boi = datetime.now().strftime('%Y-%m-%d %H:%M:%S'), f'mac {MAC_RUN_ID}'
+
+    def last_row(tab):
+        v = loader.spreadsheet.worksheet(tab).get_all_values()
+        ic = [str(h).strip() for h in v[0]].index('product_code')
+        return str(max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip())))
+    if not kho:
+        pairs = {'che_do': want, 'che_do_luc': luc, 'che_do_boi': boi}
+        if want == 'master':  # mốc như web: dòng gõ tay sau mốc được web nhập bù
+            pairs.update({'du_phong_hang': last_row('BAN'), 'du_phong_tu': luc})
+    else:
+        pairs = {'che_do_kho': want, 'che_do_kho_luc': luc, 'che_do_kho_boi': boi}
+        if want == 'master':
+            pairs.update({'du_phong_nhap_hang': last_row('NHAP'), 'du_phong_xuat_hang': last_row('XUAT'), 'du_phong_kho_tu': luc})
     set_meta(loader, pairs)
+    loader._che_do_kho = None
     loader._mark_sync('META')
-    print(f"✅ Đã đổi chế độ sổ gốc: {want.upper()}")
+    print(f"✅ Đã đổi {'sổ kho' if kho else 'sổ bán'}: {want.upper()}")
 
 
 MAC_LOCK_PATH = '/tmp/hnc_main_py.lock'

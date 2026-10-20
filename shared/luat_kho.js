@@ -209,12 +209,81 @@ var LuatKho = (function () {
     return goc && String(goc).indexOf('undefined') === -1 ? String(goc).trim() + '#' + thuTu : '';
   }
 
+  /** Số NK kế tiếp của 1 kho từ số lớn nhất hiện có ("NK000027" | 27 | "" → "NK000028" | "NK000001"). Mỗi kho 1 dãy riêng (2 MISA). */
+  function soNhapKe(soCuoi) {
+    var m = String(soCuoi === null || soCuoi === undefined ? '' : soCuoi).trim().toUpperCase().match(/^(?:NK)?(\d+)$/);
+    return 'NK' + ('000000' + ((m ? Number(m[1]) : 0) + 1)).slice(-6);
+  }
+
+  /** Số chứng từ phiếu khách trả: "TRA-<ddMMyy>" theo ngày (bot appendNhap_). ngayKey "yyyy-mm-dd". */
+  function soTraHang(ngayKeyStr) {
+    var p = String(ngayKeyStr || '').split('-');
+    return p.length === 3 ? 'TRA-' + p[2] + p[1] + p[0].slice(2) : '';
+  }
+
+  /**
+   * Kiểm trước khi huỷ phiếu nhập (bot receiptUndoGuard_): dòng NHAP của phiếu xoá được luôn (tồn có thể âm, không chặn);
+   * mã / dòng KHO MỚI do phiếu tạo chỉ xoá khi chưa có giao dịch khác (NHAP / BAN / XUAT không thuộc phiếu này).
+   * maMoi: [{ code, size?, kho? }] · giaoDich: [{ tab, dong, code, size, kho }] · cuaPhieu: { NHAP: [dòng…], … } → [lý do chặn]
+   */
+  function huyNhapKiem(maMoi, giaoDich, cuaPhieu) {
+    var own = {};
+    Object.keys(cuaPhieu || {}).forEach(function (t) { (cuaPhieu[t] || []).forEach(function (d) { own[t + '#' + d] = true; }); });
+    var out = [];
+    (maMoi || []).forEach(function (g) {
+      ['NHAP', 'BAN', 'XUAT'].forEach(function (tab) {
+        var hit = (giaoDich || []).filter(function (x) {
+          return x.tab === tab && String(x.code || '').trim().toUpperCase() === g.code && (g.size === undefined || chuanSize(x.size) === g.size) &&
+            (!g.kho || khoChuan(x.kho) === g.kho) && !own[tab + '#' + x.dong];
+        })[0];
+        if (hit) out.push(g.code + (g.size ? ' size ' + g.size : '') + (g.kho ? ' kho ' + g.kho : '') + ' đã có giao dịch khác (' + tab + ' dòng ' + hit.dong + ')');
+      });
+    });
+    return out;
+  }
+
+  function phanTram(v) {
+    var raw = String(v === null || v === undefined ? '' : v).trim();
+    if (!raw) return 0;
+    var f = Number(raw.replace('%', '').replace(',', '.'));
+    if (!isFinite(f)) return 0;
+    return f > 1 || raw.indexOf('%') !== -1 ? f / 100 : f;
+  }
+
+  /**
+   * 1 dòng file MISA "Nhập kho mua hàng" (mẫu tpl_misa_stock_*.xlsx, cột 1–22) từ 1 dòng NHAP đã có giá (bot misaStockExport_ / main.py task 8).
+   * d: { so_ct, ngay (dd/MM/yyyy), sku, kho_misa ('15ETBH' | '3CTBH'), dvt, sl, don_gia, ncc_ma, ncc_ten, ck, vat, so_hd, ngay_hd, gia_tam, gia_cu }
+   * → { cot: {1..22: giá trị}, loi: [lý do thiếu] } (loi khác rỗng = không xuất dòng này, ghi lý do vào misa_stock).
+   */
+  function misaNhapDong(d) {
+    var loi = [];
+    if (!d.so_ct) loi.push('Thiếu số chứng từ');
+    if (!d.dvt) loi.push('Thiếu ĐVT');
+    if (!d.ngay) loi.push('Thiếu ngày');
+    if (!(Number(d.sl) > 0)) loi.push('Thiếu số lượng');
+    if (!(Number(d.don_gia) > 0)) loi.push('Thiếu đơn giá');
+    if (!d.ncc_ma && !d.ncc_ten) loi.push('Thiếu NCC');
+    if (!d.kho_misa) loi.push('Thiếu kho');
+    if (loi.length) return { cot: {}, loi: loi };
+    var tags = [d.so_hd ? '' : 'giá tạm', d.gia_cu ? 'giá cũ theo mã' : ''].filter(Boolean);
+    var amount = Number(d.sl) * Number(d.don_gia);
+    var ckRate = phanTram(d.ck), ck = Math.round(amount * ckRate * 100) / 100;
+    var vatRate = phanTram(d.vat), tax = Math.round((amount - ck) * vatRate * 100) / 100;
+    var o = {};
+    o[1] = 'Nhập kho mua hàng'; o[2] = d.ngay; o[3] = d.so_ct; o[4] = d.ncc_ma || ''; o[5] = d.ncc_ten || '';
+    o[6] = (d.ncc_ten ? 'Nhập kho mua hàng từ ' + d.ncc_ten : 'Nhập kho mua hàng') + (d.so_hd ? ' · HĐ ' + d.so_hd + (d.ngay_hd ? ' ngày ' + d.ngay_hd : '') : '') +
+      (tags.length ? ' (' + tags.join(', ') + ')' : '');
+    o[7] = 'Chưa thanh toán'; o[8] = d.sku; o[12] = d.kho_misa; o[14] = d.dvt; o[15] = Number(d.sl); o[16] = Number(d.don_gia); o[17] = amount;
+    o[18] = ckRate; o[19] = ck; o[20] = vatRate; o[21] = tax; o[22] = amount - ck + tax;
+    return { cot: o, loi: [] };
+  }
+
   return {
     PHIEN_BAN: PHIEN_BAN, KHO_ALIASES: KHO_ALIASES, COT_KY_GUI: COT_KY_GUI,
     khoChuan: khoChuan, hoKia: hoKia, chuanSize: chuanSize, soTien: soTien, ngayKey: ngayKey, fsku: fsku,
     tachMaSize: tachMaSize, banTachChuHang: banTachChuHang, huyBanKhoiPhuc: huyBanKhoiPhuc, chuyenKhoKyGui: chuyenKhoKyGui,
     traHangChuHang: traHangChuHang, canhBaoKyGui: canhBaoKyGui, soNhapKho: soNhapKho, giaMisa: giaMisa,
-    donGiaPhieuMoi: donGiaPhieuMoi, tonKho: tonKho, banTrung: banTrung, maDong: maDong
+    donGiaPhieuMoi: donGiaPhieuMoi, tonKho: tonKho, banTrung: banTrung, maDong: maDong, soNhapKe: soNhapKe, soTraHang: soTraHang, huyNhapKiem: huyNhapKiem, misaNhapDong: misaNhapDong
   };
 })();
 

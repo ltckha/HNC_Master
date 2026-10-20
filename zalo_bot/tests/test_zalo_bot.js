@@ -1107,5 +1107,16 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('"che do" 3 hai lần → che_do_kho = master + du_phong_nhap_hang / du_phong_xuat_hang / du_phong_kho_tu', ['master', 'du_phong_nhap_hang', 'du_phong_xuat_hang', 'du_phong_kho_tu'].every(x => mk.indexOf(x) !== -1), true);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// tao_ma: tạo SANPHAM + dòng KHO 2 kho × dãy size, không ghi NHAP
+{ vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.NHAP.length, s0 = DATA.SANPHAM.length;
+  const tm = b => ctx.handleStock_(Object.assign({ action: 'tao_ma', seller: 'nv@hn.vn' }, b), false);
+  eq('tao_ma: mã đã có → da_co, không ghi', [tm({ ma_hnc: 'TH2040D' }).da_co, DATA.SANPHAM.length], [true, s0]);
+  eq('tao_ma: thiếu giá → lỗi', /giá bán/.test(tm({ ma_hnc: 'ZZ900D', mau: 'Đen', day_size: ['39'] }).error), true);
+  const r = tm({ ma_hnc: 'ZZ900D', mau: 'Đen', day_size: ['39', '40'], gia_ban: 650000, ten_tam: 'Giày thử' });
+  const k15 = DATA.KHO15E.filter(x => x[1] === 'ZZ900D').length, ky = DATA.KHOY3C.filter(x => x[1] === 'ZZ900D').length;
+  eq('tao_ma: 1 dòng SANPHAM + 2 kho × 2 size, không NHAP', [r.ok, DATA.SANPHAM.length - s0, k15, ky, DATA.NHAP.length - n0], [true, 1, 2, 2, 0]);
+  vm.runInContext('MEMO={};', ctx);
+  eq('tao_ma lần 2 → da_co', tm({ ma_hnc: 'ZZ900D', mau: 'Đen', day_size: ['39'], gia_ban: 650000 }).da_co, true); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

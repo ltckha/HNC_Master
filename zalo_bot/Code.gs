@@ -1768,8 +1768,9 @@ function handleStock_(body, dryRun) {
   if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
   if (action === 'kq_in_tem') return labelResult_(body);
   if (action === 'in_bu') return labelExtraPrint_(body, dryRun);
+  if (action === 'tao_ma') return codeCreate_(body, seller, dryRun);
   if (action === 'do_trigger') return { ok: true, action: 'do_trigger', han_phut_ngay: 90, ngay: trigReport_() };
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu', 'do_trigger']).join(', ') };
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu', 'do_trigger', 'tao_ma']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -2306,6 +2307,46 @@ function receiptNewCodesPlan_(raw, lines, d, canhBao) {
     plan.codes.add(code);
   });
   return plan;
+}
+
+/**
+ * tao_ma (P2, 20/10 — số NK / phiếu kho do web ghi D1, mã MỚI vẫn tạo ở bot): tạo dòng SANPHAM tối thiểu + dòng KHO (có công thức) ở 2 kho × dãy size,
+ * KHÔNG ghi NHAP. Cùng luật ma_moi của xac_nhan. Body {ma_hnc, ma_goc?, mau, day_size:["38",…], ten_tam?, gia_ban, gia_nhap?, nganh?, ncc?}
+ * → {ok, ma_hnc, da_co?, tao: {sanpham, kho:[…]}}; mã đã có → {ok:true, da_co:true}, không ghi gì.
+ */
+function codeCreate_(body, nguoi, dryRun) {
+  MEMO = {};
+  const code = String(body.ma_hnc || '').trim().toUpperCase();
+  const fail = msg => ({ ok: false, action: 'tao_ma', ma_hnc: code, error: msg });
+  if (!/^[A-Z0-9]{3,20}$/.test(code)) return fail('mã mới không hợp lệ (3-20 chữ / số)');
+  if (knownProductCode_(code)) return { ok: true, action: 'tao_ma', ma_hnc: code, da_co: true };
+  const base = String(body.ma_goc || code.slice(0, -1)).trim().toUpperCase();
+  if (!base || code.indexOf(base) !== 0 || code.length <= base.length) return fail('mã mới phải là mã gốc + chữ màu (vd ' + (base || '32837') + 'D)');
+  const color = String(body.mau || '').trim().slice(0, 30);
+  if (!color) return fail('thiếu màu (mau)');
+  const sizes = uniq_((Array.isArray(body.day_size) ? body.day_size : []).map(x => normSize_(x)).filter(Boolean));
+  if (!sizes.length || sizes.some(x => !/^\d{2}$/.test(x))) return fail('day_size phải là danh sách size 2 chữ số');
+  const price = Math.round(moneyValue_(body.gia_ban));
+  if (!(price >= 1000)) return fail('thiếu giá bán (gia_ban, đồng, ≥ 1.000)');
+  const nganh = String(body.nganh || '').trim();
+  if (nganh && productCategories_().indexOf(nganh) === -1) return fail('ngành "' + nganh + '" không có trong SUB');
+  const m = { code, base, color, sizes: sizes.sort((a, b) => sizeOrder_(a) - sizeOrder_(b)), price, cost: Math.round(moneyValue_(body.gia_nhap)) || 0,
+    name: String(body.ten_tam || code).trim().slice(0, 120), nganh, ncc: String(body.ncc || '').trim() };
+  const kho = [];
+  ['15E', 'Y3C'].forEach(k => m.sizes.forEach(sz => { if (!findKhoRows_(k, code, [sz]).length) kho.push({ kho: k, code, size: sz, color }); }));
+  const tao = { sanpham: code, kho: kho.map(k => k.kho + ' ' + k.code + ' ' + k.size) };
+  if (dryRun) return { ok: true, action: 'tao_ma', ma_hnc: code, dry_run: true, tao };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    appendSanphamMin_(m);
+    MEMO = {};
+    kho.forEach(k => appendKhoRow_(k));
+    console.log('tao_ma ' + code + ' bởi ' + nguoi + ': ' + kho.length + ' dòng KHO');
+    return { ok: true, action: 'tao_ma', ma_hnc: code, tao, _sync: ['SANPHAM', 'KHO15E', 'KHOY3C'] };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Dòng KHO cần thêm: mã mới → cả 2 kho × dãy size; mã có rồi → đúng kho × size đang nhập mà KHO chưa có dòng. */

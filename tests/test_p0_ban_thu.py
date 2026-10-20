@@ -69,6 +69,19 @@ eq('menu 7: gõ lại sai → không đổi', main.EngineDataLoader().che_do(), 
 ans = iter(['1', '1'])
 main.change_che_do(main.EngineDataLoader())
 eq('menu 7: đổi lại master', main.EngineDataLoader().che_do(), 'master')
+# Sổ kho (P2): [4] Kho → Web → chặn THÊM dòng NHAP, sửa ô trạng thái vẫn được; [3] về Dự phòng ghi mốc NHAP / XUAT
+_kho0 = {r[0]: r[1] for r in L.spreadsheet.worksheet('META').get_all_values()[1:] if r and r[0].startswith(('che_do_kho', 'du_phong_'))}
+ans = iter(['4', '4'])
+main.change_che_do(main.EngineDataLoader())
+L4 = main.EngineDataLoader()
+eq('kho Web: chặn thêm dòng NHAP', L4.insert_rows_with_exact_range('NHAP', [['x']], 99999), False)
+eq('kho Web: sửa ô trạng thái NHAP vẫn được', L4._write_ok('NHAP'), True)
+ans = iter(['3', '3'])
+main.change_che_do(main.EngineDataLoader())
+_m = {r[0]: r[1] for r in L.spreadsheet.worksheet('META').get_all_values()[1:] if r}
+eq('kho → Dự phòng: che_do_kho master + mốc NHAP / XUAT', [_m.get('che_do_kho'), bool(_m.get('du_phong_nhap_hang')), bool(_m.get('du_phong_xuat_hang')), bool(_m.get('du_phong_kho_tu'))], ['master', True, True, True])
+if _kho0:
+    main.set_meta(L, _kho0)
 a = main.acquire_mac_lock()
 b = main.acquire_mac_lock()
 eq('khoá: cửa sổ 2 bị chặn', [a is not None, b is None], [True, True])

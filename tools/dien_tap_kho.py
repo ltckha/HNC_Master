@@ -124,7 +124,14 @@ def run():
     ghi = '--ghi' in sys.argv
     assert main.SPREADSHEET_ID == TEST_ID != main.SPREADSHEET_ID_THAT, 'chỉ chạy trên Sheet bản thử'
     L = main.EngineDataLoader()
-    print(f"🧪 Sheet bản thử · che_do = {L.che_do()} · cho_chep = {L.cho_chep()} · {'GHI' if ghi else 'chạy thử'}")
+    print(f"🧪 Sheet bản thử · sổ bán {L.che_do()} · sổ kho {L.che_do_kho()} · cho_chep = {L.cho_chep()} · {'GHI' if ghi else 'chạy thử'}")
+    # K10 (dự phòng giữa chừng): chỉ ghi khi sổ kho đang Dự phòng và web đã chép xong (như bot / main.py)
+    if ghi and L.che_do_kho() == 'web':
+        print("⛔ Sổ kho đang ở Web — đổi về Dự phòng trước (menu [7] → 3 với HNC_SHEET_ID = bản thử, hoặc nút trên web).")
+        return 1
+    if ghi and L.cho_chep() > 0:
+        print(f"⏳ Còn {L.cho_chep()} dòng web đang chép sang Sheet — chờ về 0 rồi chạy lại.")
+        return 1
     g = Ghi(L, ghi)
     try:
         if args[:1] == ['nhap'] and len(args) == 4:

@@ -1301,6 +1301,214 @@
     1
    ],
    "ra": ""
+  },
+  {
+   "ten": "số NK kế tiếp: NK000027 → NK000028",
+   "ham": "soNhapKe",
+   "vao": [
+    "NK000027"
+   ],
+   "ra": "NK000028"
+  },
+  {
+   "ten": "số NK kế tiếp: kho chưa có số → NK000001",
+   "ham": "soNhapKe",
+   "vao": [
+    ""
+   ],
+   "ra": "NK000001"
+  },
+  {
+   "ten": "số phiếu khách trả theo ngày",
+   "ham": "soTraHang",
+   "vao": [
+    "2026-10-20"
+   ],
+   "ra": "TRA-201026"
+  },
+  {
+   "ten": "huỷ phiếu nhập: mã mới đã bán → chặn xoá mã",
+   "ham": "huyNhapKiem",
+   "vao": [
+    [
+     {
+      "code": "MS1D",
+      "size": "39",
+      "kho": "15E"
+     }
+    ],
+    [
+     {
+      "tab": "NHAP",
+      "dong": 120,
+      "code": "MS1D",
+      "size": "39",
+      "kho": "15E"
+     },
+     {
+      "tab": "BAN",
+      "dong": 900,
+      "code": "MS1D",
+      "size": "39",
+      "kho": "15E"
+     }
+    ],
+    {
+     "NHAP": [
+      120
+     ]
+    }
+   ],
+   "ra": [
+    "MS1D size 39 kho 15E đã có giao dịch khác (BAN dòng 900)"
+   ]
+  },
+  {
+   "ten": "huỷ phiếu nhập: mã mới chỉ có dòng của phiếu → xoá được",
+   "ham": "huyNhapKiem",
+   "vao": [
+    [
+     {
+      "code": "MS1D",
+      "size": "39",
+      "kho": "15E"
+     }
+    ],
+    [
+     {
+      "tab": "NHAP",
+      "dong": 120,
+      "code": "MS1D",
+      "size": "39",
+      "kho": "15E"
+     }
+    ],
+    {
+     "NHAP": [
+      120
+     ]
+    }
+   ],
+   "ra": []
+  },
+  {
+   "ten": "MISA nhập kho: có HĐ, CK 10%, VAT 8%",
+   "ham": "misaNhapDong",
+   "vao": [
+    {
+     "so_ct": "NK000028",
+     "ngay": "20/10/2026",
+     "sku": "2DKN42",
+     "kho_misa": "15ETBH",
+     "dvt": "Đôi",
+     "sl": 2,
+     "don_gia": 300000,
+     "ncc_ma": "NCCTP",
+     "ncc_ten": "CÔNG TY TP",
+     "ck": "10%",
+     "vat": "8%",
+     "so_hd": "0001234",
+     "ngay_hd": "22/10/2026",
+     "gia_cu": false
+    }
+   ],
+   "ra": {
+    "cot": {
+     "1": "Nhập kho mua hàng",
+     "2": "20/10/2026",
+     "3": "NK000028",
+     "4": "NCCTP",
+     "5": "CÔNG TY TP",
+     "6": "Nhập kho mua hàng từ CÔNG TY TP · HĐ 0001234 ngày 22/10/2026",
+     "7": "Chưa thanh toán",
+     "8": "2DKN42",
+     "12": "15ETBH",
+     "14": "Đôi",
+     "15": 2,
+     "16": 300000,
+     "17": 600000,
+     "18": 0.1,
+     "19": 60000,
+     "20": 0.08,
+     "21": 43200,
+     "22": 583200
+    },
+    "loi": []
+   }
+  },
+  {
+   "ten": "MISA nhập kho: chưa HĐ + giá theo mã → ghi giá tạm, giá cũ trong diễn giải",
+   "ham": "misaNhapDong",
+   "vao": [
+    {
+     "so_ct": "NK000028",
+     "ngay": "20/10/2026",
+     "sku": "2DKN42",
+     "kho_misa": "15ETBH",
+     "dvt": "Đôi",
+     "sl": 2,
+     "don_gia": 300000,
+     "ncc_ma": "NCCTP",
+     "ncc_ten": "CÔNG TY TP",
+     "ck": "",
+     "vat": "0",
+     "so_hd": "",
+     "ngay_hd": "",
+     "gia_cu": true
+    }
+   ],
+   "ra": {
+    "cot": {
+     "1": "Nhập kho mua hàng",
+     "2": "20/10/2026",
+     "3": "NK000028",
+     "4": "NCCTP",
+     "5": "CÔNG TY TP",
+     "6": "Nhập kho mua hàng từ CÔNG TY TP (giá tạm, giá cũ theo mã)",
+     "7": "Chưa thanh toán",
+     "8": "2DKN42",
+     "12": "15ETBH",
+     "14": "Đôi",
+     "15": 2,
+     "16": 300000,
+     "17": 600000,
+     "18": 0,
+     "19": 0,
+     "20": 0,
+     "21": 0,
+     "22": 600000
+    },
+    "loi": []
+   }
+  },
+  {
+   "ten": "MISA nhập kho: thiếu ĐVT + đơn giá → không xuất, ghi lý do",
+   "ham": "misaNhapDong",
+   "vao": [
+    {
+     "so_ct": "NK000028",
+     "ngay": "20/10/2026",
+     "sku": "2DKN42",
+     "kho_misa": "15ETBH",
+     "dvt": "",
+     "sl": 2,
+     "don_gia": 0,
+     "ncc_ma": "NCCTP",
+     "ncc_ten": "CÔNG TY TP",
+     "ck": "10%",
+     "vat": "8%",
+     "so_hd": "0001234",
+     "ngay_hd": "22/10/2026",
+     "gia_cu": false
+    }
+   ],
+   "ra": {
+    "cot": {},
+    "loi": [
+     "Thiếu ĐVT",
+     "Thiếu đơn giá"
+    ]
+   }
   }
  ]
 }

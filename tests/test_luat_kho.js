@@ -18,7 +18,7 @@ ctx.LockService = { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, 
 ctx.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheetByName: () => null }) };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'zalo_bot', 'Code.gs'), 'utf8') + `
-;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, rowSrcStart_, rowSrcFields_, normSize_, moneyValue_, dateKey_, KHO_ALIASES, KYGUI_COL };
+;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, rowSrcStart_, rowSrcFields_, receiptUndoGuard_, parsePercent_, normSize_, moneyValue_, dateKey_, KHO_ALIASES, KYGUI_COL };
 this.__set = (name, fn) => { eval(name + ' = fn'); };
 this.__memo = () => { MEMO = {}; CTX = { pending: {} }; };`, ctx);
 const O = ctx.__old;
@@ -130,6 +130,42 @@ const OLD = {
     let f = {};
     for (let i = 0; i < n; i++) f = O.rowSrcFields_('NHAP');
     return f.ma_dong || '';
+  },
+  soNhapKe(so) {
+    // Cũ: receiptNkPlan_ = số lớn nhất của kho + 1
+    const m = String(so).match(/(\d+)$/);
+    return OLD.soNhapKho(m ? [{ so: 'NK' + m[1], kho: '15E', ngay_key: '2000-01-01', ncc: '' }] : [], ['15E'], '', '2026-10-20')['15E'];
+  },
+  soTraHang(k) {
+    // Cũ (appendNhap_): 'TRA-' + formatDate(hôm nay, 'ddMMyy')
+    const [y, m, d] = k.split('-'); return 'TRA-' + d + m + y.slice(2);
+  },
+  huyNhapKiem(maMoi, gd, cua) {
+    const tabCache = {};
+    ['NHAP', 'BAN', 'XUAT'].forEach(t => {
+      const rows = [['product_code', 'item_size', 'KHO']];
+      gd.filter(x => x.tab === t).forEach(x => { rows[x.dong - 1] = [x.code, x.size, x.kho]; });
+      for (let i = 0; i < rows.length; i++) if (!rows[i]) rows[i] = ['', '', ''];
+      tabCache[t] = rows;
+    });
+    const own = {}; Object.keys(cua).forEach(t => { own[t] = {}; cua[t].forEach(d => { own[t][d] = true; }); });
+    return [].concat(...maMoi.map(g => O.receiptUndoGuard_(g, own, tabCache)));
+  },
+  misaNhapDong(d) {
+    // Cũ: misaStockExport_ (đoạn tạo dòng o[1..22], dùng parsePercent_ của bot)
+    const reasons = [];
+    if (!d.so_ct) reasons.push('Thiếu số chứng từ'); if (!d.dvt) reasons.push('Thiếu ĐVT'); if (!d.ngay) reasons.push('Thiếu ngày');
+    if (!(d.sl > 0)) reasons.push('Thiếu số lượng'); if (!(d.don_gia > 0)) reasons.push('Thiếu đơn giá');
+    if (!d.ncc_ma && !d.ncc_ten) reasons.push('Thiếu NCC'); if (!d.kho_misa) reasons.push('Thiếu kho');
+    if (reasons.length) return { cot: {}, loi: reasons };
+    const tags = [d.so_hd ? '' : 'giá tạm', d.gia_cu ? 'giá cũ theo mã' : ''].filter(Boolean);
+    const amount = d.sl * d.don_gia, ckRate = O.parsePercent_(d.ck), ck = Math.round(amount * ckRate * 100) / 100;
+    const vatRate = O.parsePercent_(d.vat), tax = Math.round((amount - ck) * vatRate * 100) / 100;
+    const o = {};
+    o[1] = 'Nhập kho mua hàng'; o[2] = d.ngay; o[3] = d.so_ct; o[4] = d.ncc_ma; o[5] = d.ncc_ten;
+    o[6] = (d.ncc_ten ? 'Nhập kho mua hàng từ ' + d.ncc_ten : 'Nhập kho mua hàng') + (d.so_hd ? ' · HĐ ' + d.so_hd + (d.ngay_hd ? ' ngày ' + d.ngay_hd : '') : '') + (tags.length ? ' (' + tags.join(', ') + ')' : '');
+    o[7] = 'Chưa thanh toán'; o[8] = d.sku; o[12] = d.kho_misa; o[14] = d.dvt; o[15] = d.sl; o[16] = d.don_gia; o[17] = amount; o[18] = ckRate; o[19] = ck; o[20] = vatRate; o[21] = tax; o[22] = amount - ck + tax;
+    return { cot: o, loi: [] };
   },
   khoChuan: v => O.KHO_ALIASES[String(v).trim().toUpperCase()] || '',
   ngayKey: v => O.dateKey_(v),
