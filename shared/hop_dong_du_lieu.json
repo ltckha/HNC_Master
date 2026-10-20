@@ -379,7 +379,7 @@
       "main.py",
       "tay"
      ],
-     "dinh_dang": "Phiếu nhập: \"NK\" + 6 số, mỗi kho 1 dãy (LuatKho.soNhapKe / soNhapKho). Khách trả: \"TRA-<ddMMyy>\" (LuatKho.soTraHang). Nhập dự phòng Zalo / phần nhập của chuyển kho: trống. Kiểm kho (web, thừa): \"KK-<ddMMyy>\"; thiếu thì ghi dòng XUAT."
+     "dinh_dang": "Phiếu nhập: \"NK\" + 6 số, mỗi kho 1 dãy (LuatKho.soNhapKe / soNhapKho). Khách trả: \"TRA-<ddMMyy>\" (LuatKho.soTraHang). Nhập dự phòng Zalo / phần nhập của chuyển kho: trống. Kiểm kho (web, thừa): \"KK-<ddMMyy>\"; thiếu thì ghi dòng XUAT. Số NK không lùi: số của phiếu đã huỷ không dùng lại (META nk_cuoi_<kho>)."
     },
     "product_code": {
      "ghi": [
@@ -1234,6 +1234,24 @@
       "web",
       "main.py",
       "bot"
+     ],
+     "du_kien": true
+    },
+    "nk_cuoi_15E": {
+     "y_nghia": "Dòng key: số NK lớn nhất đã CẤP cho kho 15E (kể cả phiếu đã huỷ). Ai cấp số (web / bot / Mac) thì số mới = max(nk_cuoi, số lớn nhất trong NHAP) + 1 rồi ghi lại — không bao giờ lùi, số huỷ bỏ luôn (20/10). Luật: LuatKho.soNhapKho(…, nkCuoi).",
+     "ghi": [
+      "web",
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "nk_cuoi_Y3C": {
+     "y_nghia": "Dòng key: số NK lớn nhất đã CẤP cho kho Y3C (kể cả phiếu đã huỷ). Ai cấp số (web / bot / Mac) thì số mới = max(nk_cuoi, số lớn nhất trong NHAP) + 1 rồi ghi lại — không bao giờ lùi, số huỷ bỏ luôn (20/10). Luật: LuatKho.soNhapKho(…, nkCuoi).",
+     "ghi": [
+      "web",
+      "bot",
+      "main.py"
      ],
      "du_kien": true
     }

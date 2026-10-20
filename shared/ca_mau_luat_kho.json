@@ -1509,6 +1509,58 @@
      "Thiếu đơn giá"
     ]
    }
+  },
+  {
+   "ten": "số NK không lùi: phiếu NK000030 đã huỷ (bộ đếm nk_cuoi 30, Sheet còn 29) → NK000031",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000029",
+      "kho": "15E",
+      "ngay_key": "2026-10-20",
+      "ncc": ""
+     }
+    ],
+    [
+     "15E"
+    ],
+    "Chú Dũng",
+    "2026-10-20",
+    null,
+    {
+     "15E": "NK000030"
+    }
+   ],
+   "ra": {
+    "15E": "NK000031"
+   }
+  },
+  {
+   "ten": "số NK: bộ đếm nhỏ hơn Sheet (Sheet có số mới hơn) → theo Sheet",
+   "ham": "soNhapKho",
+   "vao": [
+    [
+     {
+      "so": "NK000045",
+      "kho": "Y3C",
+      "ngay_key": "2026-10-19",
+      "ncc": ""
+     }
+    ],
+    [
+     "Y3C"
+    ],
+    "X",
+    "2026-10-20",
+    null,
+    {
+     "Y3C": 40
+    }
+   ],
+   "ra": {
+    "Y3C": "NK000046"
+   }
   }
  ]
 }

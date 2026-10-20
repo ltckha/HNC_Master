@@ -1223,5 +1223,15 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   vm.runInContext('MEMO={};', ctx);
   const u = pn({ action: 'huy_nhap', ticket_id: 'PN-TK9', id: pid, web_ghi: true });
   eq('huy_nhap nhận ticket "PN-<ticket>" của web', [u.ok, DATA.SANPHAM.some(r => r[1] === 'QT800D')], [true, false]); }
+// Số NK không lùi: ghi phiếu → META nk_cuoi_<kho>; huỷ phiếu rồi ghi phiếu mới → số kế tiếp, không dùng lại
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at']]; vm.runInContext('MEMO={};', ctx);
+  vm.runInContext('this.receiptNkPlan_=receiptNkPlan_;', ctx);
+  const w0 = WRITES.length;
+  vm.runInContext("nkCounterBump_({ '15E': 'NK000777' });", ctx);
+  const mw = WRITES.slice(w0).filter(w => w.sheet === 'META').map(w => w.v);
+  eq('ghi số NK → META nk_cuoi_15E', [mw.indexOf('nk_cuoi_15E') !== -1, mw.indexOf('NK000777') !== -1], [true, true]);
+  DATA.META.push(['nk_cuoi_15E', 'NK000777', '']); vm.runInContext('MEMO={};', ctx);
+  eq('số mới sau khi huỷ (Sheet không còn 777) → NK000778, không dùng lại', ctx.receiptNkPlan_(['15E'], '')['15E'], 'NK000778');
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

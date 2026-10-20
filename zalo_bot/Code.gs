@@ -1067,6 +1067,7 @@ function doMovement_(p, action, kho, dryRun) {
   }
   const nhapDoc = CTX.nhapDoc || '';
   CTX.nhapDoc = '';
+  if (nhapDoc && !dryRun && action === ACTIONS.IN) { const b = {}; b[kho] = nhapDoc; nkCounterBump_(b); }
   if (nhapDoc && !dryRun) delete MEMO.NHAP; // lệnh "misa" kế tiếp tính số NK theo dòng vừa ghi
   const kyText = kygui.map(x => '  ↳ ' + (x.size ? 'size ' + x.size + ': ' : '') + x.qty + ' là hàng của hộ ' + x.chu_hang +
     (x.loai === 'tra_ve_ky_gui' ? ' (trả về sổ ký gửi)' : ' (ký gửi, tiền / hoá đơn thuộc ' + x.chu_hang + ')'));
@@ -2394,6 +2395,7 @@ function receiptConfirm_(body, nguoi, dryRun) {
       CTX.receiptId = '';
       CTX.newCodes = null;
     }
+    nkCounterBump_(nk);
     d.trang_thai = 'da_ghi';
     d.xac_nhan = { luc: new Date().toISOString(), nguoi, ticket_id: ticket, dong: input, ma_moi: plan.list, canh_bao: canhBao, so_ct: nk,
       rows: ops.map(o => o.sheet + '!' + o.row), ops }; // ops: để Chủ huỷ được sau 10 phút (huy_nhap chu:true)
@@ -2616,9 +2618,33 @@ function receiptNkPlan_(khos, ncc) {
     const rowNcc = pnr ? pnr.ncc : sup[String(nh[r][col.product_code] || '').trim().toUpperCase()];
     if (norm_(rowNcc || '') === norm_(ncc)) same[kho] = 'NK' + m[1];
   }
+  // Không lùi (20/10): số đã cấp rồi huỷ thì bỏ — so với bộ đếm chung META nk_cuoi_<kho> (web cũng ghi). Cùng luật LuatKho.soNhapKho.
   const out = {};
-  khos.forEach(k => { out[k] = same[k] || 'NK' + String((max[k] || 0) + 1).padStart(6, '0'); });
+  khos.forEach(k => { out[k] = same[k] || 'NK' + String(Math.max(max[k] || 0, metaNum_('nk_cuoi_' + k)) + 1).padStart(6, '0'); });
   return out;
+}
+
+/** Số trong 1 khoá META (vd nk_cuoi_15E = "NK000030" | 30); không có → 0. */
+function metaNum_(key) {
+  try {
+    const meta = sheetValues_('META');
+    const c = headerMap_(meta[0] || []);
+    if (c.key === undefined || c.value === undefined) return 0;
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === key);
+    return r ? Number(String(r[c.value]).replace(/[^\d]/g, '')) || 0 : 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+/** Sau khi ghi dòng NHAP có số NK: nâng bộ đếm META nk_cuoi_<kho> nếu số mới lớn hơn (không bao giờ hạ). */
+function nkCounterBump_(nkByKho) {
+  const pairs = {};
+  Object.keys(nkByKho || {}).forEach(k => {
+    const n = Number(String(nkByKho[k] || '').replace(/[^\d]/g, '')) || 0;
+    if (n > metaNum_('nk_cuoi_' + k)) pairs['nk_cuoi_' + k] = 'NK' + String(n).padStart(6, '0');
+  });
+  if (Object.keys(pairs).length) { try { metaSet_(pairs); } catch (err) { console.error('Không ghi được nk_cuoi: ' + (err && err.message ? err.message : err)); } }
 }
 
 /** product_code → supplier (SANPHAM). */

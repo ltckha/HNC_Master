@@ -74,11 +74,12 @@ const OLD = {
     stub('findKhoRows_', () => [{ current_quantity: ton }]);
     return !!O.kyguiCheck_('X1', '40', '15E', traVe);
   },
-  soNhapKho(dong, khos, ncc, homNay) {
+  soNhapKho(dong, khos, ncc, homNay, _chuan, nkCuoi) {
     ctx.__memo();
     ctx.__today = homNay;
     const sup = {};
-    stub('sheetValues_', () => [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'KHO']].concat(dong.map((r, i) => {
+    const meta = [['key', 'value', 'updated_at']].concat(Object.keys(nkCuoi || {}).map(k => ['nk_cuoi_' + k, String(nkCuoi[k]), '']));
+    stub('sheetValues_', name => name === 'META' ? meta : [['Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'KHO']].concat(dong.map((r, i) => {
       sup['M' + i] = r.ncc;
       const [y, m, d] = r.ngay_key.split('-');
       return [d + '/' + m + '/' + y, r.so, 'M' + i, r.kho];

@@ -133,8 +133,9 @@ var LuatKho = (function () {
    * Số chứng từ nhập kho cho lần xác nhận phiếu, theo từng kho: NK + 6 số.
    * Cùng kho + cùng NCC + cùng ngày (hôm nay) đã có số → dùng chung; khác → số lớn nhất của kho đó + 1.
    * dongNhap: [{ so, kho, ngay_key, ncc }] (ncc của dòng do phía gọi tra: phiếu NCC, không thì SANPHAM.supplier).
+   * nkCuoi: { '15E': 30, 'Y3C': 41 } = META nk_cuoi_<kho> (số lớn nhất đã cấp, kể cả đã huỷ) — số mới không bao giờ lùi.
    */
-  function soNhapKho(dongNhap, khos, ncc, homNayKey, chuanTen) {
+  function soNhapKho(dongNhap, khos, ncc, homNayKey, chuanTen, nkCuoi) {
     var cmp = chuanTen || function (s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); };
     var max = {}, same = {};
     (dongNhap || []).forEach(function (r) {
@@ -145,8 +146,12 @@ var LuatKho = (function () {
       if (!ncc || same[kho] || r.ngay_key !== homNayKey) return;
       if (cmp(r.ncc || '') === cmp(ncc)) same[kho] = 'NK' + m[1];
     });
+    // Không lùi (anh Kha qua Bán hàng 20/10): số đã cấp rồi huỷ thì bỏ, không dùng lại → so với bộ đếm chung META nk_cuoi_<kho>
     var out = {};
-    khos.forEach(function (k) { out[k] = same[k] || 'NK' + ('000000' + ((max[k] || 0) + 1)).slice(-6); });
+    khos.forEach(function (k) {
+      var cuoi = Number(String((nkCuoi || {})[k] || '').replace(/[^\d]/g, '')) || 0;
+      out[k] = same[k] || 'NK' + ('000000' + (Math.max(max[k] || 0, cuoi) + 1)).slice(-6);
+    });
     return out;
   }
 

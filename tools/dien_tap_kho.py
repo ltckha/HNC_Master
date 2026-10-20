@@ -29,7 +29,7 @@ def money(v):
 class Ghi:
     """Gom các dòng / ô cần ghi; chạy thử thì chỉ in."""
     def __init__(self, loader, ghi):
-        self.L, self.ghi, self.n = loader, ghi, 0
+        self.L, self.ghi, self.n, self.sau = loader, ghi, 0, []
         self.today = datetime.now().strftime('%d/%m/%Y')
 
     def ma_dong(self):
@@ -111,7 +111,10 @@ def nhap(g, code, size, kho, so='', marks=None):
     h = [c.strip() for c in nh[0]]
     if not so:
         dong = [{'so': r[h.index('Số chứng từ (*)')], 'kho': r[h.index('KHO')], 'ngay_key': '', 'ncc': ''} for r in nh[2:]]
-        so = goi('soNhapKho', dong, [kho], '', datetime.now().strftime('%Y-%m-%d'))[kho]
+        cuoi = {r[0]: r[1] for r in g.L.spreadsheet.worksheet('META').get_all_values()[1:] if r}.get('nk_cuoi_' + kho, '')
+        so = goi('soNhapKho', dong, [kho], '', datetime.now().strftime('%Y-%m-%d'), None, {kho: cuoi})[kho]  # không lùi (bộ đếm META chung với web / bot)
+        if g.ghi:
+            g.sau.append(lambda: main.set_meta(g.L, {'nk_cuoi_' + kho: so}))
     vals = {'Ngày chứng từ (*)': g.today, 'Số chứng từ (*)': so, 'product_code': code, 'product_color': info['color'], 'KHO': kho,
             'item_size': int(size) if size.isdigit() else size, 'Số lượng (*)': 1, 'ma_dong': g.ma_dong(), 'nguon': 'mac'}
     gia = goi('donGiaPhieuMoi', '', info['buy'])
@@ -163,6 +166,8 @@ def run():
     except RuntimeError as e:
         print(f"⛔ {e}")
         return 1
+    for f in g.sau:
+        f()
     print(f"✅ Đã ghi lúc {datetime.now():%H:%M:%S}" if ghi else "Chạy thử — chưa ghi. Thêm --ghi để ghi vào bản thử.")
     return 0
 
