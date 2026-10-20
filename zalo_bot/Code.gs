@@ -152,6 +152,10 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
       const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const cmdLines = lines.filter(isBatchCommandLine_);
+      if (webModeOn_() && (cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1)) {
+        const w = webForward_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
+        return { reply: (w.ok ? (w.text || '✅ Web đã ghi.') : '⚠️ ' + (w.error || 'web chưa nhận')) + '\nNhắn số: 9 Menu', syncTabs: [] };
+      }
       if (lines.length > 1 && cmdLines.length) {
         res = runBatch_(cmdLines, dryRun);
         isWrite = true;
@@ -1310,7 +1314,46 @@ function handleSaleRequest_(e) {
  * Ghi 1 phiếu bán vào BAN. Kiểm tra hết các dòng trước: có dòng lỗi thì không ghi dòng nào.
  * Chống trùng theo ticket_id (lưu Script Properties 30 ngày). Trả kết quả từng dòng.
  */
+// ---- Chế độ Web: bot chuyển lệnh ghi cho web (P0 mục 7, viết sẵn 20/10, CHƯA BẬT) ----
+// Bật khi cả 2: Script Property BOT_CHUYEN_WEB = 1 (công tắc an toàn, mặc định tắt) VÀ META che_do = web (đổi thật sau 26/10, anh xác nhận).
+// Tắt (mặc định) → không đọc META, bot chạy y như cũ. Bật → lệnh ghi (bán / nhập / xuất / chuyển / huỷ…) POST <gốc web>/api/bot-lenh
+// (hoặc WEB_CMD_URL) ký HMAC như callback: x-bot-time = luc, x-bot-sig = hex HMAC-SHA256(khoá, luc + "." + body);
+// body {nguon: zalo | app_ban | app_kho, luc, dry_run, ...}; web trả {ok, text?, ket_qua?}. Lệnh xem (kiểm, bc) vẫn chạy ở bot.
+function webModeOn_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('BOT_CHUYEN_WEB') !== '1') return false;
+  try {
+    const meta = sheetValues_('META');
+    const c = headerMap_(meta[0] || []);
+    if (c.key === undefined || c.value === undefined) return false;
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === 'che_do');
+    return !!r && String(r[c.value]).trim().toLowerCase() === 'web';
+  } catch (err) {
+    return false; // không đọc được META → giữ như cũ (master)
+  }
+}
+
+function webForward_(payload) {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('BOT_CALLBACK_KEY') || props.getProperty('WEB_NOTIFY_KEY') || '';
+  const url = props.getProperty('WEB_CMD_URL') || (webOrigin_() ? webOrigin_() + '/api/bot-lenh' : '');
+  if (key.length < 16 || !url) return { ok: false, error: 'chế độ Web nhưng bot chưa có khoá / địa chỉ web' };
+  const luc = new Date().toISOString();
+  const body = JSON.stringify(Object.assign({ luc }, payload));
+  try {
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: body,
+      headers: { 'x-bot-time': luc, 'x-bot-sig': hmacHex_(key, luc + '.' + body) } });
+    let out = {};
+    try { out = JSON.parse(res.getContentText() || '{}'); } catch (e) { out = {}; }
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'web trả lỗi ' + res.getResponseCode() + (out.error ? ': ' + String(out.error).slice(0, 200) : ''), web: true };
+    return Object.assign({ web: true }, out);
+  } catch (err) {
+    return { ok: false, error: 'không gọi được web: ' + (err && err.message ? err.message : err), web: true };
+  }
+}
+
 function handleSale_(body, dryRun) {
+  if (webModeOn_()) return webForward_({ nguon: 'app_ban', dry_run: !!dryRun, body });
   MEMO = {};
   CTX = { seller: '', pending: {} };
   const ticket = String(body.ticket_id || '').trim();
@@ -1555,6 +1598,7 @@ function handleStockRequest_(e) {
 
 function handleStock_(body, dryRun) {
   MEMO = {};
+  if (webModeOn_()) return webForward_({ nguon: 'app_kho', dry_run: !!dryRun, body });
   CTX = { seller: '', pending: {} };
   const action = String(body.action || '').trim().toLowerCase();
   const ticket = String(body.ticket_id || '').trim();
@@ -1567,7 +1611,8 @@ function handleStock_(body, dryRun) {
   if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
   if (action === 'kq_in_tem') return labelResult_(body);
   if (action === 'in_bu') return labelExtraPrint_(body, dryRun);
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu']).join(', ') };
+  if (action === 'do_trigger') return { ok: true, action: 'do_trigger', han_phut_ngay: 90, ngay: trigReport_() };
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu', 'do_trigger']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -2778,6 +2823,11 @@ const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyn
 
 /** Trigger cài đặt onEdit (người sửa ô). */
 function onSheetEditHint(e) {
+  const t0 = Date.now();
+  try { onSheetEditHintBody_(e); } finally { trigStat_('onSheetEditHint', t0); }
+}
+
+function onSheetEditHintBody_(e) {
   try {
     const name = e && e.range ? e.range.getSheet().getName() : '';
     if (name) queueSyncHint_([name]);
@@ -2786,6 +2836,11 @@ function onSheetEditHint(e) {
 
 /** Trigger cài đặt onChange (thêm/xoá dòng, cột, dán…). Sự kiện không có tên tab → lấy tab đang mở. */
 function onSheetChangeHint(e) {
+  const t0 = Date.now();
+  try { onSheetChangeHintBody_(e); } finally { trigStat_('onSheetChangeHint', t0); }
+}
+
+function onSheetChangeHintBody_(e) {
   try {
     const ss = e && e.source ? e.source : SpreadsheetApp.getActiveSpreadsheet();
     const name = ss.getActiveSheet().getName();
@@ -2794,7 +2849,41 @@ function onSheetChangeHint(e) {
 }
 
 /** Trigger mỗi phút: gửi phần còn trong hàng chờ. */
+// ---- Đo thời gian trigger / ngày (P0 mục 6, 20/10): Apps Script Gmail thường có hạn ~90 phút trigger / ngày ----
+// Script Property trig_<yyyy-MM-dd> = {n, ms, max, ten:{flushSyncHints:ms, onSheetEditHint:ms, …}}; giữ 14 ngày. Xem: cửa stock_key do_trigger.
+function trigStat_(name, t0) {
+  try {
+    const ms = Date.now() - t0;
+    const props = PropertiesService.getScriptProperties();
+    const day = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+    const k = 'trig_' + day;
+    let st = {};
+    try { st = JSON.parse(props.getProperty(k) || '{}'); } catch (e) { st = {}; }
+    if (!st.n) {
+      Object.keys(props.getProperties()).filter(x => /^trig_\d{4}-\d{2}-\d{2}$/.test(x) && x.slice(5) < Utilities.formatDate(new Date(Date.now() - 14 * 86400000), TZ, 'yyyy-MM-dd'))
+        .forEach(x => props.deleteProperty(x));
+    }
+    st.n = (st.n || 0) + 1; st.ms = (st.ms || 0) + ms; st.max = Math.max(st.max || 0, ms);
+    st.ten = st.ten || {}; st.ten[name] = (st.ten[name] || 0) + ms;
+    props.setProperty(k, JSON.stringify(st));
+  } catch (err) { /* đo không được thì thôi, không làm hỏng trigger */ }
+}
+
+function trigReport_() {
+  const all = PropertiesService.getScriptProperties().getProperties();
+  return Object.keys(all).filter(k => /^trig_\d{4}-\d{2}-\d{2}$/.test(k)).sort().map(k => {
+    let st = {}; try { st = JSON.parse(all[k]); } catch (e) { /* bỏ */ }
+    return { ngay: k.slice(5), so_lan: st.n || 0, phut: Math.round((st.ms || 0) / 600) / 100, lau_nhat_giay: Math.round((st.max || 0) / 100) / 10,
+      theo_ham_phut: Object.keys(st.ten || {}).reduce((o, t) => { o[t] = Math.round(st.ten[t] / 600) / 100; return o; }, {}) };
+  });
+}
+
 function flushSyncHints() {
+  const t0 = Date.now();
+  try { flushSyncHintsBody_(); } finally { trigStat_('flushSyncHints', t0); }
+}
+
+function flushSyncHintsBody_() {
   try { kyguiSweep_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // soát ký gửi gõ tay mỗi 5 phút (chạy chung trigger mỗi phút)
   try { flushSyncHint_(false); } catch (err) { console.error(err && err.stack ? err.stack : err); }
   try { invoiceFoldersWarm_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // màn Hoá đơn không phải chờ duyệt Drive

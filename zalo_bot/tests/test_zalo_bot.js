@@ -992,5 +992,32 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   t = ctx.handleText_('bc 05/10/2026', true, '');
   eq('bc: dòng Chủ đã bấm "Không phải trùng" thì bỏ qua', /bán trùng/.test(t), false);
   ctx.UrlFetchApp.fetch = f0; DATA.BAN.splice(n0, 3); delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; delete CACHE.ban_khong_trung; }
+// P0 mục 6: đo thời gian trigger / ngày
+{ Object.keys(PROPS).filter(k => /^trig_/.test(k)).forEach(k => delete PROPS[k]);
+  ctx.flushSyncHints();
+  const rep = ctx.handleStock_({ action: 'do_trigger', seller: 'nv@hn.vn' }, false);
+  eq('đo trigger: ghi trig_<ngày>, cửa do_trigger trả số lần + phút', [rep.ok, rep.ngay.length, rep.ngay[0].so_lan, typeof rep.ngay[0].phut, 'flushSyncHints' in rep.ngay[0].theo_ham_phut], [true, 1, 1, 'number', true]); }
+// P0 mục 7: chuyển lệnh cho web — mặc định tắt
+{ const f0 = ctx.UrlFetchApp.fetch; let sent = [];
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, text: 'web ghi rồi' }) }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20);
+  const sale = { ticket_id: 'W1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] };
+  let r = ctx.handleSale_(sale, true);
+  eq('chế độ Web tắt (mặc định) → bot tự ghi như cũ, không gọi web', [r.ok, sent.length], [true, 0]);
+  PROPS.BOT_CHUYEN_WEB = '1';
+  vm.runInContext('MEMO={};', ctx);
+  r = ctx.handleSale_(sale, true);
+  eq('bật công tắc nhưng META chưa có che_do = web → vẫn như cũ', [r.ok, !!r.web, sent.length], [true, false, 0]);
+  const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do', 'web', '']];
+  vm.runInContext('MEMO={};', ctx);
+  r = ctx.handleSale_(sale, true);
+  eq('công tắc + META che_do = web → chuyển cho web, kèm chữ ký', [r.ok, r.web, sent[0] && sent[0].nguon, sent[0] && sent[0].body.ticket_id], [true, true, 'app_ban', 'W1']);
+  vm.runInContext('MEMO={};', ctx);
+  const t = ctx.handleText_('ban TH2040D 40 YEN', true, 'nvW');
+  eq('Zalo lệnh bán ở chế độ Web → web trả lời', [/web ghi rồi/.test(t), sent[sent.length - 1].nguon], [true, 'zalo']);
+  vm.runInContext('MEMO={};', ctx);
+  const n = sent.length; ctx.handleText_('TH2040D 40', true, 'nvW');
+  eq('Zalo lệnh kiểm hàng ở chế độ Web → bot tự trả lời', sent.length, n);
+  if (meta0) DATA.META = meta0; else delete DATA.META; delete PROPS.BOT_CHUYEN_WEB; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; ctx.UrlFetchApp.fetch = f0; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
