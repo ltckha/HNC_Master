@@ -1214,5 +1214,14 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const inv = ctx.invoiceTickets_().some(t => (t.rows || []).indexOf(kkRow) !== -1);
   eq('kiểm kho KK-: không vào in tem theo ngày, không thành phiếu hoá đơn', [(lt.rows || []).some(r => r.dong === kkRow), inv], [false, false]);
   DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
+// huy_nhap: web gửi ticket "PN-<ticket>" → bot vẫn nhận
+{ vm.runInContext('MEMO={};', ctx);
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5004', ngay: '2026-10-20', dong: [{ ma_ncc: 'QT', mo_ta: 'Giày QT', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+  const pid = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-pn-prefix').toString('base64') }).id;
+  vm.runInContext('MEMO={};', ctx);
+  pn({ action: 'xac_nhan', id: pid, ticket_id: 'TK9', web_ghi: true, dong: [{ dong: 1, ma_hnc: 'QT800D', kho: '15E', sizes: { '40': 1 } }], ma_moi: [{ ma_hnc: 'QT800D', mau: 'Đen', gia_ban: 800000, day_size: ['40'] }] });
+  vm.runInContext('MEMO={};', ctx);
+  const u = pn({ action: 'huy_nhap', ticket_id: 'PN-TK9', id: pid, web_ghi: true });
+  eq('huy_nhap nhận ticket "PN-<ticket>" của web', [u.ok, DATA.SANPHAM.some(r => r[1] === 'QT800D')], [true, false]); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

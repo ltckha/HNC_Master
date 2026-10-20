@@ -2755,7 +2755,8 @@ function appendKhoRow_(k) {
 function receiptUndo_(body, nguoi, dryRun) {
   const ticket = String(body.ticket_id || '').trim();
   const cache = CacheService.getScriptCache();
-  const raw = cache.get('stkops_' + ticket);
+  const raw = cache.get('stkops_' + ticket) || cache.get('stkops_' + ticket.replace(/^PN-/, '')); // web gửi "PN-<ticket>"
+  const cacheKey = cache.get('stkops_' + ticket) ? 'stkops_' + ticket : 'stkops_' + ticket.replace(/^PN-/, '');
   let rec = raw ? JSON.parse(raw) : null;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -2766,7 +2767,7 @@ function receiptUndo_(body, nguoi, dryRun) {
     if (rec.seller !== nguoi && body.chu !== true) return { ok: false, action: 'huy_nhap', ticket_id: ticket, error: 'chỉ huỷ được thao tác của chính mình' };
     const r = undoRecord_(rec, dryRun);
     if (r.ok && !dryRun) {
-      cache.remove('stkops_' + ticket);
+      cache.remove(cacheKey);
       const d = rec.pn ? receiptLoad_(rec.pn) : null;
       if (d && d.trang_thai === 'da_ghi') {
         d.trang_thai = 'nhap';
@@ -2790,7 +2791,8 @@ function receiptUndoRecord_(id, ticket) {
   const d = receiptLoad_(id);
   if (!d) return { error: 'thiếu / sai id phiếu' };
   if (d.trang_thai !== 'da_ghi' || !d.xac_nhan) return { error: 'phiếu ' + id + ' chưa ghi hoặc đã huỷ' };
-  if (d.xac_nhan.ticket_id !== ticket) return { error: 'ticket_id không khớp lần ghi của phiếu ' + id };
+  // Web lưu phiếu kho là "PN-<ticket>" (P2-3) → nhận cả 2 dạng
+  if (d.xac_nhan.ticket_id !== ticket && 'PN-' + d.xac_nhan.ticket_id !== ticket) return { error: 'ticket_id không khớp lần ghi của phiếu ' + id };
   let ops = d.xac_nhan.ops;
   if (!ops) {
     const newCodes = (d.xac_nhan.ma_moi || []).map(m => m.code);
