@@ -3,7 +3,7 @@
  "ghi_chu": [
   "Hợp đồng dữ liệu Sheet HNC_Master (ID 1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0) cho bot, main.py, web (P0 phương án 3).",
   "Luật 4: đọc / ghi theo TÊN cột ở hang_tieu_de (SANPHAM = hàng 2, hàng 1 là tên nhóm); thiếu cột bắt buộc → báo lỗi, không ghi cột khác.",
-  "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị.",
+  "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị. Riêng NHAP.FSKU: cong_thuc nhưng PHẢI ghi công thức từng dòng (ghi_cong_thuc: true).",
   "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách). Web giữ trong bảng riêng, chỉ vai Chủ; không ra trang khách, feed, AI hay nhân viên (luật web 20/10, repo web 1d7d80a). SĐT khách web đã có từ đơn / phiếu bán, vẫn che với AI.",
   "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json).",
   "du_kien: cột / khoá chưa có trên Sheet thật (20/10 đã thêm ma_dong / nguon và META che_do… trên Sheet thật, chế độ master; còn khoa_mac chưa dùng)."
@@ -428,27 +428,29 @@
       "tay"
      ],
      "cong_thuc": true,
-     "ten_hang_2": "FSKU"
+     "ten_hang_2": "FSKU",
+     "dinh_dang": "CÔNG THỨC TỪNG DÒNG, phải ghi khi thêm dòng (USER_ENTERED): =CONCATENATE(<KHO>{r}; <product_code>{r}; <item_size>{r}) — xem tab.NHAP.cong_thuc_mau. Để trống thì SUMIF tồn KHO không thấy dòng này.",
+     "ghi_cong_thuc": true
     },
     "web_stock": {
      "ghi": [
       "main.py"
      ],
-     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "web_label": {
      "ghi": [
       "bot",
       "main.py"
      ],
-     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "misa_stock": {
      "ghi": [
       "bot",
       "main.py"
      ],
-     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "kho_sync": {
      "ghi": [
@@ -550,7 +552,8 @@
       "bot",
       "tay"
      ],
-     "cong_thuc": true
+     "cong_thuc": true,
+     "dinh_dang": "ARRAYFORMULA ở hàng 2 tự tính cả cột — KHÔNG ghi gì vào cột này."
     },
     "ma_dong": {
      "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n · dòng gõ tay được web cấp khi nhập bù TAY-<yyyyMMdd>-<số hàng Sheet> (không có #). Không dùng số NK. Bot / main.py không bao giờ cấp gốc TAY-. Luật: LuatKho.maDong.",
@@ -632,7 +635,7 @@
       "tay"
      ],
      "cong_thuc": true,
-     "dinh_dang": "Công thức ARRAYFORMULA — KHÔNG ghi."
+     "dinh_dang": "ARRAYFORMULA ở hàng 2 tự tính cả cột — KHÔNG ghi gì vào cột này."
     },
     "channel": {
      "ghi": [
