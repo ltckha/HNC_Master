@@ -1233,5 +1233,14 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   DATA.META.push(['nk_cuoi_15E', 'NK000777', '']); vm.runInContext('MEMO={};', ctx);
   eq('số mới sau khi huỷ (Sheet không còn 777) → NK000778, không dùng lại', ctx.receiptNkPlan_(['15E'], '')['15E'], 'NK000778');
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// H8: hàng hoá Web, kiểm mã cũ đã đổi → hỏi web loai "ma" → tồn mã mới
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_hh', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch;
+  ctx.UrlFetchApp.fetch = (url, opt) => { const b = JSON.parse(opt.payload || '{}'); if (/bot-lenh/.test(url) && b.loai === 'ma') return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, ma_moi: 'TH2040D', loai: 'doi_ten' }) }; return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
+  const t = ctx.handleText_('TH2040X 40', true, 'nvH8');
+  eq('kiểm mã cũ đã đổi → "đổi thành" + tồn mã mới', [/Mã TH2040X đã đổi thành TH2040D/.test(t), /TH2040D/.test(t)], [true, true]);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
