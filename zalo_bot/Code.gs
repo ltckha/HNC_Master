@@ -171,9 +171,10 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       const cmdLines = lines.filter(isBatchCommandLine_);
       const isWriteCmd = cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
       if (isWriteCmd && !dryRun) { const blk = choChepBlock_(); if (blk) return { reply: '⏳ ' + blk + '\nNhắn số: 9 Menu', syncTabs: [] }; }
-      if (webModeOn_() && (cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1)) {
-        const w = webForward_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
-        return { reply: (w.ok ? (w.text || '✅ Web đã ghi.') : '⚠️ ' + (w.error || 'web chưa nhận')) + '\nNhắn số: 9 Menu', syncTabs: [] };
+      const isSale = cmdLines.length ? cmdLines.some(l => parseMessage_(l, knownCodes_()).action === ACTIONS.SELL) : parseMessage_(text, knownCodes_()).action === ACTIONS.SELL;
+      if (isSale) {
+        const g = saleWebGate_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
+        if (g) return { reply: (g.ok ? (g.text || '✅ Web đã ghi.') : (g.web_mode ? '🌐 ' : '⚠️ ') + (g.error || 'web chưa nhận')) + '\nNhắn số: 9 Menu', syncTabs: [] };
       }
       if (lines.length > 1 && cmdLines.length) {
         res = runBatch_(cmdLines, dryRun);
@@ -713,6 +714,7 @@ function navMenuPick_(n, chatId, owner) {
 
 /** Chủ huỷ dòng bán (Zalo / nhập tay) trong 2 ngày: "huy <mã> [size] [kho] [ngày]" → liệt kê dòng khớp, nhắn số để huỷ. */
 function saleLineCancelAsk_(text, chatId) {
+  if (cheDo_() === 'web') return { text: '🌐 ' + WEB_MODE_SALE_TEXT + '\nNhắn số: 9 Menu' };
   if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ huỷ được đơn hàng cũ. Huỷ lệnh vừa gõ (10 phút): nhắn "huy".' };
   const rest = String(text).trim().replace(/^\S+\s*/, '');
   const p = parseMessage_(rest, knownCodes_());
@@ -747,6 +749,7 @@ function saleLineCancelAsk_(text, chatId) {
 }
 
 function saleLineCancelPick_(n, chatId, d, dryRun) {
+  if (cheDo_() === 'web') { navClearAsk_(chatId); return { text: '🌐 ' + WEB_MODE_SALE_TEXT + '\nNhắn số: 9 Menu' }; }
   const x = (d.rows || [])[n - 1];
   if (!x) return { text: navMenu_(chatId) };
   navClearAsk_(chatId);
@@ -1345,6 +1348,16 @@ function webModeOn_() {
   return cheDo_() === 'web';
 }
 
+const WEB_MODE_SALE_TEXT = 'Đang bán trên app (chế độ Web) — mở app để bán / huỷ đơn. Web hỏng: Chủ nhắn "che do" → 1 Dự phòng.';
+
+/** P1 sổ bán (Bán hàng chốt 20/10): che_do = web → lệnh BÁN không ghi Sheet. Có công tắc BOT_CHUYEN_WEB = 1 thì chuyển cho web
+ *  (khi web có /api/bot-lenh), không thì CHẶN. Nhập / xuất / chuyển kho / phiếu NCC / in tem / hoá đơn vẫn ghi Sheet như cũ. Trả null = ghi như cũ. */
+function saleWebGate_(payload) {
+  if (cheDo_() !== 'web') return null;
+  if (PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1') return webForward_(payload);
+  return { ok: false, web_mode: true, error: WEB_MODE_SALE_TEXT };
+}
+
 /** META che_do: 'web' | 'master' (mặc định master; không đọc được META → master). Cùng luật main.py loader.che_do(). */
 function cheDo_() {
   try {
@@ -1447,7 +1460,7 @@ function webForward_(payload) {
 }
 
 function handleSale_(body, dryRun) {
-  if (webModeOn_()) return webForward_({ nguon: 'app_ban', dry_run: !!dryRun, body });
+  { const g = saleWebGate_({ nguon: 'app_ban', dry_run: !!dryRun, body }); if (g) return g; }
   rowSrcStart_(String(body.channel || '').trim().toLowerCase() === 'web' ? 'web' : 'app', body.ticket_id);
   if (!dryRun) { const blk = choChepBlock_(); if (blk) return { ok: false, ticket_id: String(body.ticket_id || ''), error: blk, cho_chep: true }; }
   MEMO = {};
@@ -1694,7 +1707,6 @@ function handleStockRequest_(e) {
 
 function handleStock_(body, dryRun) {
   MEMO = {};
-  if (webModeOn_()) return webForward_({ nguon: 'app_kho', dry_run: !!dryRun, body });
   rowSrcStart_('app', PN_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1 && body.id ? body.id : (body.ticket_id || body.id));
   if (!dryRun && STOCK_ACTIONS.concat(['xac_nhan', 'huy_nhap', 'huy']).indexOf(String(body.action || '').trim().toLowerCase()) !== -1) {
     const blk = choChepBlock_();
@@ -2994,6 +3006,7 @@ function flushSyncHintsBody_() {
 /** Thêm tab vào hàng chờ (chỉ tab đang theo dõi) rồi gửi ngay nếu đã quá 60 giây kể từ lần gửi trước. */
 function queueSyncHint_(tabs) {
   let add = tabs.filter(t => SYNC_WATCH_TABS.indexOf(t) !== -1);
+  if (add.indexOf('BAN') !== -1 && cheDo_() === 'web') add = add.filter(t => t !== 'BAN'); // chế độ Web: sổ bán ở web → không báo chép BAN (tránh vòng lặp chép)
   if (!add.length) return;
   if (add.some(t => SYNC_STOCK_TABS.indexOf(t) !== -1)) add = add.concat(['KHO15E', 'KHOY3C']);
   const lock = LockService.getDocumentLock() || LockService.getScriptLock();
@@ -4333,6 +4346,7 @@ function kyguiAdjust_(chu, at, code, size, delta, dry) {
  * → trừ cột cua_… của dòng KHO, ghi ky_gui_tru = "soat <giờ>" (thiếu ký gửi thì ghi thêm "thiếu n"). Dòng bot / app ghi đã có ky_gui_tru.
  */
 function kyguiSweep_(force) {
+  if (cheDo_() === 'web') return 0; // chế độ Web: Sheet là bản web chép, ký gửi do web trừ — bot không tự trừ cua_
   const cache = CacheService.getScriptCache();
   if (!force && Date.now() - Number(cache.get('ky_sweep') || 0) < KYGUI_SWEEP_MS) return 0;
   cache.put('ky_sweep', String(Date.now()), 21600);

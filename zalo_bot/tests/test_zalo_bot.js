@@ -1061,5 +1061,24 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   DATA.META[1][1] = '0'; vm.runInContext('MEMO={};', ctx);
   eq('cho_chep 0 → bán chạy thử được', ctx.handleSale_({ ticket_id: 'CC2', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] }, true).ok, true);
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P1 sổ bán: che_do = web, chưa có công tắc chuyển → CHẶN bán; kho vẫn ghi; sweep / huỷ bán / sync BAN tắt
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do', 'web', '']]; vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.BAN.length;
+  const r = ctx.handleSale_({ ticket_id: 'WM1', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] }, false);
+  eq('chế độ Web: cửa sale_key bị chặn, không ghi BAN', [r.ok, /Đang bán trên app/.test(r.error), DATA.BAN.length], [false, true, n0]);
+  vm.runInContext('MEMO={};', ctx);
+  eq('chế độ Web: Zalo "ban …" → nhắc bán trên app', /Đang bán trên app/.test(ctx.handleText_('ban TH2040D 40 YEN', false, 'nvWM')), true);
+  vm.runInContext('MEMO={};', ctx);
+  const st = ctx.handleStock_({ action: 'nhap', ticket_id: 'WM2', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] }, true);
+  eq('chế độ Web: nhập kho vẫn bot ghi như cũ', [st.ok, !!st.web_mode], [true, false]);
+  vm.runInContext('MEMO={};', ctx);
+  eq('chế độ Web: Chủ "huy <mã>" → huỷ trên app', /Đang bán trên app/.test(z('huy TH2040D 40')), true);
+  vm.runInContext('MEMO={};', ctx);
+  eq('chế độ Web: soát ký gửi gõ tay bỏ qua', ctx.kyguiSweep_(true), 0);
+  delete PROPS.sync_tabs; PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; vm.runInContext('MEMO={};', ctx);
+  const h0 = HINTS.length; ctx.queueSyncHint_(['BAN']); ctx.flushSyncHints && ctx.flushSyncHints();
+  eq('chế độ Web: không báo chép BAN', HINTS.slice(h0).some(h => (h.body.tabs || []).indexOf('BAN') !== -1), false);
+  delete PROPS.SYNC_HINT_URL;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

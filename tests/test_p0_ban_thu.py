@@ -41,7 +41,8 @@ try:
     L2 = main.EngineDataLoader()
     eq('đổi META che_do = web → đọc web', L2.che_do(), 'web')
     eq('web: chặn ghi BAN', L2.append_rows_to_sheet('BAN', [['thử']]), False)
-    eq('web: chặn update_status NHAP', L2.update_status('NHAP', [5], 9, 'x'), False)
+    eq('web (P1 chỉ sổ bán): NHAP vẫn ghi được', L2._write_ok('NHAP'), True)
+    eq('web: chặn update_status BAN', L2.update_status('BAN', [5], 9, 'x'), False)
     eq('web: META vẫn ghi được (không khoá)', L2._write_ok('META'), True)
     eq('web: BAN không thêm dòng', len(L2.spreadsheet.worksheet('BAN').get_all_values()), n0)
 finally:

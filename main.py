@@ -88,8 +88,9 @@ SPREADSHEET_NAME = "HNC_Control_Center"
 SPREADSHEET_ID_THAT = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"
 # P0 (20/10): HNC_SHEET_ID trỏ Sheet bản thử (vd HNC_Master_BAN_THU) để thử; không đặt = Sheet thật
 SPREADSHEET_ID = os.getenv("HNC_SHEET_ID", "").strip() or SPREADSHEET_ID_THAT
-# Chế độ Web (META che_do = web): sổ gốc ở web → menu Mac không ghi các tab này (chỉ xem / xuất file). Mặc định master = như cũ.
-WEB_MODE_LOCKED_TABS = {'BAN', 'NHAP', 'XUAT', 'KHO15E', 'KHOY3C', 'SANPHAM'}
+# Chế độ Web (META che_do = web): P1 chỉ SỔ BÁN chuyển sang web (Bán hàng chốt 20/10) → menu Mac không ghi BAN.
+# Kho / nhập / SANPHAM vẫn ghi như cũ (cùng phạm vi bot saleWebGate_). Mặc định master = như cũ.
+WEB_MODE_LOCKED_TABS = {'BAN'}
 # Tab web giayhainancy.vn chép về; ghi vào các tab này thì báo web chép lại (SYNC_HINT_URL / SYNC_HINT_KEY trong .env)
 SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', 'SUB', 'META', 'KYGUI']
 GRID_EXTRA_ROWS = 100  # Số dòng dư thêm khi lưới Google Sheet không đủ chỗ ghi
@@ -4257,7 +4258,7 @@ def main():
     if SPREADSHEET_ID != SPREADSHEET_ID_THAT:
         print(f"🧪 ĐANG DÙNG SHEET BẢN THỬ ({SPREADSHEET_ID}) — không phải sổ thật.")
     if loader.is_google_api and loader.che_do() == 'web':
-        print("🌐 Chế độ Web: sổ gốc ở web — menu Mac chỉ xem / xuất file, không ghi BAN / NHAP / XUAT / KHO / SANPHAM.")
+        print("🌐 Chế độ Web: sổ bán ở web — menu Mac không ghi tab BAN (kho / nhập / MISA vẫn như cũ).")
 
     while True:
         os.system('clear' if os.name == 'posix' else 'cls')
