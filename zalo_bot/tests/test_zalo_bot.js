@@ -1019,5 +1019,19 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   const n = sent.length; ctx.handleText_('TH2040D 40', true, 'nvW');
   eq('Zalo lệnh kiểm hàng ở chế độ Web → bot tự trả lời', sent.length, n);
   if (meta0) DATA.META = meta0; else delete DATA.META; delete PROPS.BOT_CHUYEN_WEB; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; ctx.UrlFetchApp.fetch = f0; vm.runInContext('MEMO={};', ctx); }
+// P0 mục 3: ma_dong / nguon (chỉ ghi khi tab có cột)
+{ const n0 = DATA.BAN.length;
+  ctx.handleSale_({ ticket_id: 'BH-2010-003', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }] }, false);
+  eq('chưa có cột ma_dong → dòng BAN như cũ', DATA.BAN[0].indexOf('ma_dong'), -1);
+  DATA.BAN[0].push('ma_dong', 'nguon');
+  const mi = DATA.BAN[0].indexOf('ma_dong'), ni = DATA.BAN[0].indexOf('nguon');
+  ctx.handleSale_({ ticket_id: 'BH-2010-004', channel: 'cua_hang', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C', price: 800000 }, { code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C', price: 800000 }] }, false);
+  const rows = DATA.BAN.slice(n0).filter(r => r[mi]);
+  eq('app: ma_dong = ticket#thứ tự, nguon = app', rows.map(r => [r[mi], r[ni]]).slice(0, 2), [['BH-2010-004#1', 'app'], ['BH-2010-004#2', 'app']]);
+  vm.runInContext("LAST_MSG_ID = 'm777';", ctx);
+  ctx.handleText_('ban TH2040D 40 YEN', false, 'nvZ');
+  const z = DATA.BAN.filter(r => /^Z-/.test(r[mi] || '')).pop();
+  eq('Zalo: ma_dong = Z-<message_id>#1, nguon = zalo', z && [z[mi], z[ni]], ['Z-m777#1', 'zalo']);
+  DATA.BAN.forEach(r => { r.splice(ni, 1); r.splice(mi, 1); }); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

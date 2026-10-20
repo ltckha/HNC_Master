@@ -65,6 +65,19 @@ const HELP_TEXT = [
 let MEMO = {};
 // Ngữ cảnh tin nhắn đang xử lý (tên người nhắn → cột seller của BAN)
 let CTX = {};
+// Nguồn dòng ghi (P0 mục 3, 20/10): BAN / NHAP / XUAT có cột ma_dong / nguon thì ghi (Sheet chưa có cột → bỏ qua, như cũ).
+// ma_dong = <gốc>#<thứ tự>: gốc = số NK (dòng nhập có số NK) | ticket_id (app / web) | Z-<message_id> (Zalo).
+let ROW_SRC = null;
+let LAST_MSG_ID = '';
+function rowSrcStart_(nguon, goc) { ROW_SRC = { nguon, goc: String(goc || '').trim(), n: {} }; }
+function rowSrcFields_(sheetName, values) {
+  if (!ROW_SRC || ['BAN', 'NHAP', 'XUAT'].indexOf(sheetName) === -1) return {};
+  const so = sheetName === 'NHAP' ? String(values['Số chứng từ (*)'] || '').trim().toUpperCase() : '';
+  const goc = /^NK\d+$/.test(so) ? so : ROW_SRC.goc;
+  if (!goc) return { nguon: ROW_SRC.nguon };
+  ROW_SRC.n[goc] = (ROW_SRC.n[goc] || 0) + 1;
+  return { ma_dong: goc + '#' + ROW_SRC.n[goc], nguon: ROW_SRC.nguon };
+}
 
 // Cửa "ghi bán" cho app bán hàng
 // Kênh nhận từ app; 'cua_hang' (bán tại quầy) ghi ô trống — quy ước: channel trống = bán tại cửa hàng theo KHO
@@ -118,6 +131,7 @@ function doPost(e) {
 
     const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true';
     const sellerName = msg.from && msg.from.display_name ? String(msg.from.display_name).slice(0, 50) : '';
+    LAST_MSG_ID = String(msg.message_id || (msg.chat.id + '_' + msg.date));
     sendMessage_(chatId, handleText_(msg.text, dryRun, chatId, sellerName));
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
@@ -141,6 +155,7 @@ function handleText_(text, dryRun, chatId, sellerName) {
 
 function handleTextLocked_(text, dryRun, chatId, sellerName) {
   MEMO = {};
+  rowSrcStart_('zalo', 'Z-' + (LAST_MSG_ID || (String(chatId || '').slice(-4) + '-' + Date.now())));
   CTX = { seller: sellerName || '', pending: {} };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1354,6 +1369,7 @@ function webForward_(payload) {
 
 function handleSale_(body, dryRun) {
   if (webModeOn_()) return webForward_({ nguon: 'app_ban', dry_run: !!dryRun, body });
+  rowSrcStart_(String(body.channel || '').trim().toLowerCase() === 'web' ? 'web' : 'app', body.ticket_id);
   MEMO = {};
   CTX = { seller: '', pending: {} };
   const ticket = String(body.ticket_id || '').trim();
@@ -1599,6 +1615,7 @@ function handleStockRequest_(e) {
 function handleStock_(body, dryRun) {
   MEMO = {};
   if (webModeOn_()) return webForward_({ nguon: 'app_kho', dry_run: !!dryRun, body });
+  rowSrcStart_('app', body.ticket_id || body.id);
   CTX = { seller: '', pending: {} };
   const action = String(body.action || '').trim().toLowerCase();
   const ticket = String(body.ticket_id || '').trim();
@@ -4425,6 +4442,7 @@ function appendByHeader_(sheetName, values, formulaBuilder, check, optional) {
 
   const all = Object.assign({}, values, formulaBuilder ? formulaBuilder(row, col) : {});
   if (formulaBuilder) requireColumns_(sheetName, col, Object.keys(all));
+  optional = Object.assign({}, optional || {}, rowSrcFields_(sheetName, values));
   Object.keys(optional || {}).forEach(name => {
     if (col[name] !== undefined && optional[name] !== '') all[name] = optional[name];
   });
