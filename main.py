@@ -3799,7 +3799,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_n_qty is not None: row[idx_n_qty] = 1
             if idx_n_fsku is not None: row[idx_n_fsku] = f'=CONCATENATE({c_n_kho}{cur_nhap_row}; {c_n_code}{cur_nhap_row}; {c_n_size}{cur_nhap_row})'
             if idx_n_price is not None and parse_number(data.get('purchase_price')) > 0: row[idx_n_price] = int(parse_number(data.get('purchase_price')))
-            if idx_n_madong is not None and doc_no: row[idx_n_madong] = f"{doc_no}#{nhap_count + 1}"
+            if idx_n_madong is not None: row[idx_n_madong] = f"MAC-{MAC_RUN_ID}#{nhap_count + 1}"  # duy nhất theo lần chạy (LuatKho.maDong 'mac')
             if idx_n_nguon is not None: row[idx_n_nguon] = 'mac'
             nhap_new_rows.append(row)
             nhap_count += 1
@@ -4163,6 +4163,7 @@ def handle_submenu_media(loader):
 
 
 MAC_LOCK_PATH = '/tmp/hnc_main_py.lock'
+MAC_RUN_ID = datetime.now().strftime('%y%m%d-%H%M%S')  # mã lần mở menu → ma_dong MAC-<lần chạy>#n
 
 
 def acquire_mac_lock():

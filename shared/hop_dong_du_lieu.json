@@ -476,7 +476,7 @@
      ]
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
       "main.py"
@@ -544,7 +544,7 @@
      "cong_thuc": true
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
       "main.py"
@@ -652,7 +652,7 @@
      ]
     },
     "ma_dong": {
-     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "y_nghia": "Mã dòng duy nhất <mã thao tác>#n: phiếu NCC <phieu_id>#n · app / web <ticket_id>#n · Zalo Z-<message_id>#n · menu Mac MAC-<lần chạy>#n. Không dùng số NK. Dòng cũ để trống. Luật: LuatKho.maDong.",
      "ghi": [
       "bot",
       "main.py"

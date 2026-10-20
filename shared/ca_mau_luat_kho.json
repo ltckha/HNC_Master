@@ -1216,6 +1216,66 @@
     "1.250.000 đ"
    ],
    "ra": 1250000
+  },
+  {
+   "ten": "mã dòng: 2 phiếu cùng NCC cùng ngày chung NK000045 → khác nhau (phiếu 1)",
+   "ham": "maDong",
+   "vao": [
+    "phieu",
+    {
+     "phieu_id": "PN2010A"
+    },
+    1
+   ],
+   "ra": "PN2010A#1"
+  },
+  {
+   "ten": "mã dòng: 2 phiếu cùng NCC cùng ngày chung NK000045 → khác nhau (phiếu 2)",
+   "ham": "maDong",
+   "vao": [
+    "phieu",
+    {
+     "phieu_id": "PN2010B"
+    },
+    1
+   ],
+   "ra": "PN2010B#1"
+  },
+  {
+   "ten": "mã dòng: lệnh app dòng 3",
+   "ham": "maDong",
+   "vao": [
+    "app",
+    {
+     "ticket": "BH-2010-003"
+    },
+    3
+   ],
+   "ra": "BH-2010-003#3"
+  },
+  {
+   "ten": "mã dòng: Zalo",
+   "ham": "maDong",
+   "vao": [
+    "zalo",
+    {
+     "msg_id": "m777"
+    },
+    1
+   ],
+   "ra": "Z-m777#1"
+  },
+  {
+   "ten": "mã dòng: menu Mac",
+   "ham": "maDong",
+   "vao": [
+    "mac",
+    {
+     "lan_chay": "201026-1530"
+    },
+    2
+   ],
+   "ra": "MAC-201026-1530#2"
   }
  ]
 }

@@ -66,17 +66,16 @@ let MEMO = {};
 // Ngữ cảnh tin nhắn đang xử lý (tên người nhắn → cột seller của BAN)
 let CTX = {};
 // Nguồn dòng ghi (P0 mục 3, 20/10): BAN / NHAP / XUAT có cột ma_dong / nguon thì ghi (Sheet chưa có cột → bỏ qua, như cũ).
-// ma_dong = <gốc>#<thứ tự>: gốc = số NK (dòng nhập có số NK) | ticket_id (app / web) | Z-<message_id> (Zalo).
+// ma_dong = <mã thao tác duy nhất>#<thứ tự> (Bán hàng chốt 20/10: duy nhất tuyệt đối, KHÔNG dùng số NK — 2 phiếu chung NK vẫn khác):
+// phiếu NCC → <phieu_id>#n · lệnh app / web → <ticket_id>#n · Zalo → Z-<message_id>#n · main.py → MAC-<lần chạy>#n. Luật: LuatKho.maDong.
 let ROW_SRC = null;
 let LAST_MSG_ID = '';
-function rowSrcStart_(nguon, goc) { ROW_SRC = { nguon, goc: String(goc || '').trim(), n: {} }; }
-function rowSrcFields_(sheetName, values) {
+function rowSrcStart_(nguon, goc) { ROW_SRC = { nguon, goc: String(goc || '').trim(), n: 0 }; }
+function rowSrcFields_(sheetName) {
   if (!ROW_SRC || ['BAN', 'NHAP', 'XUAT'].indexOf(sheetName) === -1) return {};
-  const so = sheetName === 'NHAP' ? String(values['Số chứng từ (*)'] || '').trim().toUpperCase() : '';
-  const goc = /^NK\d+$/.test(so) ? so : ROW_SRC.goc;
-  if (!goc) return { nguon: ROW_SRC.nguon };
-  ROW_SRC.n[goc] = (ROW_SRC.n[goc] || 0) + 1;
-  return { ma_dong: goc + '#' + ROW_SRC.n[goc], nguon: ROW_SRC.nguon };
+  if (!ROW_SRC.goc) return { nguon: ROW_SRC.nguon };
+  ROW_SRC.n += 1;
+  return { ma_dong: ROW_SRC.goc + '#' + ROW_SRC.n, nguon: ROW_SRC.nguon };
 }
 
 // Cửa "ghi bán" cho app bán hàng
@@ -1615,7 +1614,7 @@ function handleStockRequest_(e) {
 function handleStock_(body, dryRun) {
   MEMO = {};
   if (webModeOn_()) return webForward_({ nguon: 'app_kho', dry_run: !!dryRun, body });
-  rowSrcStart_('app', body.ticket_id || body.id);
+  rowSrcStart_('app', PN_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1 && body.id ? body.id : (body.ticket_id || body.id));
   CTX = { seller: '', pending: {} };
   const action = String(body.action || '').trim().toLowerCase();
   const ticket = String(body.ticket_id || '').trim();
@@ -4442,7 +4441,7 @@ function appendByHeader_(sheetName, values, formulaBuilder, check, optional) {
 
   const all = Object.assign({}, values, formulaBuilder ? formulaBuilder(row, col) : {});
   if (formulaBuilder) requireColumns_(sheetName, col, Object.keys(all));
-  optional = Object.assign({}, optional || {}, rowSrcFields_(sheetName, values));
+  optional = Object.assign({}, optional || {}, rowSrcFields_(sheetName));
   Object.keys(optional || {}).forEach(name => {
     if (col[name] !== undefined && optional[name] !== '') all[name] = optional[name];
   });

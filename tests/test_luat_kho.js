@@ -18,7 +18,7 @@ ctx.LockService = { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, 
 ctx.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheetByName: () => null }) };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'zalo_bot', 'Code.gs'), 'utf8') + `
-;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, normSize_, moneyValue_, dateKey_, KHO_ALIASES, KYGUI_COL };
+;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, rowSrcStart_, rowSrcFields_, normSize_, moneyValue_, dateKey_, KHO_ALIASES, KYGUI_COL };
 this.__set = (name, fn) => { eval(name + ' = fn'); };
 this.__memo = () => { MEMO = {}; CTX = { pending: {} }; };`, ctx);
 const O = ctx.__old;
@@ -121,6 +121,14 @@ const OLD = {
     const keys = {}; (boQua || []).forEach(k => { keys[k] = true; });
     stub('saleDupIgnore_', () => ({ ok: true, keys }));
     return [].concat(...days.map(d => O.saleDupRows_(d).rows)).sort((a, b) => a - b);
+  },
+  maDong(nguon, d, n) {
+    // Cũ (bot rowSrcStart_ / rowSrcFields_): gốc theo thao tác, đếm thứ tự trong 1 thao tác
+    const goc = nguon === 'phieu' ? d.phieu_id : nguon === 'zalo' ? 'Z-' + d.msg_id : nguon === 'mac' ? 'MAC-' + d.lan_chay : d.ticket;
+    O.rowSrcStart_(nguon, goc);
+    let f = {};
+    for (let i = 0; i < n; i++) f = O.rowSrcFields_('NHAP');
+    return f.ma_dong || '';
   },
   khoChuan: v => O.KHO_ALIASES[String(v).trim().toUpperCase()] || '',
   ngayKey: v => O.dateKey_(v),

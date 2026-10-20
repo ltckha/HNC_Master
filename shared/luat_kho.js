@@ -194,12 +194,23 @@ var LuatKho = (function () {
     }).map(function (r) { return r.dong; });
   }
 
+  /**
+   * Mã dòng duy nhất (ma_dong) của dòng BAN / NHAP / XUAT mới (Bán hàng chốt 20/10): <mã thao tác duy nhất>#<thứ tự trong thao tác>.
+   * Không dùng số NK (2 phiếu cùng NCC cùng ngày chung số NK vẫn ra mã khác). nguon: 'phieu' | 'app' | 'web' | 'zalo' | 'mac'.
+   * d: { phieu_id?, ticket?, msg_id?, lan_chay? }; thuTu bắt đầu từ 1.
+   */
+  function maDong(nguon, d, thuTu) {
+    d = d || {};
+    var goc = nguon === 'phieu' ? d.phieu_id : nguon === 'zalo' ? 'Z-' + d.msg_id : nguon === 'mac' ? 'MAC-' + d.lan_chay : d.ticket;
+    return goc && String(goc).indexOf('undefined') === -1 ? String(goc).trim() + '#' + thuTu : '';
+  }
+
   return {
     PHIEN_BAN: PHIEN_BAN, KHO_ALIASES: KHO_ALIASES, COT_KY_GUI: COT_KY_GUI,
     khoChuan: khoChuan, hoKia: hoKia, chuanSize: chuanSize, soTien: soTien, ngayKey: ngayKey, fsku: fsku,
     tachMaSize: tachMaSize, banTachChuHang: banTachChuHang, huyBanKhoiPhuc: huyBanKhoiPhuc, chuyenKhoKyGui: chuyenKhoKyGui,
     traHangChuHang: traHangChuHang, canhBaoKyGui: canhBaoKyGui, soNhapKho: soNhapKho, giaMisa: giaMisa,
-    donGiaPhieuMoi: donGiaPhieuMoi, tonKho: tonKho, banTrung: banTrung
+    donGiaPhieuMoi: donGiaPhieuMoi, tonKho: tonKho, banTrung: banTrung, maDong: maDong
   };
 })();
 
