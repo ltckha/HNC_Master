@@ -1157,5 +1157,30 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   vm.runInContext('MEMO={};', ctx);
   eq('phiếu đã đánh dấu ghi → xac_nhan lại bị chặn', /phiếu đã ghi/.test(pn({ action: 'xac_nhan', id: pid, ticket_id: 'WG2', web_ghi: true, dong: [{ dong: 1, ma_hnc: 'QQ500D', kho: '15E', sizes: { '40': 1 } }] }).error || ''), true);
   ctx.UrlFetchApp.fetch = f0; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P2-3: xac_nhan ở sổ kho Web (không web_ghi): bot tạo mã + đánh dấu rồi gửi web (loai phieu_ncc); web lỗi → bot huỷ phần bot
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_kho', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch; const sent = []; let ok = true;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return ok ? { getResponseCode: () => 200, getContentText: () => '{"ok":true,"text":"web ghi phiếu"}' } : { getResponseCode: () => 500, getContentText: () => '{}' }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20);
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5001', ngay: '2026-10-20', dong: [{ ma_ncc: 'QR', mo_ta: 'Giày QR', sl: 1, don_gia: 310000 }], tong_sl: 1, tong_tien: 310000 };
+  vm.runInContext('MEMO={};', ctx);
+  const pid = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-kho-web-1').toString('base64') }).id;
+  const n0 = DATA.NHAP.length, s0 = DATA.SANPHAM.length;
+  vm.runInContext('MEMO={};', ctx);
+  const x = pn({ action: 'xac_nhan', id: pid, ticket_id: 'KW1', dong: [{ dong: 1, ma_hnc: 'QR600D', kho: '15E', sizes: { '41': 1 } }], ma_moi: [{ ma_hnc: 'QR600D', mau: 'Đen', gia_ban: 600000, day_size: ['41'] }] });
+  const m = sent[sent.length - 1];
+  eq('kho Web xac_nhan: tạo mã + gửi web phieu_ncc kèm tao_moi + phieu.dong giá, không ghi NHAP',
+    [x.ok, x.kho_web, m && m.loai, m && m.body.tao_moi[0], m && m.phieu.dong[0].don_gia, DATA.SANPHAM.length - s0, DATA.NHAP.length - n0], [true, true, 'phieu_ncc', 'QR600D', 310000, 1, 0]);
+  // web lỗi → huỷ phần bot
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5002', ngay: '2026-10-20', dong: [{ ma_ncc: 'QS', mo_ta: 'Giày QS', sl: 1, don_gia: 320000 }], tong_sl: 1, tong_tien: 320000 };
+  vm.runInContext('MEMO={};', ctx);
+  const pid2 = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-kho-web-2').toString('base64') }).id;
+  ok = false; vm.runInContext('MEMO={};', ctx);
+  const y = pn({ action: 'xac_nhan', id: pid2, ticket_id: 'KW2', dong: [{ dong: 1, ma_hnc: 'QS700D', kho: '15E', sizes: { '41': 1 } }], ma_moi: [{ ma_hnc: 'QS700D', mau: 'Đen', gia_ban: 700000, day_size: ['41'] }] });
+  vm.runInContext('MEMO={};', ctx);
+  const st = pn({ action: 'xem_nhap', id: pid2 });
+  eq('kho Web xac_nhan: web lỗi → báo, đã huỷ phần bot, phiếu về nháp', [y.ok, /đã huỷ phần bot/.test(y.error || ''), st.phieu ? st.phieu.trang_thai : st.trang_thai], [false, true, 'cho_chia']);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

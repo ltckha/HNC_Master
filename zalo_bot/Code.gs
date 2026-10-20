@@ -1458,8 +1458,20 @@ function stockWebGate_(payload) {
   }
   const b = payload.body || {};
   if (b.action === 'xac_nhan' && b.id) {
-    payload.loai = 'phieu_ncc'; // kết quả đọc ảnh phiếu NCC gửi kèm (web chốt 20/10)
-    try { const d = receiptLoad_(String(b.id).trim()); if (d) payload.phieu = d; } catch (err) { /* thiếu nháp → web tự báo */ }
+    // Phiếu NCC ở sổ kho Web (web chốt 20/10): bot kiểm + TẠO MÃ MỚI + đánh dấu phiếu trước (như web_ghi), rồi gửi web ghi NHAP.
+    // Web lỗi → bot huỷ phần của bot (xoá mã mới, trả phiếu về nháp) để không lệch.
+    payload.loai = 'phieu_ncc';
+    const nguoi = String(b.nguoi || b.seller || '').trim().toLowerCase();
+    const pre = receiptConfirm_(Object.assign({}, b, { web_ghi: true }), nguoi, !!payload.dry_run);
+    if (!pre.ok) return Object.assign({ kho_web: true }, pre);
+    payload.body = Object.assign({}, b, { tao_moi: (pre.tao_moi && pre.tao_moi.sanpham) || [] });
+    try { const d = receiptLoad_(String(b.id).trim()); if (d) payload.phieu = { ncc: d.ncc || '', so_phieu: d.so_phieu || '', ngay: d.ngay || '', dong: (d.dong || []).map(x => ({ dong: x.dong, don_gia: x.don_gia || 0, sl: x.sl, ma_ncc: x.ma_ncc || '', mo_ta: x.mo_ta || '' })) }; } catch (err) { /* web tự báo */ }
+    const w = webForward_(payload);
+    if (!w.ok && !payload.dry_run && !pre.duplicate) {
+      const u = receiptUndo_({ ticket_id: b.ticket_id, id: b.id, chu: true }, nguoi, false);
+      return Object.assign({ kho_web: true, ok: false, error: (w.error || 'web chưa ghi') + (u.ok ? ' — đã huỷ phần bot (mã mới, đánh dấu phiếu), gửi lại được' : ' — chưa huỷ được phần bot: ' + (u.error || '')) });
+    }
+    return Object.assign({ kho_web: true, tao_moi: pre.tao_moi }, w, w.ok ? {} : { ok: false });
   }
   const w = webForward_(payload);
   return Object.assign({ kho_web: true }, w, w.ok ? {} : { ok: false });
