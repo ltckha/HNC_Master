@@ -12,6 +12,7 @@ os.environ['HNC_SHEET_ID'] = TEST_ID
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import main  # noqa: E402
+from tools.luat_kho_node import goi  # noqa: E402  (luật 15: cùng luật bán ký gửi với bot / web)
 
 SO_DONG = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--so=')), 3))  # --so=2 → 2 dòng
 
@@ -37,7 +38,9 @@ def pick_rows(loader):
             except ValueError:
                 ton = 0
             if code and ton > 0 and price.get(code, 0) > 0:
-                out.append({'kho': kho, 'code': code, 'color': r[hk.index('product_color')].strip(), 'size': r[hk.index('item_size')].strip(), 'gia': price[code]})
+                cot = 'cua_Y3C' if kho == '15E' else 'cua_15E'
+                out.append({'kho': kho, 'code': code, 'color': r[hk.index('product_color')].strip(), 'size': r[hk.index('item_size')].strip(), 'gia': price[code],
+                            'tab': tab, 'dong_kho': v.index(r) + 1, 'cot': cot, 'ky': money(r[hk.index(cot)]) if cot in hk else 0})
                 if len([x for x in out if x['kho'] == kho]) >= 2:
                     break
     return out[:SO_DONG]
@@ -58,27 +61,38 @@ def main_():
     ws = loader.spreadsheet.worksheet('BAN')
     v = ws.get_all_values()
     head = [c.strip() for c in v[0]]
-    for c in ('Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'seller', 'ma_dong', 'nguon'):
+    for c in ('Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'seller', 'ma_dong', 'nguon', 'chu_hang', 'payment_method', 'ky_gui_tru'):
         if c not in head:
             print(f"⛔ Tab BAN bản thử thiếu cột {c}")
             return 1
     ic = head.index('product_code')
     last = max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip()))
     today = main.datetime.now().strftime('%d/%m/%Y')
-    new = []
-    for i, x in enumerate(rows, start=1):
-        r = [''] * len(head)
-        vals = {'Ngày': today, 'product_code': x['code'], 'product_color': x['color'], 'Giá': x['gia'], 'item_size': x['size'],
-                'item_quantity': 1, 'KHO': x['kho'], 'seller': 'dien-tap-mac', 'ma_dong': f"MAC-{main.MAC_RUN_ID}#{i}", 'nguon': 'mac'}
-        for k, val in vals.items():
-            r[head.index(k)] = val
-        new.append(r)
-        print(f"  dòng {last + i}: {x['kho']} {x['code']} size {x['size']} · {x['gia']:,}đ · {vals['ma_dong']}")
+    new, doi = [], []
+    stamp = 'mac ' + main.datetime.now().strftime('%Y-%m-%d %H:%M')
+    for x in rows:
+        tach = goi('banTachChuHang', x['kho'], 1, x['ky'])  # ký gửi của hộ kia bán trước (như bot kyguiSale_)
+        for ph in tach['phan']:
+            n = len(new) + 1
+            r = [''] * len(head)
+            vals = {'Ngày': today, 'product_code': x['code'], 'product_color': x['color'], 'Giá': x['gia'], 'item_size': x['size'],
+                    'item_quantity': ph['qty'], 'KHO': x['kho'], 'seller': 'dien-tap-mac', 'ma_dong': f"MAC-{main.MAC_RUN_ID}#{n}", 'nguon': 'mac',
+                    'chu_hang': ph['chu_hang'], 'payment_method': 'Tiền mặt', 'ky_gui_tru': stamp if ph['chu_hang'] != x['kho'] else ''}
+            for k, val in vals.items():
+                r[head.index(k)] = val
+            new.append(r)
+            print(f"  dòng {last + n}: {x['kho']} {x['code']} size {x['size']} · {x['gia']:,}đ · chủ {ph['chu_hang']} · {vals['ma_dong']}")
+        for d in tach['doi_cot']:
+            doi.append((x['tab'], x['dong_kho'], d['cot'], x['ky'] + d['delta']))
+            print(f"  {x['tab']} dòng {x['dong_kho']}: {d['cot']} {x['ky']} → {x['ky'] + d['delta']}")
     if not ghi:
         print("Chạy thử — chưa ghi. Thêm --ghi để ghi vào bản thử.")
         return 0
     if not loader.insert_rows_with_exact_range('BAN', new, last + 1):
         return 1
+    for tab, dong, cot, moi in doi:
+        ws_k = loader.spreadsheet.worksheet(tab)
+        ws_k.update_cell(dong, [c.strip() for c in ws_k.row_values(1)].index(cot) + 1, moi)
     print(f"✅ Đã ghi {len(new)} dòng BAN vào bản thử (dòng {last + 1}–{last + len(new)}).")
     return 0
 
