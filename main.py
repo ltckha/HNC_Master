@@ -4219,7 +4219,13 @@ def change_che_do(loader):
     if input(f"⚠️ Gõ lại {pick} để đổi sang {want.upper()}: ").strip() != pick:
         print("👌 Không đổi.")
         return
-    set_meta(loader, {'che_do': want, 'che_do_luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'che_do_boi': f'mac {MAC_RUN_ID}'})
+    pairs = {'che_do': want, 'che_do_luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'che_do_boi': f'mac {MAC_RUN_ID}'}
+    if want == 'master':
+        # Mốc như web: hàng cuối tab BAN lúc đổi Dự phòng → dòng gõ tay sau mốc được web nhập bù / đối chiếu (du_phong_hang, P0 20/10)
+        ban = loader.spreadsheet.worksheet('BAN').get_all_values()
+        ic = [str(h).strip() for h in ban[0]].index('product_code')
+        pairs['du_phong_hang'] = str(max(i + 1 for i, r in enumerate(ban) if i == 0 or (len(r) > ic and r[ic].strip())))
+    set_meta(loader, pairs)
     loader._mark_sync('META')
     print(f"✅ Đã đổi chế độ sổ gốc: {want.upper()}")
 

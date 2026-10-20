@@ -1412,7 +1412,15 @@ function navCheDoPick_(n, chatId, d, dryRun) {
   }
   navClearAsk_(chatId);
   if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ đổi chế độ sang ' + want.toUpperCase() };
-  metaSet_({ che_do: want, che_do_luc: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), che_do_boi: 'zalo ' + (CTX.seller || chatId) });
+  const pairs = { che_do: want, che_do_luc: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), che_do_boi: 'zalo ' + (CTX.seller || chatId) };
+  if (want === 'master') {
+    // Mốc như web: hàng cuối BAN lúc đổi Dự phòng (du_phong_hang) → web nhập bù dòng gõ tay sau mốc
+    const ban = sheetValues_('BAN'), c = headerMap_(ban[0]);
+    let last = ban.length;
+    while (last > 1 && String(ban[last - 1][c.product_code] || '').trim() === '') last--;
+    pairs.du_phong_hang = String(last);
+  }
+  metaSet_(pairs);
   const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';
   return { text: '✅ Đã đổi chế độ sổ gốc: ' + want.toUpperCase() +
     (want === 'web' && !sw ? '\n(Công tắc BOT_CHUYEN_WEB chưa bật → bot vẫn tự ghi như cũ.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };

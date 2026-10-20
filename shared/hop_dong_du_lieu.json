@@ -1056,6 +1056,22 @@
       "main.py"
      ],
      "du_kien": true
+    },
+    "du_phong_hang": {
+     "y_nghia": "Dòng key: số hàng cuối tab BAN lúc đổi sang Dự phòng (chuỗi số). Web / main.py [7] / bot \"che do\" ghi khi đổi sang master; dòng gõ tay sau mốc được web nhập bù.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "cho_chep": {
+     "y_nghia": "Dòng key: số dòng web còn chờ chép sang Sheet (web ghi). Master mà > 0 → bot / main.py chưa ghi BAN / NHAP / XUAT.",
+     "ghi": [
+      "web"
+     ],
+     "du_kien": true
     }
    }
   },

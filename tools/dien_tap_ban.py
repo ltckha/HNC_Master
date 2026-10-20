@@ -13,7 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import main  # noqa: E402
 
-SO_DONG = 3
+SO_DONG = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--so=')), 3))  # --so=2 → 2 dòng
 
 
 def money(v):
@@ -53,7 +53,7 @@ def main_():
         return 1
     rows = pick_rows(loader)
     if len(rows) < SO_DONG:
-        print("⛔ Không đủ 3 mã còn tồn trong bản thử.")
+        print(f"⛔ Không đủ {SO_DONG} mã còn tồn trong bản thử.")
         return 1
     ws = loader.spreadsheet.worksheet('BAN')
     v = ws.get_all_values()
