@@ -171,6 +171,12 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       const cmdLines = lines.filter(isBatchCommandLine_);
       const isWriteCmd = cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
       if (isWriteCmd && !dryRun) { const blk = choChepBlock_(); if (blk) return { reply: '⏳ ' + blk + '\nNhắn số: 9 Menu', syncTabs: [] }; }
+      const STOCK_ZALO = [ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC];
+      const isStock = cmdLines.length ? cmdLines.some(l => STOCK_ZALO.indexOf(parseMessage_(l, knownCodes_()).action) !== -1) : STOCK_ZALO.indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
+      if (isStock) {
+        const g = stockWebGate_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
+        if (g) return { reply: (g.ok ? (g.text || '✅ Web đã ghi phiếu kho.') : '⚠️ Web chưa ghi phiếu kho: ' + (g.error || 'lỗi') + ' — chưa ghi gì, thử lại hoặc làm trên app') + '\nNhắn số: 9 Menu', syncTabs: [] };
+      }
       const isSale = cmdLines.length ? cmdLines.some(l => parseMessage_(l, knownCodes_()).action === ACTIONS.SELL) : parseMessage_(text, knownCodes_()).action === ACTIONS.SELL;
       if (isSale) {
         const g = saleWebGate_({ nguon: 'zalo', dry_run: !!dryRun, text: String(text || ''), chat_id: String(chatId || ''), nguoi: CTX.seller, chu: navIsOwner_(chatId) });
@@ -1371,6 +1377,32 @@ function cheDo_() {
   }
 }
 
+/** META che_do_kho: 'web' | 'master' (P2, 20/10 — phiếu kho ghi D1). Mặc định master; không đọc được → master. */
+function cheDoKho_() {
+  try {
+    const meta = sheetValues_('META');
+    const c = headerMap_(meta[0] || []);
+    if (c.key === undefined || c.value === undefined) return 'master';
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === 'che_do_kho');
+    return r && String(r[c.value]).trim().toLowerCase() === 'web' ? 'web' : 'master';
+  } catch (err) {
+    return 'master';
+  }
+}
+
+// P2: lệnh kho chuyển cho web khi che_do_kho = web (không tự ghi Sheet; web lỗi thì báo, không ghi).
+// Đọc ảnh phiếu (doc_phieu), nháp, in tem, hoá đơn, xuất MISA, bổ sung SP, kiểm hàng vẫn chạy ở bot (chỉ sửa ô trạng thái NHAP, không thêm dòng).
+const KHO_WEB_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'huy', 'xac_nhan', 'huy_nhap'];
+function stockWebGate_(payload) {
+  if (cheDoKho_() !== 'web') return null;
+  const b = payload.body || {};
+  if (b.action === 'xac_nhan' && b.id) {
+    try { const d = receiptLoad_(String(b.id).trim()); if (d) payload.phieu = d; } catch (err) { /* thiếu nháp → web tự báo */ }
+  }
+  const w = webForward_(payload);
+  return Object.assign({ kho_web: true }, w, w.ok ? {} : { ok: false });
+}
+
 /** META cho_chep = số dòng web còn chờ chép sang Sheet (web ghi, P0 20/10). Không có khoá → 0. */
 function choChep_() {
   try {
@@ -1412,32 +1444,40 @@ function metaSet_(pairs) {
 function navCheDo_(chatId) {
   if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ đổi chế độ sổ gốc.\nNhắn số: 9 Menu' };
   navSetAsk_(chatId, 'chedo', {});
-  return { text: '🧭 Chế độ sổ gốc đang là: ' + (cheDo_() === 'web' ? 'WEB (web ghi sổ)' : 'MASTER (bot / Mac ghi Sheet)') +
-    '\nNhắn số: 1 Master — web hỏng, bot / Mac ghi Sheet · 2 Web — web ghi, bot chuyển lệnh · 0 Để sau' };
+  const lab = v => (v === 'web' ? 'WEB (web ghi)' : 'DỰ PHÒNG (bot / Mac ghi Sheet)');
+  return { text: '🧭 Sổ bán: ' + lab(cheDo_()) + '\n🧭 Sổ kho: ' + lab(cheDoKho_()) +
+    '\nNhắn số: 1 Bán → Dự phòng · 2 Bán → Web · 3 Kho → Dự phòng · 4 Kho → Web · 0 Để sau' };
+}
+
+/** Mốc lúc đổi sang Dự phòng: hàng cuối có mã của tab (như web) → web nhập bù dòng ghi sau mốc. */
+function lastCodeRow_(tab) {
+  const v = sheetValues_(tab), c = headerMap_(v[0]);
+  let last = v.length;
+  while (last > 1 && String(v[last - 1][c.product_code] || '').trim() === '') last--;
+  return String(last);
 }
 
 function navCheDoPick_(n, chatId, d, dryRun) {
-  if (n !== 1 && n !== 2) return { text: navMenu_(chatId) };
-  const want = n === 1 ? 'master' : 'web';
+  if ([1, 2, 3, 4].indexOf(n) === -1) return { text: navMenu_(chatId) };
+  const kho = n >= 3, want = n % 2 === 1 ? 'master' : 'web', ten = (kho ? 'Sổ kho' : 'Sổ bán') + ' → ' + (want === 'web' ? 'WEB' : 'DỰ PHÒNG');
   if (!(d.pending === n && Date.now() - (d.pt || 0) <= UNDO_SECONDS * 1000)) {
     navSetAsk_(chatId, 'chedo', { pending: n, pt: Date.now() });
-    return { text: '⚠️ Đổi sang ' + want.toUpperCase() + ' — nhắn ' + n + ' lần nữa (trong 10 phút) để đổi · ' + NAV_FOOT };
+    return { text: '⚠️ ' + ten + ' — nhắn ' + n + ' lần nữa (trong 10 phút) để đổi · ' + NAV_FOOT };
   }
   navClearAsk_(chatId);
-  if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ đổi chế độ sang ' + want.toUpperCase() };
-  const pairs = { che_do: want, che_do_luc: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), che_do_boi: 'zalo ' + (CTX.seller || chatId) };
-  if (want === 'master') {
-    // Mốc như web: hàng cuối BAN lúc đổi Dự phòng (du_phong_hang) → web nhập bù dòng gõ tay sau mốc
-    const ban = sheetValues_('BAN'), c = headerMap_(ban[0]);
-    let last = ban.length;
-    while (last > 1 && String(ban[last - 1][c.product_code] || '').trim() === '') last--;
-    pairs.du_phong_hang = String(last);
-    pairs.du_phong_tu = pairs.che_do_luc; // giờ mốc giữ lại sau khi đổi về Web
+  if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ đổi ' + ten };
+  const luc = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), boi = 'zalo ' + (CTX.seller || chatId);
+  let pairs;
+  if (!kho) {
+    pairs = { che_do: want, che_do_luc: luc, che_do_boi: boi };
+    if (want === 'master') { pairs.du_phong_hang = lastCodeRow_('BAN'); pairs.du_phong_tu = luc; } // mốc như web
+  } else {
+    pairs = { che_do_kho: want, che_do_kho_luc: luc, che_do_kho_boi: boi };
+    if (want === 'master') { pairs.du_phong_nhap_hang = lastCodeRow_('NHAP'); pairs.du_phong_xuat_hang = lastCodeRow_('XUAT'); pairs.du_phong_kho_tu = luc; }
   }
   metaSet_(pairs);
   const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';
-  return { text: '✅ Đã đổi chế độ sổ gốc: ' + want.toUpperCase() +
-    (want === 'web' && !sw ? '\n(Công tắc BOT_CHUYEN_WEB chưa bật → bot vẫn tự ghi như cũ.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };
+  return { text: '✅ Đã đổi ' + ten + (!kho && want === 'web' && !sw ? '\n(Lệnh bán Zalo / app sẽ bị chặn: bán trên app.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };
 }
 
 function webForward_(payload) {
@@ -1708,6 +1748,10 @@ function handleStockRequest_(e) {
 function handleStock_(body, dryRun) {
   MEMO = {};
   rowSrcStart_('app', PN_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1 && body.id ? body.id : (body.ticket_id || body.id));
+  if (KHO_WEB_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1) {
+    const g = stockWebGate_({ nguon: 'app_kho', dry_run: !!dryRun, body });
+    if (g) return g;
+  }
   if (!dryRun && STOCK_ACTIONS.concat(['xac_nhan', 'huy_nhap', 'huy']).indexOf(String(body.action || '').trim().toLowerCase()) !== -1) {
     const blk = choChepBlock_();
     if (blk) return { ok: false, action: String(body.action || ''), error: blk, cho_chep: true };
@@ -3007,8 +3051,10 @@ function flushSyncHintsBody_() {
 function queueSyncHint_(tabs) {
   let add = tabs.filter(t => SYNC_WATCH_TABS.indexOf(t) !== -1);
   if (add.indexOf('BAN') !== -1 && cheDo_() === 'web') add = add.filter(t => t !== 'BAN'); // chế độ Web: sổ bán ở web → không báo chép BAN (tránh vòng lặp chép)
+  const khoWeb = cheDoKho_() === 'web';
+  if (khoWeb) add = add.filter(t => ['XUAT', 'KHO15E', 'KHOY3C'].indexOf(t) === -1); // kho Web: phiếu kho ở web; NHAP vẫn báo nhưng "chỉ cột trạng thái"
   if (!add.length) return;
-  if (add.some(t => SYNC_STOCK_TABS.indexOf(t) !== -1)) add = add.concat(['KHO15E', 'KHOY3C']);
+  if (!khoWeb && add.some(t => SYNC_STOCK_TABS.indexOf(t) !== -1)) add = add.concat(['KHO15E', 'KHOY3C']);
   const lock = LockService.getDocumentLock() || LockService.getScriptLock();
   if (!lock.tryLock(10000)) return;
   try {
@@ -3048,7 +3094,8 @@ function flushSyncHint_(force) {
       method: 'post',
       contentType: 'application/json',
       headers: { 'x-sync-key': key },
-      payload: JSON.stringify({ tabs: SYNC_WATCH_TABS.filter(t => tabs.indexOf(t) !== -1) }),
+      payload: JSON.stringify(Object.assign({ tabs: SYNC_WATCH_TABS.filter(t => tabs.indexOf(t) !== -1) },
+        tabs.indexOf('NHAP') !== -1 && cheDoKho_() === 'web' ? { chi_trang_thai: ['NHAP'] } : {})), // kho Web: web chỉ đọc lại cột trạng thái theo ma_dong, không tạo dòng
       muteHttpExceptions: true,
     });
     code = res.getResponseCode();

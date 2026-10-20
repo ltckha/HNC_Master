@@ -1036,12 +1036,12 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
 // Lệnh Zalo "che do" (Chủ, nhắn 2 lần) — viết sẵn, chưa deploy
 { const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', '']];
   eq('nhân viên gõ "che do" → chặn', /Chỉ Chủ/.test(ctx.handleText_('che do', false, 'nvCD')), true);
-  eq('Chủ gõ "che do" → đang MASTER + menu số', /MASTER[\s\S]*1 Master[\s\S]*2 Web/.test(z('che do')), true);
+  eq('Chủ gõ "che do" → sổ bán / sổ kho + menu 4 số', /Sổ bán: DỰ PHÒNG[\s\S]*Sổ kho: DỰ PHÒNG[\s\S]*1 Bán → Dự phòng[\s\S]*4 Kho → Web/.test(z('che do')), true);
   eq('nhắn 2 lần 1 → hỏi lại, chưa đổi', [/nhắn 2 lần nữa/.test(z('2')), DATA.META.some(r => r[0] === 'che_do')], [true, false]);
   const w0 = WRITES.length;
   const r2 = z('2');
   const mw = WRITES.slice(w0).filter(w => w.sheet === 'META').map(w => w.v);
-  eq('nhắn 2 lần → ghi META che_do = web + lúc / bởi, báo công tắc chưa bật', [/Đã đổi[\s\S]*WEB/.test(r2), mw.indexOf('che_do') !== -1, mw.indexOf('web') !== -1, mw.indexOf('che_do_boi') !== -1, /BOT_CHUYEN_WEB chưa bật/.test(r2)], [true, true, true, true, true]);
+  eq('nhắn 2 lần → ghi META che_do = web + lúc / bởi, báo bán bị chặn', [/Đã đổi[\s\S]*WEB/.test(r2), mw.indexOf('che_do') !== -1, mw.indexOf('web') !== -1, mw.indexOf('che_do_boi') !== -1, /Lệnh bán Zalo \/ app sẽ bị chặn/.test(r2)], [true, true, true, true, true]);
   const w1 = WRITES.length; z('che do'); z('1'); z('1');
   const mw1 = WRITES.slice(w1).filter(w => w.sheet === 'META').map(w => w.v);
   eq('đổi lại master + mốc du_phong_hang = hàng cuối BAN', [mw1.indexOf('master') !== -1, mw1.indexOf('du_phong_hang') !== -1, mw1.indexOf(String(DATA.BAN.length)) !== -1, mw1.indexOf('du_phong_tu') !== -1], [true, true, true, true]);
@@ -1079,6 +1079,33 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const h0 = HINTS.length; ctx.queueSyncHint_(['BAN']); ctx.flushSyncHints && ctx.flushSyncHints();
   eq('chế độ Web: không báo chép BAN', HINTS.slice(h0).some(h => (h.body.tabs || []).indexOf('BAN') !== -1), false);
   delete PROPS.SYNC_HINT_URL;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P2 sổ kho: che_do_kho = web → lệnh kho chuyển web, không ghi Sheet; web lỗi → báo, không ghi
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_kho', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch; const sent = []; let webOk = true;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return webOk ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, text: 'web ghi phiếu kho rồi' }) } : { getResponseCode: () => 503, getContentText: () => '{"error":"bảo trì"}' }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.NHAP.length;
+  let r = ctx.handleStock_({ action: 'nhap', ticket_id: 'K1', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] }, false);
+  eq('kho Web: app nhập → chuyển web, không ghi NHAP', [r.ok, r.kho_web, sent[0] && sent[0].nguon, sent[0] && sent[0].body.action, DATA.NHAP.length], [true, true, 'app_kho', 'nhap', n0]);
+  vm.runInContext('MEMO={};', ctx);
+  const t = ctx.handleText_('nhap TH2040D 40 TBH', false, 'nvK');
+  eq('kho Web: Zalo nhập → web trả lời', [/web ghi phiếu kho rồi/.test(t), sent[sent.length - 1].nguon, DATA.NHAP.length], [true, 'zalo', n0]);
+  webOk = false; vm.runInContext('MEMO={};', ctx);
+  r = ctx.handleStock_({ action: 'xuat', ticket_id: 'K2', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] }, false);
+  eq('kho Web: web lỗi → báo, không tự ghi', [r.ok, /503/.test(r.error), DATA.XUAT ? DATA.XUAT.length : 0], [false, true, DATA.XUAT ? DATA.XUAT.length : 0]);
+  webOk = true; vm.runInContext('MEMO={};', ctx);
+  eq('kho Web: in tem / danh sách nháp vẫn chạy ở bot', [ctx.handleStock_({ action: 'ds_nhap', seller: 'nv@hn.vn' }, false).ok, !!ctx.handleStock_({ action: 'ds_nhap', seller: 'nv@hn.vn' }, false).kho_web], [true, false]);
+  vm.runInContext('MEMO={};', ctx);
+  PROPS.SYNC_HINT_KEY = PROPS.SYNC_HINT_KEY || 'h'.repeat(20); vm.runInContext('this.flushSyncHint_=flushSyncHint_;', ctx);
+  delete CACHE.sync_q; const h0 = HINTS.length; ctx.queueSyncHint_(['NHAP', 'XUAT']); ctx.flushSyncHint_(true);
+  const hb = HINTS.slice(h0).map(h => h.body);
+  eq('kho Web: sync-hint chỉ NHAP, gắn chi_trang_thai; bỏ XUAT / KHO', [hb.length ? hb[0].tabs.indexOf('XUAT') : 0, hb.length ? hb[0].tabs.indexOf('KHO15E') : 0, hb.length ? JSON.stringify(hb[0].chi_trang_thai) : '[]'], [-1, -1, '["NHAP"]']);
+  // đổi Kho → Dự phòng: nhắn 3 hai lần → che_do_kho master + mốc NHAP / XUAT
+  const w0 = WRITES.length; z('che do'); z('3'); z('3');
+  const mk = WRITES.slice(w0).filter(w => w.sheet === 'META').map(w => w.v);
+  eq('"che do" 3 hai lần → che_do_kho = master + du_phong_nhap_hang / du_phong_xuat_hang / du_phong_kho_tu', ['master', 'du_phong_nhap_hang', 'du_phong_xuat_hang', 'du_phong_kho_tu'].every(x => mk.indexOf(x) !== -1), true);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
