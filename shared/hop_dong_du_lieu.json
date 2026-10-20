@@ -378,7 +378,8 @@
       "bot",
       "main.py",
       "tay"
-     ]
+     ],
+     "dinh_dang": "Phiếu nhập: \"NK\" + 6 số, mỗi kho 1 dãy (LuatKho.soNhapKe / soNhapKho). Khách trả: \"TRA-<ddMMyy>\" (LuatKho.soTraHang). Nhập dự phòng Zalo / phần nhập của chuyển kho: trống."
     },
     "product_code": {
      "ghi": [
@@ -432,19 +433,22 @@
     "web_stock": {
      "ghi": [
       "main.py"
-     ]
+     ],
+     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
     },
     "web_label": {
      "ghi": [
       "bot",
       "main.py"
-     ]
+     ],
+     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
     },
     "misa_stock": {
      "ghi": [
       "bot",
       "main.py"
-     ]
+     ],
+     "dinh_dang": "Cột trạng thái (bot / Mac sửa ô, không thêm dòng). Dòng nhập dự phòng Zalo / chuyển kho: \"Zalo_Update\"; khách trả: \"Tra_hang\"; xong: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"); lỗi: lý do."
     },
     "kho_sync": {
      "ghi": [
@@ -1069,6 +1073,60 @@
       "main.py",
       "bot"
      ]
+    },
+    "che_do_kho": {
+     "y_nghia": "Dòng key: sổ kho web | master (P2). Mặc định master.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_kho_luc": {
+     "y_nghia": "Dòng key: lúc đổi sổ kho, \"yyyy-MM-dd HH:mm:ss\" giờ VN.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "che_do_kho_boi": {
+     "y_nghia": "Dòng key: ai đổi sổ kho.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "du_phong_kho_tu": {
+     "y_nghia": "Dòng key: giờ đổi sổ kho sang Dự phòng.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "du_phong_nhap_hang": {
+     "y_nghia": "Dòng key: hàng cuối NHAP lúc đổi sổ kho sang Dự phòng.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
+    },
+    "du_phong_xuat_hang": {
+     "y_nghia": "Dòng key: hàng cuối XUAT lúc đổi sổ kho sang Dự phòng.",
+     "ghi": [
+      "web",
+      "main.py",
+      "bot"
+     ],
+     "du_kien": true
     }
    }
   },
