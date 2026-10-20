@@ -1,0 +1,1069 @@
+{
+ "phien_ban": "2026-10-20",
+ "ghi_chu": [
+  "Hợp đồng dữ liệu Sheet HNC_Master (ID 1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0) cho bot, main.py, web (P0 phương án 3).",
+  "Luật 4: đọc / ghi theo TÊN cột ở hang_tieu_de (SANPHAM = hàng 2, hàng 1 là tên nhóm); thiếu cột bắt buộc → báo lỗi, không ghi cột khác.",
+  "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị.",
+  "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách) — web không nhận cột này trong dữ liệu đồng bộ công khai.",
+  "du_kien: cột / khoá chưa có trên Sheet thật, sẽ thêm sau 26/10 khi anh Kha xác nhận (thử trước trên Sheet bản sao).",
+  "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json)."
+ ],
+ "tab": {
+  "SANPHAM": {
+   "y_nghia": "Danh mục mã con (1 dòng / mã màu)",
+   "hang_tieu_de": 2,
+   "khoa_dong": "product_code",
+   "cot": {
+    "parent_product_code": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Tên Ngành Hàng": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Đặc điểm": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Thương hiệu": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Giới tính": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Size Plus": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Size": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Chất liệu": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Nhấn mạnh": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Chất liệu quai:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Chất liệu đế:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Lót trong:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Mặt lót đế:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Dáng giày mũi:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Phần dưới giày:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Kết hợp trang phục:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Sử dụng:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "Bonus:": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "CON_NAME": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "CON_DES": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_code": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_name": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_price": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_unit": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_origin": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_category_id": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "product_description": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "purchase_price": {
+     "ghi": [
+      "tay",
+      "bot",
+      "main.py"
+     ],
+     "chi_chu": true
+    },
+    "invoice_price": {
+     "ghi": [
+      "bot",
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "supplier": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ],
+     "chi_chu": true
+    },
+    "content_path": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "content_url": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "content_files": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "web_url": {
+     "ghi": [
+      "tay",
+      "main.py"
+     ]
+    },
+    "get_images": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_01": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_02": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_03": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_04": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_05": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_06": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_07": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_08": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_09": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "image_10": {
+     "ghi": [
+      "tay",
+      "main.py",
+      "bot"
+     ]
+    },
+    "shopee_upload": {
+     "ghi": [
+      "main.py"
+     ]
+    },
+    "tiktok_upload": {
+     "ghi": [
+      "main.py"
+     ]
+    },
+    "web_upload": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "misa_upload": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    }
+   }
+  },
+  "NHAP": {
+   "y_nghia": "Phiếu nhập kho (1 dòng / mã + size + kho); TRA-… = khách trả hàng",
+   "hang_tieu_de": 1,
+   "khoa_dong": "Số chứng từ (*) + product_code + item_size + KHO (từ nay ma_dong)",
+   "cot": {
+    "Ngày chứng từ (*)": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "Số chứng từ (*)": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "product_code": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "KHO": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "item_size": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "Số lượng (*)": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ]
+    },
+    "FSKU": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ],
+     "cong_thuc": true
+    },
+    "web_stock": {
+     "ghi": [
+      "main.py"
+     ]
+    },
+    "web_label": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "misa_stock": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "kho_sync": {
+     "ghi": [
+      "main.py"
+     ]
+    },
+    "don_gia_phieu": {
+     "ghi": [
+      "bot",
+      "main.py",
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "don_gia_hd": {
+     "ghi": [
+      "bot"
+     ],
+     "chi_chu": true
+    },
+    "so_hd": {
+     "ghi": [
+      "bot"
+     ]
+    },
+    "ngay_hd": {
+     "ghi": [
+      "bot"
+     ]
+    },
+    "ma_dong": {
+     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    }
+   }
+  },
+  "XUAT": {
+   "y_nghia": "Xuất kho không bán (hỏng, tặng, chuyển kho phần xuất)",
+   "hang_tieu_de": 1,
+   "khoa_dong": "Ngày + product_code + item_size + KHO (từ nay ma_dong)",
+   "cot": {
+    "Ngày": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "product_code": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "KHO": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "item_size": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "item_quantity": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "FSKU": {
+     "ghi": [
+      "bot",
+      "tay"
+     ],
+     "cong_thuc": true
+    },
+    "ma_dong": {
+     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    }
+   }
+  },
+  "BAN": {
+   "y_nghia": "Bán hàng (1 dòng / mã + size + chủ hàng)",
+   "hang_tieu_de": 1,
+   "khoa_dong": "Ngày + product_code + item_size + KHO (từ nay ma_dong)",
+   "cot": {
+    "Ngày": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "product_code": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "Giá": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "item_size": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "item_quantity": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "KHO": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "FSKU": {
+     "ghi": [
+      "bot",
+      "tay"
+     ],
+     "cong_thuc": true
+    },
+    "channel": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "seller": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "chu_hang": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "payment_method": {
+     "ghi": [
+      "bot",
+      "tay"
+     ]
+    },
+    "customer_phone": {
+     "ghi": [
+      "bot",
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "ky_gui_tru": {
+     "ghi": [
+      "bot"
+     ]
+    },
+    "ma_dong": {
+     "y_nghia": "Mã dòng duy nhất: BH-2010-003#1 (phiếu app), NK000045#3 (phiếu nhập), Z-<msgid>#n (Zalo). Dòng cũ để trống.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    }
+   }
+  },
+  "KHO15E": {
+   "y_nghia": "Tồn kho 15E (1 dòng / mã + size); cua_Y3C = đôi trong kho này là hàng của hộ Y3C",
+   "hang_tieu_de": 1,
+   "khoa_dong": "FSKU (= kho + mã + size)",
+   "cot": {
+    "15E": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "cong_thuc": true
+    },
+    "product_code": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "item_size": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "opening_quantity": {
+     "ghi": [
+      "tay",
+      "bot"
+     ]
+    },
+    "current_quantity": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "cong_thuc": true
+    },
+    "product_location": {
+     "ghi": [
+      "bot",
+      "web",
+      "tay"
+     ]
+    },
+    "cua_Y3C": {
+     "ghi": [
+      "bot"
+     ]
+    }
+   }
+  },
+  "KHOY3C": {
+   "y_nghia": "Tồn kho Y3C (1 dòng / mã + size); cua_15E = đôi trong kho này là hàng của hộ 15E",
+   "hang_tieu_de": 1,
+   "khoa_dong": "FSKU (= kho + mã + size)",
+   "cot": {
+    "Y3C": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "cong_thuc": true
+    },
+    "product_code": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "product_color": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "item_size": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "opening_quantity": {
+     "ghi": [
+      "tay",
+      "bot"
+     ]
+    },
+    "current_quantity": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "cong_thuc": true
+    },
+    "product_location": {
+     "ghi": [
+      "bot",
+      "web",
+      "tay"
+     ]
+    },
+    "cua_15E": {
+     "ghi": [
+      "bot"
+     ]
+    }
+   }
+  },
+  "SUB": {
+   "y_nghia": "Ngành hàng (loai_dong = nganh | shopee) + bảng NCC bên phải",
+   "hang_tieu_de": 1,
+   "khoa_dong": "Tên Ngành Hàng (ngành) / supplier (NCC)",
+   "cot": {
+    "Tên Ngành Hàng": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Mã nhóm hàng hóa": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Shopee": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Tiktok": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Lazada": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Shopee Size": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Tiktok Size": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Cân nặng": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chiều dài": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chiều rộng": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chiều cao": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Shopee Price %": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Tiktok Price %": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Đặc điểm": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Thương hiệu": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chất liệu": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Nhấn mạnh": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chất liệu quai:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Chất liệu đế:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Lót trong:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Mặt lót đế:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Mũi giày:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Gót giày:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Kết hợp trang phục:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Sử dụng:": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Tên tổ chức chịu trách nhiệm hàng hóa": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Địa chỉ tổ chức chịu trách nhiệm hàng hóa": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "KHO": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "15E_product_location": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Y3C_product_location": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "loai_dong": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "Mã đối tượng": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "Tên đối tượng": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "Số điện thoại": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "Trạng thái": {
+     "ghi": [
+      "tay"
+     ]
+    },
+    "supplier": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "% chiết khấu": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    },
+    "Thuế suất": {
+     "ghi": [
+      "tay"
+     ],
+     "chi_chu": true
+    }
+   }
+  },
+  "META": {
+   "y_nghia": "Cặp khoá / giá trị hệ thống",
+   "hang_tieu_de": 1,
+   "khoa_dong": "key",
+   "cot": {
+    "key": {
+     "ghi": [
+      "main.py",
+      "bot"
+     ]
+    },
+    "value": {
+     "ghi": [
+      "main.py",
+      "bot"
+     ]
+    },
+    "updated_at": {
+     "ghi": [
+      "main.py",
+      "bot"
+     ]
+    },
+    "che_do": {
+     "y_nghia": "Dòng key = che_do: web | master (mặc định master = như hôm nay). Bot / main.py đọc trước mọi lệnh ghi.",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "che_do_luc": {
+     "y_nghia": "Dòng key: lúc đổi chế độ",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "che_do_boi": {
+     "y_nghia": "Dòng key: ai đổi",
+     "ghi": [
+      "bot",
+      "main.py"
+     ],
+     "du_kien": true
+    },
+    "khoa_mac": {
+     "y_nghia": "Dòng key: khoá chống chạy main.py cùng lúc, hạn 10 phút",
+     "ghi": [
+      "main.py"
+     ],
+     "du_kien": true
+    }
+   }
+  },
+  "in_tem_lenh": {
+   "y_nghia": "Hàng đợi in tem QL-700 (ẩn): bot ghi lenh, Mac in rồi ghi ket_qua",
+   "hang_tieu_de": 1,
+   "khoa_dong": "kho",
+   "cot": {
+    "kho": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "lenh": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "ket_qua": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    },
+    "cap_nhat": {
+     "ghi": [
+      "bot",
+      "main.py"
+     ]
+    }
+   }
+  },
+  "KYGUI_cu": {
+   "y_nghia": "Tab cũ (ẩn) trước khi ký gửi chuyển sang cột KHO 18/10; chờ anh cho xoá",
+   "hang_tieu_de": 1,
+   "cot": {
+    "product_code": {
+     "ghi": []
+    },
+    "item_size": {
+     "ghi": []
+    },
+    "chu_hang": {
+     "ghi": []
+    },
+    "kho_dang_o": {
+     "ghi": []
+    },
+    "so_luong": {
+     "ghi": []
+    },
+    "cap_nhat": {
+     "ghi": []
+    }
+   }
+  }
+ }
+}
