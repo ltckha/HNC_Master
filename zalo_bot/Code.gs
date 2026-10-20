@@ -3619,6 +3619,8 @@ function misaStockExport_(kho, dry, flags) {
     const docNo = String(v(row, 'Số chứng từ (*)') || '').trim();
     if (docNo.toUpperCase().indexOf('TRA-') === 0) { if (rowKho) statuses.push({ row: r + 1, value: 'Bỏ qua - trả hàng' }); continue; }
     if (docNo.toUpperCase().indexOf('KK-') === 0) { if (rowKho) statuses.push({ row: r + 1, value: 'Bỏ qua - kiểm kho' }); continue; }
+    // Đổi / gộp mã (web ghi "DOI-ddMMyy", H8): chưa chốt cách nhập MISA → không xuất, để lại danh sách chờ anh làm tay (không ghi Done)
+    if (docNo.toUpperCase().indexOf('DOI-') === 0) continue;
     const p = prod[code.toUpperCase()];
     if (p && needsInfo_(p.row, sc)) { boQua.push(code.toUpperCase()); continue; }
     const size = normSize_(v(row, 'item_size'));
@@ -3927,7 +3929,7 @@ function invoiceTickets_() {
   for (let r = 1; r < nh.length; r++) {
     const code = String(nh[r][col.product_code] || '').trim().toUpperCase();
     if (!code || code === 'PRODUCT_CODE') continue;
-    if (/^(TRA|KK)-/.test(String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase())) continue; // khách trả / kiểm kho: không đòi hoá đơn
+    if (/^(TRA|KK|DOI)-/.test(String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase())) continue; // khách trả / kiểm kho / đổi mã: không đòi hoá đơn
     const kho = KHO_ALIASES[String(nh[r][col.KHO] || '').trim().toUpperCase()];
     if (!kho) continue; // chưa chia kho → chưa đòi hoá đơn
     const date = dateKey_(nh[r][col['Ngày chứng từ (*)']]);
@@ -4338,7 +4340,7 @@ function labelSelect_(body) {
     const code = String(nh[r][c.product_code] || '').trim().toUpperCase();
     if (!code || code === 'PRODUCT_CODE') continue;
     const doc = String(nh[r][c['Số chứng từ (*)']] || '').trim().toUpperCase();
-    if (doc.indexOf('TRA-') === 0 || doc.indexOf('KK-') === 0) continue; // khách trả / kiểm kho (web ghi "KK-ddMMyy") không in tem
+    if (/^(TRA|KK|DOI)-/.test(doc)) continue; // khách trả / kiểm kho "KK-ddMMyy" / đổi mã "DOI-ddMMyy" (web ghi) không in tem
     if (KHO_ALIASES[String(nh[r][c.KHO] || '').trim().toUpperCase()] !== kho) continue;
     if (rowsWanted) { if (rowsWanted.indexOf(r + 1) === -1) continue; }
     else if (so) { if (doc !== so) continue; }
