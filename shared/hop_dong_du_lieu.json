@@ -379,7 +379,7 @@
       "main.py",
       "tay"
      ],
-     "dinh_dang": "Phiếu nhập: \"NK\" + 6 số, mỗi kho 1 dãy (LuatKho.soNhapKe / soNhapKho). Khách trả: \"TRA-<ddMMyy>\" (LuatKho.soTraHang). Nhập dự phòng Zalo / phần nhập của chuyển kho: trống."
+     "dinh_dang": "Phiếu nhập: \"NK\" + 6 số, mỗi kho 1 dãy (LuatKho.soNhapKe / soNhapKho). Khách trả: \"TRA-<ddMMyy>\" (LuatKho.soTraHang). Nhập dự phòng Zalo / phần nhập của chuyển kho: trống. Kiểm kho (web, thừa): \"KK-<ddMMyy>\"; thiếu thì ghi dòng XUAT."
     },
     "product_code": {
      "ghi": [
@@ -436,21 +436,21 @@
      "ghi": [
       "main.py"
      ],
-     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; kiểm kho (KK-…) → \"Kiem_kho\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "web_label": {
      "ghi": [
       "bot",
       "main.py"
      ],
-     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; kiểm kho (KK-…) → \"Kiem_kho\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "misa_stock": {
      "ghi": [
       "bot",
       "main.py"
      ],
-     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
+     "dinh_dang": "Khi THÊM dòng: nhập lẻ không số chứng từ (Zalo / app không số NK, phần nhập của chuyển kho) → \"Zalo_Update\"; khách trả (TRA-…) → \"Tra_hang\"; kiểm kho (KK-…) → \"Kiem_kho\"; nhập có số NK (phiếu NCC, nhập có so_chung_tu) → ĐỂ TRỐNG (HNC sẽ in tem / đẩy web / xuất MISA rồi ghi \"Done - …\"). Sau đó bot / Mac sửa ô: \"Done - yyyy-MM-dd HH:mm\" (misa_stock có thể kèm \"· giá tạm\"), lỗi: lý do."
     },
     "kho_sync": {
      "ghi": [

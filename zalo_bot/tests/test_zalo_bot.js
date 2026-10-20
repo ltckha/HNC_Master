@@ -1126,7 +1126,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
 // P3: che_do_ton = web → kiểm hàng hỏi web; web lỗi → tồn Sheet + ghi chú
 { const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_ton', 'web', '']];
   const f0 = ctx.UrlFetchApp.fetch; let ok = true; const asked = [];
-  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-ton/.test(url)) { asked.push(JSON.parse(opt.payload)); return ok ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, ton: [{ kho: '15E', size: '40', qty: 3, ky_gui: 1 }, { kho: 'Y3C', size: 40, qty: 2 }, { kho: '15E', size: '41', qty: 9 }], luc: '2026-10-20T14:05:00+07:00' }) } : { getResponseCode: () => 500, getContentText: () => '{}' }; } return f0(url, opt); };
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url) && JSON.parse(opt.payload).loai === 'ton') { asked.push(JSON.parse(opt.payload)); return ok ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, ton: [{ kho: '15E', size: '40', qty: 3, ky_gui: 1 }, { kho: 'Y3C', size: 40, qty: 2 }, { kho: '15E', size: '41', qty: 9 }], luc: '2026-10-20T14:05:00+07:00' }) } : { getResponseCode: () => 500, getContentText: () => '{}' }; } return f0(url, opt); };
   PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
   const tw = ctx.handleText_('TH2040D 40', true, 'nvT');
   eq('tồn Web: kiểm hàng soạn từ tồn web (lọc size, có ký gửi)', [/tồn theo web/.test(tw), /Kho 15E: size 40 · 3 \(ký gửi 1\)/.test(tw), /Kho Y3C: size 40 · 2/.test(tw), /size 41/.test(tw), asked[0] && asked[0].ma, asked[0] && asked[0].size], [true, true, true, false, 'TH2040D', '40']);
@@ -1204,5 +1204,15 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const before = has();
   const r = ctx.handleStock_({ action: 'nhap', ticket_id: 'KR1', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 47, qty: 1, warehouse: 'Y3C' }] }, false);
   eq('nhập size chưa có dòng KHO → thêm dòng KHO', [before, r.ok, has()], [false, true, true]); }
+// Dòng kiểm kho (web ghi "KK-ddMMyy", dấu Kiem_kho) → không in tem, không đòi hoá đơn
+{ const ix = n => DATA.NHAP[0].indexOf(n); const row = new Array(DATA.NHAP[0].length).fill('');
+  row[ix('Ngày chứng từ (*)')] = '18/10/2026'; row[ix('Số chứng từ (*)')] = 'KK-181026'; row[ix('product_code')] = 'TH2040D'; row[ix('KHO')] = '15E'; row[ix('item_size')] = 44; row[ix('Số lượng (*)')] = 1;
+  ['web_stock', 'web_label', 'misa_stock'].forEach(n => { if (ix(n) !== -1) row[ix(n)] = 'Kiem_kho'; });
+  DATA.NHAP.push(row); const kkRow = DATA.NHAP.length; vm.runInContext('MEMO={};', ctx);
+  const lt = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', ngay: '18/10/2026', kho: '15E' }, true);
+  ctx.MEMO = {};
+  const inv = ctx.invoiceTickets_().some(t => (t.rows || []).indexOf(kkRow) !== -1);
+  eq('kiểm kho KK-: không vào in tem theo ngày, không thành phiếu hoá đơn', [(lt.rows || []).some(r => r.dong === kkRow), inv], [false, false]);
+  DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

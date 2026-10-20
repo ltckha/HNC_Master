@@ -926,12 +926,12 @@ function navInvoiceNumber_(text, chatId, d, dryRun) {
 // TÁC VỤ
 // =====================================================================
 
-/** Kiểm hàng. P3 (tồn tính ở D1): che_do_ton = web → hỏi web POST /api/bot-ton {ma, sizes} (ký HMAC như callback) → {ok, text};
+/** Kiểm hàng. P3 (tồn tính ở D1): che_do_ton = web → hỏi web POST /api/bot-lenh {loai:"ton", ma, size?} (ký HMAC như callback) → {ok, ton:[{kho,size,qty,ky_gui}], luc};
  *  web lỗi → trả tồn theo Sheet kèm ghi chú (Sheet là bản web chép, có thể trễ vài phút). */
 function doCheck_(p) {
   if (cheDoTon_() === 'web' && (p.code || p.baseCode)) {
     const sizes = p.sizes.map(s => s.size);
-    const w = webForward_(Object.assign({ ma: p.code || p.baseCode }, sizes.length === 1 ? { size: sizes[0] } : {}), '/api/bot-ton');
+    const w = webForward_(Object.assign({ loai: 'ton', ma: p.code || p.baseCode }, sizes.length === 1 ? { size: sizes[0] } : {})); // web chốt: /api/bot-lenh loai "ton"
     if (w.ok && Array.isArray(w.ton)) {
       const rows = w.ton.filter(t => !sizes.length || sizes.indexOf(normSize_(t.size)) !== -1);
       const byKho = {};
@@ -3590,6 +3590,7 @@ function misaStockExport_(kho, dry, flags) {
     if (rowKho && rowKho !== kho) continue; // kho kia: để lần xuất kho đó
     const docNo = String(v(row, 'Số chứng từ (*)') || '').trim();
     if (docNo.toUpperCase().indexOf('TRA-') === 0) { if (rowKho) statuses.push({ row: r + 1, value: 'Bỏ qua - trả hàng' }); continue; }
+    if (docNo.toUpperCase().indexOf('KK-') === 0) { if (rowKho) statuses.push({ row: r + 1, value: 'Bỏ qua - kiểm kho' }); continue; }
     const p = prod[code.toUpperCase()];
     if (p && needsInfo_(p.row, sc)) { boQua.push(code.toUpperCase()); continue; }
     const size = normSize_(v(row, 'item_size'));
@@ -3898,7 +3899,7 @@ function invoiceTickets_() {
   for (let r = 1; r < nh.length; r++) {
     const code = String(nh[r][col.product_code] || '').trim().toUpperCase();
     if (!code || code === 'PRODUCT_CODE') continue;
-    if (String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase().indexOf('TRA-') === 0) continue;
+    if (/^(TRA|KK)-/.test(String(nh[r][col['Số chứng từ (*)']] || '').trim().toUpperCase())) continue; // khách trả / kiểm kho: không đòi hoá đơn
     const kho = KHO_ALIASES[String(nh[r][col.KHO] || '').trim().toUpperCase()];
     if (!kho) continue; // chưa chia kho → chưa đòi hoá đơn
     const date = dateKey_(nh[r][col['Ngày chứng từ (*)']]);
@@ -4309,7 +4310,7 @@ function labelSelect_(body) {
     const code = String(nh[r][c.product_code] || '').trim().toUpperCase();
     if (!code || code === 'PRODUCT_CODE') continue;
     const doc = String(nh[r][c['Số chứng từ (*)']] || '').trim().toUpperCase();
-    if (doc.indexOf('TRA-') === 0) continue;
+    if (doc.indexOf('TRA-') === 0 || doc.indexOf('KK-') === 0) continue; // khách trả / kiểm kho (web ghi "KK-ddMMyy") không in tem
     if (KHO_ALIASES[String(nh[r][c.KHO] || '').trim().toUpperCase()] !== kho) continue;
     if (rowsWanted) { if (rowsWanted.indexOf(r + 1) === -1) continue; }
     else if (so) { if (doc !== so) continue; }

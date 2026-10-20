@@ -2579,7 +2579,7 @@ def process_export_task(choice, loader):
             kho_raw = str(rec.get('KHO', '')).strip().upper()
 
             # Dòng trả hàng / huỷ đơn (Số chứng từ TRA-…): anh nhập trả trong app MISA → không xuất phiếu nhập
-            if doc_no.upper().startswith('TRA-'):
+            if doc_no.upper().startswith(('TRA-', 'KK-')):  # khách trả / kiểm kho (web ghi KK-ddMMyy): không xuất phiếu nhập
                 row_status_list.append("Bỏ qua - trả hàng")
                 continue
 
@@ -2809,7 +2809,7 @@ def process_export_task(choice, loader):
                 if not code or code == 'product_code':
                     continue
                 doc = str(row[doc_idx]).strip().upper() if (doc_idx is not None and pd.notna(row[doc_idx])) else ""
-                if doc.startswith('TRA-'):
+                if doc.startswith(('TRA-', 'KK-')):
                     continue
                 if kho_want and kho_norm(row[kho_idx2]) != kho_want:
                     continue
@@ -2820,7 +2820,7 @@ def process_export_task(choice, loader):
                 sel_recs.append({k: (row[i] if pd.notna(row[i]) else "") for k, i in col_map.items() if i < len(row)})
         else:
             for rel_idx, rec in zip(pending_row_indices, pending_records):
-                if str(rec.get('Số chứng từ (*)', '')).strip().upper().startswith('TRA-'):
+                if str(rec.get('Số chứng từ (*)', '')).strip().upper().startswith(('TRA-', 'KK-')):
                     continue
                 if kho_want and kho_norm(rec.get('KHO')) != kho_want:
                     continue
