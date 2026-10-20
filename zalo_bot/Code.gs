@@ -2274,7 +2274,34 @@ function receiptConfirmWeb_(body, nguoi, dryRun, d, input, lines, plan, khoRows,
   props.setProperty('stk_' + ticket, JSON.stringify({ t: Date.now(), rows: ops.length }));
   pruneTickets_(props, 'stk_');
   CacheService.getScriptCache().put('stkops_' + ticket, JSON.stringify({ seller: nguoi, label: 'phiếu nhập kho ' + d.id + ' (web ghi)', ops, pn: d.id }), UNDO_SECONDS);
+  if (body.ncc_xuat_hd === false) props.setProperty('hdkhong_' + d.id, JSON.stringify({ t: Date.now() })); // NHAP do web ghi → đặt "không lấy HĐ" khi thấy dòng (hdKhongSweep_)
   return Object.assign({ ok: true, _sync: uniq_(ops.map(o => o.sheet)) }, base);
+}
+
+/**
+ * Phiếu NCC web ghi (sổ kho Web) mà NCC không xuất hoá đơn: thấy dòng NHAP có ma_dong "<phieu_id>#…" thì đặt phiếu hoá đơn
+ * (ngày + NCC + kho) = "không lấy", như khi bot tự ghi (ncc_xuat_hd: false). Chạy trong trigger 1 phút và trước khi đọc hoá đơn; giữ 7 ngày.
+ */
+function hdKhongSweep_() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  const ids = Object.keys(all).filter(k => k.indexOf('hdkhong_') === 0).map(k => k.slice(8));
+  if (!ids.length) return 0;
+  const nh = sheetValues_('NHAP'), c = headerMap_(nh[0]);
+  if (c.ma_dong === undefined) return 0;
+  let done = 0;
+  ids.forEach(id => {
+    const rows = [];
+    for (let r = 1; r < nh.length; r++) if (String(nh[r][c.ma_dong] || '').indexOf(id + '#') === 0) rows.push(r + 1);
+    let t0 = 0;
+    try { t0 = JSON.parse(all['hdkhong_' + id]).t || 0; } catch (e) { /* bỏ */ }
+    if (!rows.length) { if (Date.now() - t0 > 7 * 86400000) props.deleteProperty('hdkhong_' + id); return; }
+    invoiceTickets_().filter(t => (t.rows || []).some(r => rows.indexOf(r) !== -1)).forEach(t =>
+      props.setProperty('hdon_' + t.id, JSON.stringify({ s: 'khong', at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'), pn: id })));
+    props.deleteProperty('hdkhong_' + id);
+    done++;
+  });
+  return done;
 }
 
 function receiptConfirm_(body, nguoi, dryRun) {
@@ -3203,6 +3230,7 @@ function flushSyncHintsBody_() {
   try { kyguiSweep_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // soát ký gửi gõ tay mỗi 5 phút (chạy chung trigger mỗi phút)
   try { flushSyncHint_(false); } catch (err) { console.error(err && err.stack ? err.stack : err); }
   try { invoiceFoldersWarm_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // màn Hoá đơn không phải chờ duyệt Drive
+  try { hdKhongSweep_(); } catch (err) { console.error(err && err.stack ? err.stack : err); } // phiếu web ghi mà NCC không xuất HĐ
 }
 
 /** Thêm tab vào hàng chờ (chỉ tab đang theo dõi) rồi gửi ngay nếu đã quá 60 giây kể từ lần gửi trước. */
@@ -4106,6 +4134,7 @@ function invoiceAction_(body, nguoi, dryRun) {
   if (ownerEmails_().indexOf(String(nguoi || '').toLowerCase()) === -1) return fail('chỉ Chủ xem / ghi hoá đơn mua hàng');
   MEMO = {};
   const t0 = Date.now();
+  try { if (hdKhongSweep_()) MEMO = {}; } catch (err) { console.error(err && err.stack ? err.stack : err); }
   const tickets = invoiceStatus_(invoiceTickets_()).tickets;
   if (mode === 'ds') {
     // Lọc ngay trong bot (19/10): trang_thai chua | da | khong, ho 15E | Y3C, gioi_han (mặc định 30, áp cho da / khong — mới nhất trước)

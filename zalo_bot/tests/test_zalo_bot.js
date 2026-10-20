@@ -1182,5 +1182,21 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('kho Web xac_nhan: web lỗi → báo, đã huỷ phần bot, phiếu về nháp', [y.ok, /đã huỷ phần bot/.test(y.error || ''), st.phieu ? st.phieu.trang_thai : st.trang_thai], [false, true, 'cho_chia']);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// ncc_xuat_hd false + web ghi NHAP: bot nhớ phiếu, thấy dòng ma_dong <id>#… thì đặt hoá đơn = không lấy
+{ vm.runInContext('this.hdKhongSweep_=hdKhongSweep_; MEMO={};', ctx);
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5003', ngay: '2026-10-20', dong: [{ ma_ncc: 'TH', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+  const pid = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-hd-khong').toString('base64') }).id;
+  vm.runInContext('MEMO={};', ctx);
+  const r = pn({ action: 'xac_nhan', id: pid, ticket_id: 'HK1', web_ghi: true, ncc_xuat_hd: false, dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '39': 1 } }] });
+  eq('web_ghi + ncc_xuat_hd false → nhớ phiếu chờ dòng NHAP', [r.ok, !!PROPS['hdkhong_' + pid]], [true, true]);
+  if (DATA.NHAP[0].indexOf('ma_dong') === -1) DATA.NHAP[0].push('ma_dong');
+  const row = new Array(DATA.NHAP[0].length).fill(''); const ix = n => DATA.NHAP[0].indexOf(n);
+  row[ix('Ngày chứng từ (*)')] = today; row[ix('Số chứng từ (*)')] = 'NK000099'; row[ix('product_code')] = 'TH2040D'; row[ix('KHO')] = '15E'; row[ix('item_size')] = 39; row[ix('Số lượng (*)')] = 1; row[ix('ma_dong')] = pid + '#1';
+  DATA.NHAP.push(row); vm.runInContext('MEMO={};', ctx);
+  const n = ctx.hdKhongSweep_();
+  ctx.MEMO = {};
+  const t = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets.find(x => (x.rows || []).indexOf(DATA.NHAP.length) !== -1);
+  eq('thấy dòng NHAP của phiếu → hoá đơn = không lấy, xoá nhớ', [n, t && t.status, !!PROPS['hdkhong_' + pid]], [1, 'khong', false]);
+  DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
