@@ -1242,5 +1242,17 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('kiểm mã cũ đã đổi → "đổi thành" + tồn mã mới', [/Mã TH2040X đã đổi thành TH2040D/.test(t), /TH2040D/.test(t)], [true, true]);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// H8: mã cũ còn dòng nhưng web_upload = "Ẩn" → cũng hỏi web loai "ma"
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_hh', 'web', '']];
+  const hdr = DATA.SANPHAM[1]; let wi = hdr.indexOf('web_upload'); if (wi === -1) { hdr.push('web_upload'); wi = hdr.length - 1; }
+  const row = DATA.SANPHAM.find(r => r[hdr.indexOf('product_code')] === 'TH2040N'); const old = row[wi]; row[wi] = 'Ẩn';
+  const f0 = ctx.UrlFetchApp.fetch; let asked = 0;
+  ctx.UrlFetchApp.fetch = (url, opt) => { const b = JSON.parse(opt.payload || '{}'); if (/bot-lenh/.test(url) && b.loai === 'ma') { asked++; return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, ma_moi: 'TH2040D', loai: 'gop' }) }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
+  const t = ctx.handleText_('TH2040N 41', true, 'nvH8b');
+  vm.runInContext('MEMO={};', ctx); ctx.handleText_('TH2040D 40', true, 'nvH8b');
+  eq('mã Ẩn → hỏi web, "gộp vào" mã mới; mã thường không hỏi', [/Mã TH2040N đã gộp vào TH2040D/.test(t), asked], [true, 1]);
+  row[wi] = old; ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

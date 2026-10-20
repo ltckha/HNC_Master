@@ -926,11 +926,26 @@ function navInvoiceNumber_(text, chatId, d, dryRun) {
 // TÁC VỤ
 // =====================================================================
 
+/** SANPHAM.web_upload = "Ẩn" (H8: mã cũ đã đổi / gộp, web giữ dòng để giữ sổ cũ). */
+function spWebHidden_(code) {
+  if (!MEMO.__spHidden) {
+    MEMO.__spHidden = {};
+    const sp = sheetValues_('SANPHAM');
+    let hr = 0;
+    for (let i = 0; i < Math.min(2, sp.length); i++) if (sp[i].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = i; break; }
+    const c = headerMap_(sp[hr]);
+    if (c.web_upload !== undefined) for (let i = hr + 1; i < sp.length; i++) {
+      if (norm_(String(sp[i][c.web_upload] || '').trim()) === 'an') MEMO.__spHidden[String(sp[i][c.product_code] || '').trim().toUpperCase()] = true;
+    }
+  }
+  return !!MEMO.__spHidden[String(code || '').trim().toUpperCase()];
+}
+
 /** Kiểm hàng. P3 (tồn tính ở D1): che_do_ton = web → hỏi web POST /api/bot-lenh {loai:"ton", ma, size?} (ký HMAC như callback) → {ok, ton:[{kho,size,qty,ky_gui}], luc};
  *  web lỗi → trả tồn theo Sheet kèm ghi chú (Sheet là bản web chép, có thể trễ vài phút). */
 function doCheck_(p) {
   // H8 đổi / gộp mã (hàng hoá ở web): mã không còn trên Sheet → hỏi web /api/bot-lenh {loai:"ma", ma} → {ok, ma_moi, loai}
-  if (p.code && cheDoHh_() === 'web' && !codeExists_(p.code)) {
+  if (p.code && cheDoHh_() === 'web' && (!codeExists_(p.code) || spWebHidden_(p.code))) { // web giữ dòng mã cũ, đặt web_upload = "Ẩn"
     const m = webForward_({ loai: 'ma', ma: p.code, body: { ma: p.code } });
     if (m.ok && m.ma_moi && String(m.ma_moi).toUpperCase() !== p.code) {
       const moi = String(m.ma_moi).trim().toUpperCase();
