@@ -70,7 +70,7 @@ ans = iter(['1', '1'])
 main.change_che_do(main.EngineDataLoader())
 eq('menu 7: đổi lại master', main.EngineDataLoader().che_do(), 'master')
 # Sổ kho (P2): [4] Kho → Web → chặn THÊM dòng NHAP, sửa ô trạng thái vẫn được; [3] về Dự phòng ghi mốc NHAP / XUAT
-_kho0 = {r[0]: r[1] for r in L.spreadsheet.worksheet('META').get_all_values()[1:] if r and r[0].startswith(('che_do_kho', 'du_phong_'))}
+_kho0 = {r[0]: r[1] for r in L.spreadsheet.worksheet('META').get_all_values()[1:] if r and r[0].startswith(('che_do_kho', 'che_do_ton', 'che_do_hh', 'du_phong_'))}
 ans = iter(['4', '4'])
 main.change_che_do(main.EngineDataLoader())
 L4 = main.EngineDataLoader()

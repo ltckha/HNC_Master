@@ -1036,7 +1036,7 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
 // Lệnh Zalo "che do" (Chủ, nhắn 2 lần) — viết sẵn, chưa deploy
 { const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['shopee_last_update', '', '']];
   eq('nhân viên gõ "che do" → chặn', /Chỉ Chủ/.test(ctx.handleText_('che do', false, 'nvCD')), true);
-  eq('Chủ gõ "che do" → sổ bán / sổ kho + menu 4 số', /Sổ bán: DỰ PHÒNG[\s\S]*Sổ kho: DỰ PHÒNG[\s\S]*1 Bán → Dự phòng[\s\S]*4 Kho → Web/.test(z('che do')), true);
+  eq('Chủ gõ "che do" → 4 sổ + menu số 1–8', /Sổ bán: DỰ PHÒNG[\s\S]*Sổ kho: DỰ PHÒNG[\s\S]*Tồn kho: DỰ PHÒNG[\s\S]*Hàng hoá \+ giá: DỰ PHÒNG[\s\S]*1 Sổ bán → Dự phòng[\s\S]*8 → Web/.test(z('che do')), true);
   eq('nhắn 2 lần 1 → hỏi lại, chưa đổi', [/nhắn 2 lần nữa/.test(z('2')), DATA.META.some(r => r[0] === 'che_do')], [true, false]);
   const w0 = WRITES.length;
   const r2 = z('2');
@@ -1118,5 +1118,23 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('tao_ma: 1 dòng SANPHAM + 2 kho × 2 size, không NHAP', [r.ok, DATA.SANPHAM.length - s0, k15, ky, DATA.NHAP.length - n0], [true, 1, 2, 2, 0]);
   vm.runInContext('MEMO={};', ctx);
   eq('tao_ma lần 2 → da_co', tm({ ma_hnc: 'ZZ900D', mau: 'Đen', day_size: ['39'], gia_ban: 650000 }).da_co, true); }
+// P3: che_do_ton = web → kiểm hàng hỏi web; web lỗi → tồn Sheet + ghi chú
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_ton', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch; let ok = true; const asked = [];
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-ton/.test(url)) { asked.push(JSON.parse(opt.payload)); return ok ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, ton: [{ kho: '15E', size: '40', qty: 3, ky_gui: 1 }, { kho: 'Y3C', size: 40, qty: 2 }, { kho: '15E', size: '41', qty: 9 }], luc: '2026-10-20T14:05:00+07:00' }) } : { getResponseCode: () => 500, getContentText: () => '{}' }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20); vm.runInContext('MEMO={};', ctx);
+  const tw = ctx.handleText_('TH2040D 40', true, 'nvT');
+  eq('tồn Web: kiểm hàng soạn từ tồn web (lọc size, có ký gửi)', [/tồn theo web/.test(tw), /Kho 15E: size 40 · 3 \(ký gửi 1\)/.test(tw), /Kho Y3C: size 40 · 2/.test(tw), /size 41/.test(tw), asked[0] && asked[0].ma, asked[0] && asked[0].size], [true, true, true, false, 'TH2040D', '40']);
+  ok = false; vm.runInContext('MEMO={};', ctx);
+  eq('tồn Web: web lỗi → tồn Sheet + ghi chú', /Tồn theo Sheet, có thể trễ/.test(ctx.handleText_('TH2040D 40', true, 'nvT')), true);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY;
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P4: che_do_hh = web → bot không tạo / sửa SANPHAM
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_hh', 'web', '']]; vm.runInContext('MEMO={};', ctx);
+  const s0 = DATA.SANPHAM.length;
+  const r1 = ctx.handleStock_({ action: 'tao_ma', seller: 'nv@hn.vn', ma_hnc: 'ZZ901D', mau: 'Đen', day_size: ['39'], gia_ban: 650000 }, false);
+  const r2 = ctx.handleStock_({ action: 'bo_sung_sp', seller: 'nv@hn.vn', product_code: 'TH2040D', cot: { 'Đặc điểm': 'x' } }, false);
+  eq('hàng hoá Web: tao_ma / bo_sung_sp bị chặn, không ghi SANPHAM', [r1.ok, r1.hh_web, r2.ok, r2.hh_web, DATA.SANPHAM.length], [false, true, false, true, s0]);
+  if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

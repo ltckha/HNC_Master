@@ -376,20 +376,33 @@ class EngineDataLoader:
             pass
         return 0
 
-    def che_do_kho(self):
-        """META che_do_kho: 'web' | 'master' (P2 — phiếu kho ghi D1). Mặc định master. Cùng luật bot cheDoKho_."""
-        if getattr(self, '_che_do_kho', None) is None:
-            self._che_do_kho = 'master'
+    def meta_mode(self, key):
+        """Khoá chế độ trong META ('web' | 'master'), mặc định master. Đọc 1 lần mỗi lần mở menu; đổi ở [7] thì xoá nhớ. Cùng luật bot metaMode_."""
+        cache = self.__dict__.setdefault('_modes', {})
+        if key not in cache:
+            cache[key] = 'master'
             try:
                 for r in self.spreadsheet.worksheet('META').get_all_values()[1:]:
-                    if len(r) > 1 and r[0].strip() == 'che_do_kho':
-                        self._che_do_kho = 'web' if r[1].strip().lower() == 'web' else 'master'
+                    if len(r) > 1 and r[0].strip() == key:
+                        cache[key] = 'web' if r[1].strip().lower() == 'web' else 'master'
             except Exception:
                 pass
-        return self._che_do_kho
+        return cache[key]
+
+    def che_do_kho(self):
+        return self.meta_mode('che_do_kho')  # P2: phiếu kho ghi D1
+
+    def che_do_ton(self):
+        return self.meta_mode('che_do_ton')  # P3: tồn tính ở D1
+
+    def che_do_hh(self):
+        return self.meta_mode('che_do_hh')  # P4: hàng hoá + giá sửa trên admin
 
     def _write_ok(self, sheet_name, them_dong=False):
         # Sổ kho ở web (P2): menu Mac không THÊM dòng NHAP / XUAT (phiếu kho do web ghi); sửa ô trạng thái (in tem, MISA) vẫn được
+        if them_dong and sheet_name == 'SANPHAM' and self.is_google_api and self.che_do_hh() == 'web':
+            print("⛔ Hàng hoá đang sửa trên web: menu Mac không thêm mã vào SANPHAM. Tạo mã trên web (admin), hoặc đổi hàng hoá về Dự phòng khi web hỏng.")
+            return False
         if them_dong and sheet_name in ('NHAP', 'XUAT') and self.is_google_api and self.che_do_kho() == 'web':
             print(f"⛔ Sổ kho đang ở Web: menu Mac không thêm dòng {sheet_name}. Nhập / xuất trên web / app, hoặc đổi sổ kho về Dự phòng khi web hỏng.")
             return False
@@ -3983,7 +3996,7 @@ def print_main_menu():
   [4] [bold #29B6F6]📊 MISA eSHOP[/bold #29B6F6]
   [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
   [6] [bold #69F0AE]📸 AI TỰ ĐỘNG THÊM HÀNG HOÁ MỚI TỪ ẢNH[/bold #69F0AE]
-  [7] 🧭 Chế độ sổ gốc: sổ bán / sổ kho — DỰ PHÒNG (Mac, bot ghi Sheet) ↔ WEB (web ghi)
+  [7] 🧭 Chế độ sổ gốc: sổ bán / kho / tồn / hàng hoá — DỰ PHÒNG (Mac, bot ghi Sheet) ↔ WEB (web ghi)
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -4221,41 +4234,58 @@ def set_meta(loader, pairs):
         cells += [gspread.Cell(r, cv + 1, v), gspread.Cell(r, cu + 1, now)]
     ws.update_cells(cells, value_input_option='RAW')
     loader._che_do = None
+    loader.__dict__.pop('_modes', None)
+
+
+# 4 sổ đổi được — cùng bảng với bot CHE_DO_SO (số 2k-1 = về Dự phòng, 2k = sang Web)
+CHE_DO_SO = [
+    {'key': 'che_do', 'ten': 'Sổ bán', 'moc': {'du_phong_hang': 'BAN'}, 'tu': 'du_phong_tu'},
+    {'key': 'che_do_kho', 'ten': 'Sổ kho', 'moc': {'du_phong_nhap_hang': 'NHAP', 'du_phong_xuat_hang': 'XUAT'}, 'tu': 'du_phong_kho_tu'},
+    {'key': 'che_do_ton', 'ten': 'Tồn kho', 'moc': {}, 'tu': 'du_phong_ton_tu'},
+    {'key': 'che_do_hh', 'ten': 'Hàng hoá + giá', 'moc': {}, 'tu': 'du_phong_hh_tu'},
+]
 
 
 def change_che_do(loader):
-    """Menu [7]: xem / đổi sổ bán (che_do) và sổ kho (che_do_kho) master ↔ web, gõ lại số mới đổi — cùng luật lệnh Zalo "che do"."""
+    """Menu [7]: xem / đổi 4 sổ (bán, kho, tồn, hàng hoá) Dự phòng ↔ Web, gõ lại số mới đổi — cùng luật lệnh Zalo "che do"."""
     lab = lambda v: 'WEB (web ghi)' if v == 'web' else 'DỰ PHÒNG (Mac / bot ghi Sheet)'
-    print(f"🧭 Sổ bán: {lab(loader.che_do())}\n🧭 Sổ kho: {lab(loader.che_do_kho())}" + (" — SHEET BẢN THỬ" if SPREADSHEET_ID != SPREADSHEET_ID_THAT else ""))
-    pick = input("[1] Bán → Dự phòng  [2] Bán → Web  [3] Kho → Dự phòng  [4] Kho → Web  [Enter] giữ nguyên: ").strip()
-    if pick not in ('1', '2', '3', '4'):
+    for m in CHE_DO_SO:
+        print(f"🧭 {m['ten']}: {lab(loader.meta_mode(m['key']))}")
+    if SPREADSHEET_ID != SPREADSHEET_ID_THAT:
+        print("   (SHEET BẢN THỬ)")
+    print('  ' + ' · '.join(f"[{2 * i + 1}] {m['ten']} → Dự phòng  [{2 * i + 2}] → Web" for i, m in enumerate(CHE_DO_SO)))
+    pick = input("Chọn số (Enter = giữ nguyên): ").strip()
+    if not pick.isdigit() or not 1 <= int(pick) <= 2 * len(CHE_DO_SO):
         print("👌 Giữ nguyên.")
         return
-    kho, want = pick in ('3', '4'), ('master' if pick in ('1', '3') else 'web')
-    if want == (loader.che_do_kho() if kho else loader.che_do()):
+    m, want = CHE_DO_SO[(int(pick) - 1) // 2], ('master' if int(pick) % 2 == 1 else 'web')
+    if want == loader.meta_mode(m['key']):
         print("👌 Đang đúng chế độ đó rồi.")
         return
-    if input(f"⚠️ Gõ lại {pick} để đổi {'sổ kho' if kho else 'sổ bán'} sang {want.upper()}: ").strip() != pick:
+    if input(f"⚠️ Gõ lại {pick} để đổi {m['ten']} sang {want.upper()}: ").strip() != pick:
         print("👌 Không đổi.")
         return
-    luc, boi = datetime.now().strftime('%Y-%m-%d %H:%M:%S'), f'mac {MAC_RUN_ID}'
-
-    def last_row(tab):
-        v = loader.spreadsheet.worksheet(tab).get_all_values()
-        ic = [str(h).strip() for h in v[0]].index('product_code')
-        return str(max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip())))
-    if not kho:
-        pairs = {'che_do': want, 'che_do_luc': luc, 'che_do_boi': boi}
-        if want == 'master':  # mốc như web: dòng gõ tay sau mốc được web nhập bù
-            pairs.update({'du_phong_hang': last_row('BAN'), 'du_phong_tu': luc})
-    else:
-        pairs = {'che_do_kho': want, 'che_do_kho_luc': luc, 'che_do_kho_boi': boi}
-        if want == 'master':
-            pairs.update({'du_phong_nhap_hang': last_row('NHAP'), 'du_phong_xuat_hang': last_row('XUAT'), 'du_phong_kho_tu': luc})
+    luc = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    pairs = {m['key']: want, m['key'] + '_luc': luc, m['key'] + '_boi': f'mac {MAC_RUN_ID}'}
+    if want == 'master':  # mốc như web: dòng ghi sau mốc được web nhập bù
+        for k, tab in m['moc'].items():
+            v = loader.spreadsheet.worksheet(tab).get_all_values()
+            ic = [str(h).strip() for h in v[0]].index('product_code')
+            pairs[k] = str(max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip())))
+        pairs[m['tu']] = luc
     set_meta(loader, pairs)
-    loader._che_do_kho = None
+    loader.__dict__.pop('_modes', None)
     loader._mark_sync('META')
-    print(f"✅ Đã đổi {'sổ kho' if kho else 'sổ bán'}: {want.upper()}")
+    print(f"✅ Đã đổi {m['ten']}: {want.upper()}")
+
+
+def warn_ton_web(loader):
+    """P3: tồn tính ở web mà web còn dòng đang chép → tồn Sheet có thể thiếu; hỏi trước khi xuất tồn sàn / MISA."""
+    if loader.is_google_api and loader.che_do_ton() == 'web':
+        n = loader.cho_chep()
+        if n > 0:
+            return input(f"⚠️ Tồn tính ở web, còn {n} dòng web đang chép sang Sheet — tồn có thể thiếu. Vẫn làm tiếp? (y/Enter = không): ").strip().lower() == 'y'
+    return True
 
 
 MAC_LOCK_PATH = '/tmp/hnc_main_py.lock'
@@ -4305,6 +4335,8 @@ def main():
             sys.exit(0)
         elif choice_input == "1":
             handle_submenu_website(loader)
+        elif choice_input in ("2", "3", "4") and not warn_ton_web(loader):
+            continue
         elif choice_input == "2":
             handle_submenu_shopee(loader)
         elif choice_input == "3":
