@@ -1045,6 +1045,11 @@ function doMovement_(p, action, kho, dryRun) {
       if (!p.returnGoods && (p.nhapDoc || p.nhapMisa) && !CTX.nhapDoc) {
         CTX.nhapDoc = p.nhapDoc || receiptNkPlan_([kho], (productSuppliers_()[p.code] || ''))[kho]; // "misa" không số → NK tiếp theo của kho
       }
+      // Kho chưa có dòng mã + size → tạo dòng KHO có công thức trước (20/10, cùng luật web): tồn mới đếm được dòng NHAP
+      if (!rows.length) {
+        if (!dryRun) { ops.push(appendKhoRow_({ kho, code: p.code, size: s.size, color })); delete MEMO[KHO_SHEETS[kho]]; }
+        else warnings.push('ℹ️ ' + KHO_SHEETS[kho] + ' chưa có ' + p.code + (s.size ? ' size ' + s.size : '') + ' → sẽ thêm dòng kho');
+      }
       if (!dryRun) ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, p.returnGoods));
       if (p.returnGoods) {
         const rr = kyguiReturn_(p.code, s.size, s.qty, kho, p.owner, dryRun);

@@ -50,6 +50,8 @@ class Ghi:
                 raise RuntimeError(f'Tab {tab} thiếu cột {k}')
             out[head.index(k)] = val
         L = lambda n: main.gspread.utils.rowcol_to_a1(1, head.index(n) + 1).rstrip('1')
+        if tab.startswith('KHO'):
+            row = max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip())) + 1
         for k, f in (formulas or {}).items():
             out[head.index(k)] = f(L, row)
         print(f"  {tab} dòng {row}: " + ' · '.join(f'{k}={out[head.index(k)]}' for k in vals))
@@ -62,7 +64,10 @@ class Ghi:
         head = [c.strip() for c in v[0]]
         r = next((i + 1 for i, x in enumerate(v) if x[head.index('product_code')].strip().upper() == code and str(x[head.index('item_size')]).strip() == size), None)
         if r is None:
-            raise RuntimeError(f'{tab} không có dòng {code} size {size} (bot sẽ tự thêm dòng; công cụ này không tạo dòng KHO)')
+            if not self.ghi:
+                print(f"  {tab}: (dòng {code} size {size} sẽ được thêm ở bước nhập) {cot} 0 → {delta}")
+                return
+            raise RuntimeError(f'{tab} không có dòng {code} size {size}')
         cur = money(v[r - 1][head.index(cot)])
         print(f"  {tab} dòng {r}: {cot} {cur} → {cur + delta}")
         if self.ghi:
@@ -84,8 +89,24 @@ def kho_row(loader, kho, code, size):
     return next((x for x in v[1:] if x[h.index('product_code')].strip().upper() == code and x[h.index('item_size')].strip() == size), None), h
 
 
+def tao_dong_kho(g, kho, code, size, color):
+    """Kho chưa có dòng mã + size → thêm dòng KHO có công thức (như bot appendKhoRow_ / hợp đồng cong_thuc_mau)."""
+    tab = KHO_TAB[kho]
+    hn = [c.strip() for c in g.L.spreadsheet.worksheet('NHAP').row_values(1)]
+    hx = [c.strip() for c in g.L.spreadsheet.worksheet('XUAT').row_values(1)]
+    hb = [c.strip() for c in g.L.spreadsheet.worksheet('BAN').row_values(1)]
+    col = lambda h, n: main.gspread.utils.rowcol_to_a1(1, h.index(n) + 1).rstrip('1')
+    g.append(tab, {'product_code': code, 'product_color': color, 'item_size': int(size) if size.isdigit() else size, 'opening_quantity': 0}, {
+        kho: lambda L, r: f"=CONCATENATE(${L(kho)}$1;{L('product_code')}{r};{L('item_size')}{r})",
+        'current_quantity': lambda L, r: (f"={L('opening_quantity')}{r} + SUMIF(NHAP!{col(hn, 'FSKU')}:{col(hn, 'FSKU')}; {L(kho)}{r}; NHAP!{col(hn, 'Số lượng (*)')}:{col(hn, 'Số lượng (*)')})"
+                                          f" - SUMIF(XUAT!{col(hx, 'FSKU')}:{col(hx, 'FSKU')}; {L(kho)}{r}; XUAT!{col(hx, 'item_quantity')}:{col(hx, 'item_quantity')})"
+                                          f" - SUMIF(BAN!{col(hb, 'FSKU')}:{col(hb, 'FSKU')}; {L(kho)}{r}; BAN!{col(hb, 'item_quantity')}:{col(hb, 'item_quantity')})")})
+
+
 def nhap(g, code, size, kho, so='', marks=None):
     info = sp_info(g.L, code)
+    if kho_row(g.L, kho, code, size)[0] is None:
+        tao_dong_kho(g, kho, code, size, info['color'])
     nh = g.L.spreadsheet.worksheet('NHAP').get_all_values()
     h = [c.strip() for c in nh[0]]
     if not so:
@@ -105,8 +126,6 @@ def chuyen(g, code, size, tu, den):
     src, hs = kho_row(g.L, tu, code, size)
     if src is None:
         raise RuntimeError(f'{KHO_TAB[tu]} không có dòng {code} size {size} — không chuyển từ {tu} được')
-    if kho_row(g.L, den, code, size)[0] is None:
-        raise RuntimeError(f'{KHO_TAB[den]} chưa có dòng {code} size {size} (bot sẽ tự thêm dòng; công cụ này không tạo dòng KHO)')
     g.append('XUAT', {'Ngày': g.today, 'product_code': code, 'product_color': info['color'], 'KHO': tu,
                       'item_size': int(size) if size.isdigit() else size, 'item_quantity': 1, 'ma_dong': g.ma_dong(), 'nguon': 'mac'})
     # Phần nhập ở kho đến: như bot (nhập không số chứng từ → đánh dấu Zalo_Update để HNC bỏ qua khi xuất MISA / tem)

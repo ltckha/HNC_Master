@@ -1299,5 +1299,6 @@
   "id": "1QwH7Y1A45Pb9S0JbfDSkrP-VeUmD_cA6FsKdI4Gmxcw",
   "ten": "HNC_Master_BAN_THU",
   "ghi_chu": "Bản sao 20/10 (V115) để thử P0 mục 3–5 và diễn tập web; đã có cột ma_dong / nguon và META che_do = master. Không dùng bán thật."
- }
+ },
+ "luat_dong_kho": "Mã + size chưa có dòng ở tab KHO của kho: (1) ghi dòng làm tồn TĂNG (nhập lẻ / phiếu NCC / khách trả / phần nhập của chuyển kho) → TẠO dòng KHO có công thức (cong_thuc_mau) TRƯỚC rồi mới ghi NHAP; (2) cần ghi ô ký gửi cua_… ở kho chưa có dòng → tạo dòng như (1); (3) xuất / bán từ kho chưa có dòng → KHÔNG tạo, chỉ cảnh báo \"tồn không trừ\"; (4) tao_ma → dòng 2 kho × dãy size. Bot từ 20/10 (appendKhoRow_), web làm giống."
 }

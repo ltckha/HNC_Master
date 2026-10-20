@@ -1198,5 +1198,11 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const t = ctx.invoiceStatus_(ctx.invoiceTickets_()).tickets.find(x => (x.rows || []).indexOf(DATA.NHAP.length) !== -1);
   eq('thấy dòng NHAP của phiếu → hoá đơn = không lấy, xoá nhớ', [n, t && t.status, !!PROPS['hdkhong_' + pid]], [1, 'khong', false]);
   DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
+// Nhập vào kho chưa có dòng mã + size → bot tạo dòng KHO có công thức trước
+{ vm.runInContext('MEMO={};', ctx);
+  const has = () => DATA.KHOY3C.some(x => x[1] === 'TH2040D' && String(x[3]) === '47');
+  const before = has();
+  const r = ctx.handleStock_({ action: 'nhap', ticket_id: 'KR1', seller: 'nv@hn.vn', lines: [{ code: 'TH2040D', size: 47, qty: 1, warehouse: 'Y3C' }] }, false);
+  eq('nhập size chưa có dòng KHO → thêm dòng KHO', [before, r.ok, has()], [false, true, true]); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
