@@ -108,9 +108,9 @@ def mark_done(rows, codes):
             raise RuntimeError(f'Tab NHAP thiếu cột {name}')
     ip, isz, iw = head.index('product_code'), head.index('item_size'), head.index('web_label')
     stamp = 'Done - ' + datetime.now().strftime('%Y-%m-%d %H:%M')
-    marked, cells = [], []
+    marked, cells, got = [], [], {}
     for r in rows:
-        vals = ws.row_values(r)
+        vals = got[r] = ws.row_values(r)
         code = (vals[ip] if ip < len(vals) else '').strip().upper()
         size = (vals[isz] if isz < len(vals) else '').strip()
         if size.endswith('.0'):
@@ -119,7 +119,21 @@ def mark_done(rows, codes):
             cells.append(gspread.Cell(r, iw + 1, stamp))
             marked.append(r)
     if cells:
-        ws.update_cells(cells)
+        # P5b: Sổ kho Web + META p5b_web = 1 → gửi web_label lên web (co_nhap, cùng luật bot nhapFlagsWeb_); Dự phòng → ghi Sheet như cũ
+        sys.path.insert(0, ROOT)
+        from tools import web_lenh
+        w = None
+        if web_lenh.p5b_on(web_lenh.meta(ws.spreadsheet), 'che_do_kho'):
+            im = head.index('ma_dong') if 'ma_dong' in head else None
+            dong = []
+            for r in marked:
+                vals = got[r]
+                dong.append({'row': r, 'code': vals[ip].strip().upper(), 'ma_dong': (vals[im] if im is not None and im < len(vals) else '').strip(), 'value': stamp})
+            w = web_lenh.co_nhap('web_label', dong)
+        if w is None:
+            ws.update_cells(cells)
+        elif not w.get('ok'):
+            raise RuntimeError(w.get('error'))
     return marked
 
 

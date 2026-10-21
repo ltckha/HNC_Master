@@ -1283,5 +1283,44 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const u = pn({ action: 'huy_nhap', ticket_id: 'PN-HW1', id: pid });
   eq('kho Web: huỷ phiếu bot ghi → bot xoá dòng NHAP của nó, không chuyển web, trả dòng đã xoá', [w.ok, u.ok, fwd, (u.dong_nhap_xoa || []).length > 0, DATA.NHAP.filter(r => r[2]).length < nAfter], [true, true, 0, true, true]);
   ctx.UrlFetchApp.fetch = f0; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+// P5b (21/10): META p5b_web = 1 + sổ Web → hoá đơn / cờ NHAP / cờ SANPHAM gửi web (hoa_don / co_nhap / co_sp), không ghi Sheet; du_phong → ghi Sheet
+{ const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_kho', 'web', ''], ['che_do_hh', 'web', ''], ['p5b_web', '1', '']];
+  const f0 = ctx.UrlFetchApp.fetch; const sent = []; let reply = { ok: true, so_dong: 1, chua_khop: [] }, code = 200;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return { getResponseCode: () => code, getContentText: () => JSON.stringify(reply) }; } return f0(url, opt); };
+  PROPS.SYNC_HINT_URL = 'https://beta.giayhainancy.vn/api/sync-hint'; PROPS.WEB_NOTIFY_KEY = 'k'.repeat(20);
+  vm.runInContext('this.misaWriteStatus_=misaWriteStatus_;MEMO={};', ctx);
+  const allRows = { che_do: 'ghi', phieu: hdT.id, so_hd: 'W777', ngay_hd: '06/10/2026', dong: [{ dong: hdRowN, don_gia_hd: 530000 }].concat(hdOthers.map(d => ({ dong: d.dong, don_gia_hd: 300000 }))) };
+  const hdo = ctx.invoiceAction_(allRows, 'ltckha@gmail.com', false);
+  const m = sent[sent.length - 1] || {};
+  const d0 = (m.body && m.body.dong || []).find(d => d.row === hdRowN) || {};
+  eq('P5b hoa_don: gửi web (chu, so_hd, phieu_hd, dòng row + code + size + giá), không ghi NHAP, phiếu = đã có HĐ',
+    [hdo.ok, hdo.web, m.loai, m.chu, m.nguon, m.body && m.body.so_hd, m.body && m.body.phieu_hd[0], d0.code, String(d0.size), d0.don_gia_hd, hdRow[hdIx('so_hd')], JSON.parse(PROPS['hdon_' + hdT.id]).so_hd],
+    [true, true, 'hoa_don', true, 'bot', 'W777', hdT.id, 'TH2040N', '41', 530000, '0001234', 'W777']);
+  reply = { ok: false, error: 'bảo trì' }; code = 500; vm.runInContext('MEMO={};', ctx);
+  const hde = ctx.invoiceAction_(Object.assign({}, allRows, { so_hd: 'W778' }), 'ltckha@gmail.com', false);
+  eq('P5b hoa_don: web lỗi → báo lỗi, không ghi Sheet', [hde.ok, /web chưa ghi hoa_don/.test(hde.error), hdRow[hdIx('so_hd')]], [false, true, '0001234']);
+  reply = { ok: false, du_phong: true }; code = 200; vm.runInContext('MEMO={};', ctx);
+  const hdd = ctx.invoiceAction_(Object.assign({}, allRows, { so_hd: 'W779' }), 'ltckha@gmail.com', false);
+  eq('P5b hoa_don: web Dự phòng → bot ghi Sheet như cũ', [hdd.ok, !!hdd.web, hdRow[hdIx('so_hd')]], [true, false, 'W779']);
+  // co_nhap: da_in_tem
+  reply = { ok: true }; lbRow[9] = ''; vm.runInContext('MEMO={};', ctx);
+  const n0 = sent.length;
+  const dn2 = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
+  const cn = sent[n0] || {};
+  eq('P5b co_nhap: da_in_tem gửi web_label theo dòng (row + code), không ghi Sheet', [dn2.ok, dn2.web, cn.loai, cn.body && cn.body.dong.length, /^Done - /.test(cn.body && cn.body.dong[0].web_label), !!(cn.body && cn.body.dong[0].row && cn.body.dong[0].code), lbRow[9]],
+    [true, true, 'co_nhap', 1, true, true, '']);
+  // co_sp: cờ misa_upload (xuất danh mục MISA)
+  const spHr = DATA.SANPHAM.findIndex(r => r.indexOf('product_code') !== -1), spRow = DATA.SANPHAM.findIndex(r => r[1] === 'TH2040N') + 1;
+  const ci = DATA.SANPHAM[spHr].indexOf('misa_upload'), before = ci >= 0 ? DATA.SANPHAM[spRow - 1][ci] : '';
+  vm.runInContext('MEMO={};', ctx);
+  const ws = ctx.misaWriteStatus_('SANPHAM', ci, [{ row: spRow, value: 'Done - x' }], 'misa_upload');
+  const cs = sent[sent.length - 1] || {};
+  eq('P5b co_sp: cờ misa_upload gửi web theo mã, không ghi Sheet', [ws.ok, cs.loai, cs.body && cs.body.ds[0].code, cs.body && cs.body.ds[0].doi.misa_upload, ci >= 0 ? DATA.SANPHAM[spRow - 1][ci] : before], [true, 'co_sp', 'TH2040N', 'Done - x', before]);
+  // p5b_web tắt → như cũ (không gọi web)
+  DATA.META = DATA.META.filter(r => r[0] !== 'p5b_web'); vm.runInContext('MEMO={};', ctx);
+  const n1 = sent.length; lbRow[9] = '';
+  ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
+  eq('P5b tắt (chưa có p5b_web) → bot ghi Sheet như cũ, không gọi web', [sent.length - n1, /^Done - /.test(lbRow[9])], [0, true]);
+  ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

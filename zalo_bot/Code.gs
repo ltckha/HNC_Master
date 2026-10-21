@@ -920,7 +920,8 @@ function navInvoiceNumber_(text, chatId, d, dryRun) {
     return { text: '⚠️ ' + id + ': ' + r.error + (r.loi ? ' — ' + r.loi.slice(0, 3).join('; ') : '') + '\n→ nhập giá trên app: ' + webOrigin_() + '/admin/app\n\n' + next.text };
   }
   return { text: '✅ ' + id + ': HĐ ' + r.so_hd + ' ngày ' + r.ngay_hd + ', ' + r.so_dong + ' dòng, giá như phiếu' + (r.lech_gia.length ? ' (lệch: ' + r.lech_gia.join('; ') + ')' : '') +
-    '\n\n' + next.text, touched: dryRun ? [] : ['NHAP', 'SANPHAM'] };
+    (r.chua_khop ? '\n⚠ Web chưa khớp ' + r.chua_khop.length + ' dòng: ' + r.chua_khop.slice(0, 3).map(x => 'dòng ' + (x.row || x.ma_dong) + ' ' + (x.ly_do || '')).join('; ') : '') +
+    '\n\n' + next.text, touched: dryRun || r.web ? [] : ['NHAP', 'SANPHAM'] };
 }
 
 // =====================================================================
@@ -1591,6 +1592,64 @@ function navCheDoPick_(n, chatId, d, dryRun) {
   metaSet_(pairs);
   const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';
   return { text: '✅ Đã đổi ' + ten + (m.key === 'che_do' && want === 'web' && !sw ? '\n(Lệnh bán Zalo / app sẽ bị chặn: bán trên app.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };
+}
+
+// ---- P5b (21/10): hoá đơn + cờ NHAP / SANPHAM qua web (hợp đồng web docs/vision/p5b_api_hnc.md mục "Chốt") ----
+// Bật khi META p5b_web = 1 (web ghi lúc P5b lên bản đó) VÀ sổ tương ứng = web: Sổ kho → hoa_don / co_nhap, Hàng hoá → co_sp.
+// Web trả ok:false + du_phong:true → ghi Sheet như cũ (trả null). Lỗi khác → KHÔNG ghi Sheet (web là gốc), báo lỗi. Cùng luật tools/web_lenh.py (Mac).
+const CO_NHAP_COLS = ['misa_stock', 'web_label', 'kho_sync'];
+const CO_SP_MAX = 200;
+function metaOn_(key) {
+  try {
+    const meta = sheetValues_('META');
+    const c = headerMap_(meta[0] || []);
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === key);
+    return !!r && ['1', 'web', 'true'].indexOf(String(r[c.value]).trim().toLowerCase()) !== -1;
+  } catch (err) {
+    return false;
+  }
+}
+function p5bOn_(so) { return metaOn_('p5b_web') && metaMode_(so) === 'web'; }
+/** Gửi 1 gói P5b. null = web đang Dự phòng → ghi Sheet như cũ; {ok:true,…} = web đã ghi; {ok:false, error} = chưa ghi gì. */
+function p5bSend_(loai, body, extra) {
+  const w = webForward_(Object.assign({ loai, nguon: 'bot', nguoi: (typeof CTX !== 'undefined' && CTX && CTX.seller) || '', body }, extra || {}));
+  if (!w.ok && w.du_phong) return null;
+  return w.ok ? w : Object.assign({}, w, { ok: false, error: 'web chưa ghi ' + loai + ': ' + (w.error || 'không rõ') });
+}
+/** Cờ 1 cột của các dòng NHAP → web (co_nhap). sets [{row, value}]. null = ghi Sheet như cũ. Khoá dòng: ma_dong (nếu có) + row + code. */
+function nhapFlagsWeb_(field, sets) {
+  if (!sets.length || CO_NHAP_COLS.indexOf(field) === -1 || !p5bOn_('che_do_kho')) return null;
+  const nh = sheetValues_('NHAP'), c = headerMap_(nh[0]);
+  const dong = sets.map(x => {
+    const r = nh[x.row - 1] || [];
+    const d = { row: x.row, code: String(r[c.product_code] || '').trim().toUpperCase() };
+    const md = c.ma_dong !== undefined ? String(r[c.ma_dong] || '').trim() : '';
+    if (md) d.ma_dong = md;
+    d[field] = String(x.value);
+    return d;
+  });
+  return p5bSend_('co_nhap', { dong });
+}
+/** Cờ 1 cột của các dòng SANPHAM → web (co_sp), lô ≤ 200 mã. sets [{row, value}] (số hàng Sheet). null = ghi Sheet như cũ. */
+function spFlagsWeb_(field, sets) {
+  if (!sets.length || !p5bOn_('che_do_hh')) return null;
+  const sp = sheetValues_('SANPHAM');
+  let hr = 0;
+  for (let i = 0; i < Math.min(2, sp.length); i++) if (sp[i].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = i; break; }
+  const c = headerMap_(sp[hr]);
+  const ds = [];
+  sets.forEach(x => {
+    const code = String((sp[x.row - 1] || [])[c.product_code] || '').trim().toUpperCase();
+    if (!code) return;
+    const doi = {}; doi[field] = String(x.value);
+    ds.push({ code, doi });
+  });
+  for (let i = 0; i < ds.length; i += CO_SP_MAX) {
+    const w = p5bSend_('co_sp', { ds: ds.slice(i, i + CO_SP_MAX) });
+    if (w === null) return i === 0 ? null : { ok: false, error: 'web chuyển Dự phòng giữa chừng (đã gửi ' + i + ' mã) — chạy lại' };
+    if (!w.ok) return Object.assign(w, { da_gui: i });
+  }
+  return { ok: true, web: true, so_ma: ds.length };
 }
 
 function webForward_(payload, path) {
@@ -3525,9 +3584,15 @@ function subSuppliers_() {
 }
 
 /** Ghi cờ trạng thái từng dòng (row 1-based, cột 0-based). */
-function misaWriteStatus_(sheetName, colIdx, statuses) {
+function headerName_(header, idx) { return String((header || [])[idx] || '').trim(); }
+
+function misaWriteStatus_(sheetName, colIdx, statuses, field) {
+  // P5b: sổ ở Web → gửi web (co_nhap / co_sp); web lỗi → không ghi Sheet, trả lỗi để báo (file đã tạo — đừng nhập MISA 2 lần)
+  const w = sheetName === 'NHAP' ? nhapFlagsWeb_(field, statuses) : sheetName === 'SANPHAM' ? spFlagsWeb_(field, statuses) : null;
+  if (w) return w;
   const sheet = getSheet_(sheetName);
   statuses.forEach(st => sheet.getRange(st.row, colIdx + 1).setValue(st.value));
+  return { ok: true };
 }
 
 /** Danh mục hàng hoá MISA (TASK 4): mã cha mới → tpl_misa_upload; mã cha đã lên MISA (thêm màu) → tpl_misa_update. */
@@ -3619,8 +3684,9 @@ function misaCatalogExport_(dry, flags) {
     });
     files.push(misaWriteFile_('tpl_misa_update.xlsx', 'Nhap_khau_cap_nhat_thong_tin', 3, rows, 'MISA_PRODUCTS_UPDATE_' + stamp + '.xlsx', dry));
   }
-  if (!dry && flags !== false && statuses.length) misaWriteStatus_('SANPHAM', c.misa_upload, statuses);
-  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: valid.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['SANPHAM'] : [] };
+  const co = !dry && flags !== false && statuses.length ? misaWriteStatus_('SANPHAM', c.misa_upload, statuses, 'misa_upload') : null;
+  if (co && !co.ok) canhBao.unshift('⚠ CHƯA ghi cờ misa_upload (' + co.error + ') — file đã tạo, nhập MISA 1 lần rồi báo Thực thi');
+  return { loi_co: co && !co.ok ? co.error : undefined, files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: valid.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['SANPHAM'] : [] };
 }
 
 /** Phiếu nhập kho MISA (TASK 8) cho 1 kho: dòng NHAP chưa có cờ misa_stock. Đơn giá = invoice_price, trống thì purchase_price (anh Kha 17/10). */
@@ -3706,8 +3772,9 @@ function misaStockExport_(kho, dry, flags) {
     rows.push(o);
   }
   const files = rows.length ? [misaWriteFile_(MISA_STOCK_KHO[kho].tpl, 'Nhap kho', 9, rows, MISA_STOCK_KHO[kho].out + misaStamp_() + '.xlsx', dry)] : [];
-  if (!dry && flags !== false && statuses.length) misaWriteStatus_('NHAP', stCol, statuses);
-  return { files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: rows.length, so_loi: canhBao.length,
+  const co = !dry && flags !== false && statuses.length ? misaWriteStatus_('NHAP', stCol, statuses, headerName_(nh[0], stCol)) : null;
+  if (co && !co.ok) canhBao.unshift('⚠ CHƯA ghi cờ misa_stock (' + co.error + ') — file đã tạo, nhập MISA 1 lần rồi báo Thực thi');
+  return { loi_co: co && !co.ok ? co.error : undefined, files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: rows.length, so_loi: canhBao.length,
     cho_hd: Object.keys(choHd).map(k => ({ so_chung_tu: k.split(' ')[0], ngay: k.split(' ').slice(1).join(' '), so_dong: choHd[k] })),
     _sync: !dry && statuses.length ? ['NHAP'] : [] };
 }
@@ -4285,14 +4352,33 @@ function invoiceAction_(body, nguoi, dryRun) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_('NHAP');
-    const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
-    requireColumns_('NHAP', c, NHAP_HD_COLS);
-    rows.forEach(r => {
-      sheet.getRange(r.dong, c.don_gia_hd + 1).setValue(r.moi);
-      sheet.getRange(r.dong, c.so_hd + 1).setValue(soHd);
-      sheet.getRange(r.dong, c.ngay_hd + 1).setValue(ngayHd);
-    });
+    // P5b (B2): sổ kho Web → web ghi chu_gia_phieu + chép NHAP 3 ô (và invoice_price khi Hàng hoá = Web). Dự phòng → ghi Sheet như cũ.
+    let webHd = null;
+    if (p5bOn_('che_do_kho')) {
+      const nh = sheetValues_('NHAP'), nc = headerMap_(nh[0]);
+      webHd = p5bSend_('hoa_don', { so_hd: soHd, ngay_hd: ngayHd, phieu_hd: ids, dong: rows.map(r => {
+        const d = { row: r.dong, code: r.ma, size: r.size, don_gia_hd: r.moi };
+        const md = nc.ma_dong !== undefined ? String((nh[r.dong - 1] || [])[nc.ma_dong] || '').trim() : '';
+        if (md) d.ma_dong = md;
+        return d;
+      }) }, { chu: true });
+      if (webHd && !webHd.ok) return fail(webHd.error);
+      if (webHd && !(Number(webHd.so_dong) > 0)) return Object.assign(fail('web không khớp dòng nào, chưa ghi'), { chua_khop: webHd.chua_khop || [] });
+    }
+    if (webHd) {
+      out.web = true;
+      out.so_dong = Number(webHd.so_dong);
+      if (webHd.chua_khop && webHd.chua_khop.length) out.chua_khop = webHd.chua_khop;
+    } else {
+      const sheet = getSheet_('NHAP');
+      const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
+      requireColumns_('NHAP', c, NHAP_HD_COLS);
+      rows.forEach(r => {
+        sheet.getRange(r.dong, c.don_gia_hd + 1).setValue(r.moi);
+        sheet.getRange(r.dong, c.so_hd + 1).setValue(soHd);
+        sheet.getRange(r.dong, c.ngay_hd + 1).setValue(ngayHd);
+      });
+    }
     // SANPHAM.invoice_price = giá hoá đơn gần nhất
     const sp = getSheet_('SANPHAM');
     const spv = sheetValues_('SANPHAM');
@@ -4318,7 +4404,7 @@ function invoiceAction_(body, nguoi, dryRun) {
       out.sua_misa = sua;
       out.bao_chu = true;
     }
-    out._sync = ['NHAP', 'SANPHAM'];
+    out._sync = webHd ? (cheDoHh_() === 'web' ? [] : ['SANPHAM']) : ['NHAP', 'SANPHAM'];
     return out;
   } finally {
     lock.releaseLock();
@@ -4544,6 +4630,9 @@ function labelDone_(body, nguoi, dryRun) {
   const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
   requireColumns_('NHAP', c, ['web_label']);
   const stamp = 'Done - ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const w = nhapFlagsWeb_('web_label', sel.rows.map(x => ({ row: x.row, value: stamp }))); // P5b: sổ kho Web → web ghi
+  if (w && !w.ok) return { ok: false, action: 'da_in_tem', error: w.error };
+  if (w) return { ok: true, action: 'da_in_tem', so_dong: sel.rows.length, web: true };
   sel.rows.forEach(x => sheet.getRange(x.row, c.web_label + 1).setValue(stamp));
   console.log('da_in_tem kho ' + sel.kho + ' bởi ' + nguoi + ': ' + sel.rows.length + ' dòng');
   return { ok: true, action: 'da_in_tem', so_dong: sel.rows.length, _sync: ['NHAP'] };

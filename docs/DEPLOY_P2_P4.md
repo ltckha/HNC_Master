@@ -44,3 +44,11 @@ cd zalo_bot && clasp deployments   # xem số bản
 clasp create-deployment -i <deployment_id> -V 37 -d "lui ve @37"
 ```
 (@37 = bản trước, cùng deployment id nên Zalo / web không phải đổi gì.)
+
+## P5b — hoá đơn + cờ qua web (21/10, bot thử + Mac; bot thật khi web báo P5b lên bản chính và anh duyệt)
+- Bật khi META `p5b_web` = 1 (web ghi khi P5b lên bản đó) VÀ sổ tương ứng = web. Chưa có khoá → bot / Mac ghi Sheet như cũ.
+- Sổ kho Web: hoá đơn mua hàng (`hoa_don`), cờ NHAP `misa_stock` / `web_label` / `kho_sync` (`co_nhap`). `web_stock` ngoài hợp đồng → vẫn ghi Sheet.
+- Hàng hoá Web: cờ SANPHAM (sàn, MISA, ảnh, web_url, get_images, content_*) gửi `co_sp` (≤ 200 mã / gói). spec_fill gửi `co_sp` khi META `thuoc_tinh_web` = 1.
+- Web trả `du_phong` → ghi Sheet. Web lỗi khác → KHÔNG ghi Sheet, báo lỗi (file MISA / sàn đã tạo: không nhập 2 lần).
+- Mac cần khoá ký: `HNC_BOT_KEY` trong `.env` (bản chính) hoặc `HNC_BOT_KEY_FILE=~/hnc_bot_thu/khoa_bot_thu.json` + `HNC_WEB_ORIGIN=<beta>` khi diễn tập.
+- Code: bot `p5bSend_` / `nhapFlagsWeb_` / `spFlagsWeb_`; Mac `tools/web_lenh.py` + `EngineDataLoader._p5b_web`. Kiểm: `node zalo_bot/tests/test_zalo_bot.js`, `venv/bin/python tests/test_p5b_mac.py`.

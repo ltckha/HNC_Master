@@ -341,8 +341,8 @@ def cmd_ai(args):
 
 
 def hh_web(sh):
-    """Thuộc tính SANPHAM do web giữ (B1 của P5b) → công cụ này không ghi. Web bật bằng META thuoc_tinh_web = 1 khi B1 lên bản chính
-    (21/10: P4 bản chính mới giữ giá / màu / ẩn, thuộc tính vẫn lấy Sheet làm gốc → spec_fill vẫn chạy)."""
+    """Thuộc tính SANPHAM do web giữ (B1 của P5b): web ghi META thuoc_tinh_web = 1 khi Hàng hoá = Web (bản chính: khi B1 lên)
+    → apply gửi co_sp lên web thay vì ghi Sheet. Chưa có / = 0 → ghi Sheet như cũ (21/10: thuộc tính bản chính vẫn lấy Sheet làm gốc)."""
     try:
         for r in sh.worksheet("META").get_all_values()[1:]:
             if len(r) > 1 and r[0].strip() == "thuoc_tinh_web":
@@ -353,8 +353,6 @@ def hh_web(sh):
 
 
 def cmd_apply(args):
-    if not args.dry_run and hh_web(open_sheet()):
-        sys.exit("⛔ Thuộc tính sản phẩm đang do web giữ (META thuoc_tinh_web = 1): sửa trên web admin.")
     with open(args.csv, encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     sources = set(s.strip() for s in args.source.split(",")) if args.source else None
@@ -377,7 +375,7 @@ def cmd_apply(args):
         code = r[pc].strip().upper()
         if code and code not in row_of:
             row_of[code] = i
-    updates, skipped = [], Counter()
+    updates, skipped, doi = [], Counter(), {}
     for r in rows:
         ci = col_index(head, r["cot"])
         ri = row_of.get(r["product_code"].strip().upper())
@@ -389,9 +387,20 @@ def cmd_apply(args):
             skipped["ô đã có giá trị (không đè)"] += 1
             continue
         updates.append({"range": gspread.utils.rowcol_to_a1(ri, ci + 1), "values": [[r["de_xuat"].strip()]]})
+        doi.setdefault(r["product_code"].strip().upper(), {})[head[ci].strip()] = r["de_xuat"].strip()
     print(f"Sẽ ghi {len(updates)} ô" + (f"; bỏ qua {dict(skipped)}" if skipped else ""))
     if args.dry_run or not updates:
         return
+    if hh_web(ss):
+        # B1 (P5b): web giữ thuộc tính → gửi co_sp (tools/web_lenh.py, cùng gói bot); web Dự phòng → ghi Sheet như cũ
+        sys.path.insert(0, ROOT)
+        from tools import web_lenh
+        w = web_lenh.co_sp([{"code": k, "doi": v} for k, v in doi.items()])
+        if w is not None:
+            if not w.get("ok"):
+                sys.exit(f"❌ {w.get('error')} — chưa ghi gì vào Sheet (web giữ thuộc tính).")
+            print(f"✅ Đã gửi {len(updates)} ô ({len(doi)} mã) lên web (co_sp) — web tự chép SANPHAM.")
+            return
     for i in range(0, len(updates), 200):
         ws.batch_update(updates[i:i + 200])
         time.sleep(1)

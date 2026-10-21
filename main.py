@@ -517,6 +517,43 @@ class EngineDataLoader:
 
         raise ConnectionError(f"Không có kết nối Google Sheets API để tải sheet '{sheet_name}'!")
 
+    def _p5b_web(self, sheet_name, cells):
+        """P5b (21/10): sổ ở Web + META p5b_web = 1 → gửi cờ lên web (co_nhap / co_sp) thay vì ghi Sheet — cùng luật bot
+        nhapFlagsWeb_ / spFlagsWeb_ (tools/web_lenh.py). cells = {chỉ số dòng 0-based: {chỉ số cột: giá trị}}.
+        Trả None = ghi Sheet như cũ (P5b tắt / web Dự phòng / cột ngoài hợp đồng), True = web đã ghi, False = web lỗi (không ghi)."""
+        if not self.is_google_api or not cells or sheet_name not in ('NHAP', 'SANPHAM'):
+            return None
+        from tools import web_lenh
+        m = web_lenh.meta(self.spreadsheet)
+        if not web_lenh.p5b_on(m, 'che_do_kho' if sheet_name == 'NHAP' else 'che_do_hh'):
+            return None
+        v = self.spreadsheet.worksheet(sheet_name).get_all_values()
+        hr = 1 if sheet_name == 'SANPHAM' else 0  # SANPHAM: tên cột kỹ thuật ở hàng 2 (luật 4)
+        head = [str(h).strip() for h in v[hr]]
+        if 'product_code' not in head:
+            return None
+        ic, im = head.index('product_code'), (head.index('ma_dong') if 'ma_dong' in head else None)
+        cell = lambda r, c: (v[r][c] if r < len(v) and c is not None and c < len(v[r]) else '').strip()
+        if sheet_name == 'NHAP':
+            by_col = {}
+            for r, cols in cells.items():
+                for c, val in cols.items():
+                    by_col.setdefault(head[c] if c < len(head) else '', []).append(
+                        {'row': r + 1, 'code': cell(r, ic).upper(), 'ma_dong': cell(r, im), 'value': val})
+            if any(f not in web_lenh.CO_NHAP_COLS for f in by_col):
+                return None
+            res = [web_lenh.co_nhap(f, d) for f, d in by_col.items()]
+        else:
+            res = [web_lenh.co_sp([{'code': cell(r, ic).upper(), 'doi': {head[c]: val for c, val in cols.items() if c < len(head)}} for r, cols in cells.items()])]
+        if any(x is None for x in res):
+            return None
+        bad = [x for x in res if not x.get('ok')]
+        if bad:
+            print(f"❌ {bad[0].get('error')} — CHƯA ghi cờ {sheet_name} (web là gốc). File đã tạo: đừng nhập 2 lần; báo Thực thi.")
+            return False
+        print(f"🌐 Đã gửi cờ {sheet_name} lên web ({sum(len(c) for c in cells.values())} ô).")
+        return True
+
     def update_status(self, sheet_name, row_indices, col_idx, status_text_or_list):
         """Cập nhật chữ 'Done - YYYY-MM-DD HH:mm' hoặc danh sách trạng thái riêng từng dòng lên Google Sheet."""
         if not self._write_ok(sheet_name):
@@ -528,6 +565,10 @@ class EngineDataLoader:
             status_list = status_text_or_list
         else:
             status_list = [status_text_or_list] * len(row_indices)
+
+        w = self._p5b_web(sheet_name, {r: {col_idx: t} for r, t in zip(row_indices, status_list)})
+        if w is not None:
+            return w
 
         if self.is_google_api:
             try:
@@ -558,6 +599,16 @@ class EngineDataLoader:
             return False
         if not batch_records:
             return True
+
+        cells = {}
+        for rec in batch_records:
+            d = cells.setdefault(rec['row_idx'], {})
+            for idx in range(10):
+                d[rec['img_col_indices'][idx]] = rec['img_urls'][idx] if idx < len(rec['img_urls']) else ""
+            d[rec['status_col_idx']] = rec['status_text']
+        w = self._p5b_web(sheet_name, cells)
+        if w is not None:
+            return w
 
         if self.is_google_api:
             try:
@@ -599,6 +650,15 @@ class EngineDataLoader:
             return False
         if not batch_records or not self.is_google_api:
             return False
+        cells = {}
+        for rec in batch_records:
+            d = cells.setdefault(rec['row_idx'], {})
+            for k, val in (('path_col_idx', 'path_val'), ('url_col_idx', 'url_val'), ('files_col_idx', 'files_val')):
+                if rec.get(k) is not None:
+                    d[rec[k]] = rec[val]
+        w = self._p5b_web(sheet_name, cells)
+        if w is not None:
+            return w
         try:
             ws = self.spreadsheet.worksheet(sheet_name)
             p_idx = batch_records[0].get('path_col_idx')
