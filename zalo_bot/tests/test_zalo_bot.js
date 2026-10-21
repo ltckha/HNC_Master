@@ -1268,5 +1268,20 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('thu web 403 → "Web từ chối (403)"', /Web từ chối \(403\)/.test(z('thu web')), true);
   eq('nhân viên "thu web" → chặn', /Chỉ Chủ/.test(ctx.handleText_('thu web', false, 'nvTW')), true);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; vm.runInContext('MEMO={};', ctx); }
+// Sổ kho Web: huỷ phiếu NCC bot ghi lúc Dự phòng → bot tự huỷ (xoá dòng NHAP của nó), không chuyển ngược web
+{ vm.runInContext('MEMO={};', ctx);
+  GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5009', ngay: '2026-10-20', dong: [{ ma_ncc: 'TH', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
+  const pid = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-huy-web').toString('base64') }).id;
+  vm.runInContext('MEMO={};', ctx);
+  const n0 = DATA.NHAP.length;
+  const w = pn({ action: 'xac_nhan', id: pid, ticket_id: 'HW1', dong: [{ dong: 1, ma_hnc: 'TH2040D', kho: '15E', sizes: { '43': 1 } }] });
+  const nAfter = DATA.NHAP.filter(r => r[2]).length;
+  const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['che_do_kho', 'web', '']];
+  const f0 = ctx.UrlFetchApp.fetch; let fwd = 0;
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { fwd++; return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; } return f0(url, opt); };
+  vm.runInContext('MEMO={};', ctx);
+  const u = pn({ action: 'huy_nhap', ticket_id: 'PN-HW1', id: pid });
+  eq('kho Web: huỷ phiếu bot ghi → bot xoá dòng NHAP của nó, không chuyển web, trả dòng đã xoá', [w.ok, u.ok, fwd, (u.dong_nhap_xoa || []).length > 0, DATA.NHAP.filter(r => r[2]).length < nAfter], [true, true, 0, true, true]);
+  ctx.UrlFetchApp.fetch = f0; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

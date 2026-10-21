@@ -1457,7 +1457,9 @@ const CHE_DO_SO = [
 // P2: lệnh kho chuyển cho web khi che_do_kho = web (không tự ghi Sheet; web lỗi thì báo, không ghi).
 // Đọc ảnh phiếu (doc_phieu), nháp, in tem, hoá đơn, xuất MISA, bổ sung SP, kiểm hàng vẫn chạy ở bot (chỉ sửa ô trạng thái NHAP, không thêm dòng).
 const HH_WEB_TEXT = 'Hàng hoá + giá đang sửa trên web (admin) — tạo mã / sửa thông tin mã trên web. Web hỏng: Chủ nhắn "che do" → 7 Hàng hoá → Dự phòng.';
-const KHO_WEB_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'huy', 'xac_nhan', 'huy_nhap'];
+// huy / huy_nhap KHÔNG chuyển: bot giữ bản ghi thao tác của chính nó (phiếu bot ghi lúc Dự phòng → bot xoá đúng dòng NHAP của nó;
+// phiếu web ghi (web_ghi) → bot chỉ xoá mã mới + trả phiếu về nháp). Chuyển ngược cho web sẽ thành vòng (21/10).
+const KHO_WEB_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'xac_nhan'];
 /** Tin Zalo lệnh kho → body như app (cửa stock_key) để web ghi: nhap / tra_hang / xuat / chuyen_kho / chuyen_vi_tri. Lỗi → { error }. */
 function zaloStockBody_(text, seller) {
   const all = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -2838,6 +2840,7 @@ function receiptUndo_(body, nguoi, dryRun) {
       }
     }
     return { ok: r.ok, action: 'huy_nhap', ticket_id: ticket, id: rec.pn || '', dry_run: dryRun, so_dong: rec.ops.length,
+      dong_nhap_xoa: rec.ops.filter(o => o.sheet === 'NHAP').map(o => o.row), // phiếu bot ghi: web bỏ các dòng này khỏi D1
       error: r.ok ? undefined : 'Không huỷ được vì dữ liệu đã thay đổi: ' + (r.problems || []).join('; '), _sync: r.touched || [] };
   } finally {
     lock.releaseLock();
