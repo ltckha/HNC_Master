@@ -992,11 +992,13 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   t = ctx.handleText_('bc 05/10/2026', true, '');
   eq('bc: dòng Chủ đã bấm "Không phải trùng" thì bỏ qua', /bán trùng/.test(t), false);
   ctx.UrlFetchApp.fetch = f0; DATA.BAN.splice(n0, 3); delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; delete CACHE.ban_khong_trung; }
-// P0 mục 6: đo thời gian trigger / ngày
-{ Object.keys(PROPS).filter(k => /^trig_/.test(k)).forEach(k => delete PROPS[k]);
-  ctx.flushSyncHints();
-  const rep = ctx.handleStock_({ action: 'do_trigger', seller: 'nv@hn.vn' }, false);
-  eq('đo trigger: ghi trig_<ngày>, cửa do_trigger trả số lần + phút', [rep.ok, rep.ngay.length, rep.ngay[0].so_lan, typeof rep.ngay[0].phut, 'flushSyncHints' in rep.ngay[0].theo_ham_phut], [true, 1, 1, 'number', true]); }
+// Tin MISA 21:00 bỏ (21/10): trigger cũ gọi dailyMisaSummary → tự gỡ, không gửi tin
+{ const s0 = SENT.length, trg = [{ getHandlerFunction: () => 'dailyMisaSummary' }, { getHandlerFunction: () => 'flushSyncHints' }];
+  PROPS['trig_2026-10-20'] = '{}';
+  ctx.ScriptApp = { getProjectTriggers: () => trg.slice(), deleteTrigger: t => trg.splice(trg.indexOf(t), 1) };
+  vm.runInContext('dailyMisaSummary({ triggerUid: "x" })', ctx);
+  eq('dailyMisaSummary từ trigger: tự gỡ trigger + số đo cũ, không gửi tin', [SENT.length - s0, trg.map(t => t.getHandlerFunction()), PROPS['trig_2026-10-20']], [0, ['flushSyncHints'], undefined]);
+  delete ctx.ScriptApp; }
 // P0 mục 7: chuyển lệnh cho web — mặc định tắt
 { const f0 = ctx.UrlFetchApp.fetch; let sent = [];
   ctx.UrlFetchApp.fetch = (url, opt) => { if (/bot-lenh/.test(url)) { sent.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, text: 'web ghi rồi' }) }; } return f0(url, opt); };

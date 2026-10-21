@@ -1,5 +1,5 @@
 # Kiến trúc HNC_Master (HNC Control Center)
-Cập nhật 16/10/2026 (Thực thi – HNC_Master). Đổi cấu trúc thì sửa file này cùng commit. Chi tiết bot: `zalo_bot/README.md`. Trạng thái tính năng: `PROJECT_STATUS.md`.
+Cập nhật 16/10/2026 (Thực thi – HNC_Master). Đổi cấu trúc thì sửa file này cùng commit. Chi tiết bot: `zalo_bot/README.md`. Trạng thái + việc sau: mục cuối file này (bản cũ ở `docs/luu_tru/`).
 
 ## Sơ đồ
 ```mermaid
@@ -99,3 +99,10 @@ Hoá đơn NCC: bot gom NHAP theo ngày × NCC × kho, so với thư mục `Hoá
 - NHAP từ phiếu NCC: `Số chứng từ` = `NK` + 6 số chạy theo kho; mã `PN…` chỉ là nội bộ của bot.
 - Cửa web → bot phải để khoá trong URL (Apps Script không đọc được header); chiều bot → web dùng header.
 - Chủ hàng ≠ kho xuất: hàng ký gửi (KYGUI) bán ở kho hộ kia thì tiền / hoá đơn / tin MISA thuộc `BAN.chu_hang`, không theo `KHO`.
+
+## Tình trạng & việc sau (gộp PROJECT_STATUS + IDEAS_AND_ROADMAP, 21/10)
+- **Từ 21/10 web là sổ gốc** (4 sổ bán / kho / tồn / hàng hoá = web); bot + menu Mac là dự phòng theo khoá META. P5b (hoá đơn, cờ qua web) có trên bot thử, chờ lên bản chính. Sổ tay: `docs/DEPLOY_P2_P4.md`.
+- **Menu Mac đang dùng:** in tem + đồng bộ SKU 2 kho; Shopee / TikTok đăng mới + cập nhật giá / tồn; MISA danh mục + nhập kho; tư liệu sản phẩm (`/Volumes/Media/HNC_Master/`); AI nhập từ ảnh. **Đã ẩn:** đăng / tồn / cào ảnh Website (web mới tự làm).
+- **Bot Zalo:** bán / kho / tồn, phiếu NCC → nháp → chia size, hoá đơn NCC, in tem QL-700, đồng bộ web.
+- **Tên file xuất:** `<LOAI>_YYYYMMDD_HHMMSS.<csv|xlsx>` trong `HNC_Exported_Files` (`hnc_paths.py`); `IN.csv` và `channel_links.csv` tên cố định, ghi đè.
+- **Ý tưởng chưa làm** (cần kế hoạch + "làm" của anh): sàn Lazada / feed Facebook – Zalo; báo bán chạy + gợi ý đặt bù số + hàng chậm; tách main.py thành module (chạy song song bản cũ khi thử); gom thông tin doanh nghiệp (brand, MST 2 hộ, NCC) về 1 chỗ; mô tả hàng da Yen (Y6, chờ ảnh). Đã làm xong từ danh sách cũ: tin xin hoá đơn NCC, thư mục tư liệu SP, AI đọc phiếu.

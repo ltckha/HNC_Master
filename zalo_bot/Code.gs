@@ -1943,8 +1943,7 @@ function handleStock_(body, dryRun) {
   if (action === 'kq_in_tem') return labelResult_(body);
   if (action === 'in_bu') return labelExtraPrint_(body, dryRun);
   if (action === 'tao_ma') return codeCreate_(body, seller, dryRun);
-  if (action === 'do_trigger') return { ok: true, action: 'do_trigger', han_phut_ngay: 90, ngay: trigReport_() };
-  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu', 'do_trigger', 'tao_ma']).join(', ') };
+  if (STOCK_ACTIONS.indexOf(action) === -1) return { ok: false, error: 'action phải là: ' + STOCK_ACTIONS.concat(PN_ACTIONS, ['bo_sung_sp', 'xuat_misa', 'hoa_don', 'in_tem', 'da_in_tem', 'kq_in_tem', 'in_bu', 'tao_ma']).join(', ') };
   if (!/^[A-Za-z0-9_.:\-]{1,64}$/.test(ticket)) return { ok: false, action, error: 'ticket_id không hợp lệ (1-64 ký tự: chữ, số, _ . : -)' };
   if (!seller) return { ok: false, action, ticket_id: ticket, error: 'thiếu seller (email người dùng app)' };
 
@@ -3078,7 +3077,16 @@ function misaInvoiceSend_(ticket, channel, seller, inv, plan) {
 }
 
 /** Trigger 21:00: 1 tin tổng / hộ chủ hàng các dòng BAN hôm nay (bỏ dòng đã gửi riêng vì lấy hoá đơn). dryRun = chỉ ghi Nhật ký. */
+/** Gỡ trigger tin MISA 21:00 (anh Kha 21/10, "Sắp xếp lại hệ thống") + xoá số đo trigger cũ trig_<ngày>. */
+function goTriggerMisa_() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'dailyMisaSummary').forEach(t => ScriptApp.deleteTrigger(t));
+  const props = PropertiesService.getScriptProperties();
+  Object.keys(props.getProperties()).filter(k => /^trig_\d{4}-\d{2}-\d{2}$/.test(k)).forEach(k => props.deleteProperty(k));
+}
+
 function dailyMisaSummary(dryRun) {
+  // Trigger cũ còn cài (chưa chạy lại setupChangeTrigger) → tự gỡ ở lần chạy đầu, không gửi tin. Chạy tay (không có sự kiện) vẫn gửi.
+  if (dryRun && typeof dryRun === 'object' && dryRun.triggerUid) { goTriggerMisa_(); console.log('Đã gỡ trigger tin MISA 21:00'); return; }
   MEMO = {};
   dryRun = dryRun === true;
   const props = PropertiesService.getScriptProperties();
@@ -3292,12 +3300,11 @@ const SYNC_WATCH_TABS = ['SANPHAM', 'KHO15E', 'KHOY3C', 'BAN', 'NHAP', 'XUAT', '
 const SYNC_STOCK_TABS = ['BAN', 'NHAP', 'XUAT']; // đổi các tab này = tồn kho đổi → gửi kèm KHO15E, KHOY3C
 const SYNC_MIN_INTERVAL_MS = 60 * 1000;
 const SYNC_RETRY_MIN = [5, 15, 60]; // web lỗi → thử lại sau 5′, 15′, rồi mỗi 1 giờ (giữ hàng chờ)
-const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder', 'dailyMisaSummary'];
+const SYNC_TRIGGER_HANDLERS = ['onSheetEditHint', 'onSheetChangeHint', 'flushSyncHints', 'weeklyInvoiceReminder'];
 
 /** Trigger cài đặt onEdit (người sửa ô). */
 function onSheetEditHint(e) {
-  const t0 = Date.now();
-  try { onSheetEditHintBody_(e); } finally { trigStat_('onSheetEditHint', t0); }
+  onSheetEditHintBody_(e);
 }
 
 function onSheetEditHintBody_(e) {
@@ -3309,8 +3316,7 @@ function onSheetEditHintBody_(e) {
 
 /** Trigger cài đặt onChange (thêm/xoá dòng, cột, dán…). Sự kiện không có tên tab → lấy tab đang mở. */
 function onSheetChangeHint(e) {
-  const t0 = Date.now();
-  try { onSheetChangeHintBody_(e); } finally { trigStat_('onSheetChangeHint', t0); }
+  onSheetChangeHintBody_(e);
 }
 
 function onSheetChangeHintBody_(e) {
@@ -3322,38 +3328,8 @@ function onSheetChangeHintBody_(e) {
 }
 
 /** Trigger mỗi phút: gửi phần còn trong hàng chờ. */
-// ---- Đo thời gian trigger / ngày (P0 mục 6, 20/10): Apps Script Gmail thường có hạn ~90 phút trigger / ngày ----
-// Script Property trig_<yyyy-MM-dd> = {n, ms, max, ten:{flushSyncHints:ms, onSheetEditHint:ms, …}}; giữ 14 ngày. Xem: cửa stock_key do_trigger.
-function trigStat_(name, t0) {
-  try {
-    const ms = Date.now() - t0;
-    const props = PropertiesService.getScriptProperties();
-    const day = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
-    const k = 'trig_' + day;
-    let st = {};
-    try { st = JSON.parse(props.getProperty(k) || '{}'); } catch (e) { st = {}; }
-    if (!st.n) {
-      Object.keys(props.getProperties()).filter(x => /^trig_\d{4}-\d{2}-\d{2}$/.test(x) && x.slice(5) < Utilities.formatDate(new Date(Date.now() - 14 * 86400000), TZ, 'yyyy-MM-dd'))
-        .forEach(x => props.deleteProperty(x));
-    }
-    st.n = (st.n || 0) + 1; st.ms = (st.ms || 0) + ms; st.max = Math.max(st.max || 0, ms);
-    st.ten = st.ten || {}; st.ten[name] = (st.ten[name] || 0) + ms;
-    props.setProperty(k, JSON.stringify(st));
-  } catch (err) { /* đo không được thì thôi, không làm hỏng trigger */ }
-}
-
-function trigReport_() {
-  const all = PropertiesService.getScriptProperties().getProperties();
-  return Object.keys(all).filter(k => /^trig_\d{4}-\d{2}-\d{2}$/.test(k)).sort().map(k => {
-    let st = {}; try { st = JSON.parse(all[k]); } catch (e) { /* bỏ */ }
-    return { ngay: k.slice(5), so_lan: st.n || 0, phut: Math.round((st.ms || 0) / 600) / 100, lau_nhat_giay: Math.round((st.max || 0) / 100) / 10,
-      theo_ham_phut: Object.keys(st.ten || {}).reduce((o, t) => { o[t] = Math.round(st.ten[t] / 600) / 100; return o; }, {}) };
-  });
-}
-
 function flushSyncHints() {
-  const t0 = Date.now();
-  try { flushSyncHintsBody_(); } finally { trigStat_('flushSyncHints', t0); }
+  flushSyncHintsBody_();
 }
 
 function flushSyncHintsBody_() {
@@ -3465,9 +3441,7 @@ function setupChangeTrigger() {
   if (have.indexOf('weeklyInvoiceReminder') === -1) {
     ScriptApp.newTrigger('weeklyInvoiceReminder').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
   }
-  if (have.indexOf('dailyMisaSummary') === -1) {
-    ScriptApp.newTrigger('dailyMisaSummary').timeBased().everyDays(1).atHour(21).create(); // tin MISA cuối ngày
-  }
+  goTriggerMisa_(); // tin MISA 21:00 bỏ (anh Kha 21/10) — dailyMisaSummary vẫn chạy tay được
   console.log('Trigger hiện có: ' + ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()).join(', '));
 }
 
