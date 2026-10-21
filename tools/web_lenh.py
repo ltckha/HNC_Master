@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 import requests
 
-CO_NHAP_COLS = ('misa_stock', 'web_label', 'kho_sync')
+CO_NHAP_COLS = ('misa_stock', 'web_label', 'kho_sync', 'web_stock')
 THUOC_TINH = ('Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Giới tính', 'Size Plus', 'Size', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:',
               'Chất liệu đế:', 'Lót trong:', 'Mặt lót đế:', 'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:')
 CO_SP_COLS = set(('shopee_upload', 'tiktok_upload', 'misa_upload', 'web_upload', 'web_url', 'get_images', 'content_path', 'content_url',

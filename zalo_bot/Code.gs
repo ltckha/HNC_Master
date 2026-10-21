@@ -1597,7 +1597,7 @@ function navCheDoPick_(n, chatId, d, dryRun) {
 // ---- P5b (21/10): hoá đơn + cờ NHAP / SANPHAM qua web (hợp đồng web docs/vision/p5b_api_hnc.md mục "Chốt") ----
 // Bật khi META p5b_web = 1 (web ghi lúc P5b lên bản đó) VÀ sổ tương ứng = web: Sổ kho → hoa_don / co_nhap, Hàng hoá → co_sp.
 // Web trả ok:false + du_phong:true → ghi Sheet như cũ (trả null). Lỗi khác → KHÔNG ghi Sheet (web là gốc), báo lỗi. Cùng luật tools/web_lenh.py (Mac).
-const CO_NHAP_COLS = ['misa_stock', 'web_label', 'kho_sync'];
+const CO_NHAP_COLS = ['misa_stock', 'web_label', 'kho_sync', 'web_stock'];
 const CO_SP_MAX = 200;
 function metaOn_(key) {
   try {

@@ -81,10 +81,13 @@ eq('co_nhap: gói đúng hợp đồng', [p['loai'], p['nguon'], p['body']['dong
 h = SENT[-1]['h']
 eq('ký HMAC = hex(khoá, luc + "." + thân)', [SENT[-1]['url'], h['x-bot-sig'], h['x-bot-time'] == p['luc']],
    ['https://beta.example/api/bot-lenh', hmac.new(b'k' * 20, (h['x-bot-time'] + '.' + SENT[-1]['raw']).encode(), hashlib.sha256).hexdigest(), True])
-# cột ngoài hợp đồng (web_stock) → ghi Sheet
-n = len(SENT)
+# web_stock (thêm vào co_nhap 21/10) → gửi web
 L.update_status('NHAP', [2], 4, 'Done')
-eq('web_stock (ngoài co_nhap) → ghi Sheet, không gọi web', [len(SENT) - n, len(NHAP.writes)], [0, 1])
+eq('web_stock → co_nhap', json.loads(SENT[-1]['raw'])['body']['dong'][0].get('web_stock'), 'Done')
+# cột ngoài hợp đồng (Số chứng từ) → ghi Sheet
+n = len(SENT)
+L.update_status('NHAP', [2], 0, 'X')
+eq('cột ngoài co_nhap → ghi Sheet, không gọi web', [len(SENT) - n, len(NHAP.writes)], [0, 1])
 # web lỗi → không ghi Sheet
 REPLY[:] = [500, {'error': 'x'}]
 NHAP.writes.clear()
