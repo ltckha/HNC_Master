@@ -341,11 +341,12 @@ def cmd_ai(args):
 
 
 def hh_web(sh):
-    """META che_do_hh = web (P4, 20/10): hàng hoá + thuộc tính sửa trên web admin → công cụ này không ghi SANPHAM (cùng luật bot / main.py)."""
+    """Thuộc tính SANPHAM do web giữ (B1 của P5b) → công cụ này không ghi. Web bật bằng META thuoc_tinh_web = 1 khi B1 lên bản chính
+    (21/10: P4 bản chính mới giữ giá / màu / ẩn, thuộc tính vẫn lấy Sheet làm gốc → spec_fill vẫn chạy)."""
     try:
         for r in sh.worksheet("META").get_all_values()[1:]:
-            if len(r) > 1 and r[0].strip() == "che_do_hh":
-                return r[1].strip().lower() == "web"
+            if len(r) > 1 and r[0].strip() == "thuoc_tinh_web":
+                return r[1].strip().lower() in ("1", "web", "true")
     except Exception:
         pass
     return False
@@ -353,7 +354,7 @@ def hh_web(sh):
 
 def cmd_apply(args):
     if not args.dry_run and hh_web(open_sheet()):
-        sys.exit("⛔ Hàng hoá đang sửa trên web (che_do_hh = web): sửa thuộc tính trên web admin. Web hỏng thì đổi Hàng hoá về Dự phòng (menu [7] / Zalo \"che do\" → 7) rồi chạy lại.")
+        sys.exit("⛔ Thuộc tính sản phẩm đang do web giữ (META thuoc_tinh_web = 1): sửa trên web admin.")
     with open(args.csv, encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     sources = set(s.strip() for s in args.source.split(",")) if args.source else None
