@@ -1,82 +1,33 @@
-# 📜 CLAUDE.md - SỔ TAY VẬN HÀNH DỰ ÁN HNC_MASTER (HNC CONTROL CENTER)
+# CLAUDE.md — HNC_Master (HNC Control Center)
 
-> **Chào Claude, bạn đang cùng Kha Lưu (Project Owner) vận hành HNC Control Center.**  
-> Tài liệu này là **Hiến pháp tối cao** bắt buộc bạn phải đọc và tuân thủ 100% trong suốt quá trình làm việc trong repository này.
-
----
-
-## 🚨 1. CÁC QUY TẮC CỐT LÕI HÀNG ĐẦU (STRICT GOVERNANCE RULES)
-
-1. **LUÔN LUÔN THẢO LUẬN & THỐNG NHẤT VỚI ANH KHA TRƯỚC KHI THỰC HIỆN:**
-   - Trước khi sửa code, xuất dữ liệu lớn, hay chạy lệnh, **bắt buộc phải trình bày giải pháp kỹ thuật chi tiết và được anh Kha đồng ý trước**.
-   - Không tự ý suy đoán cấu trúc cột tính toán tài chính, giá và tồn kho.
-
-2. **GIT: THEO `~/Developer/Ecosystem-Hub/docs/LUAT_CHUNG.md` LUẬT 1:**
-   - Commit cục bộ; chỉ push khi anh Kha nhắn **"đẩy"** hoặc bấm `push_all.command` cuối ngày → quét bí mật rồi push thẳng `main`.
-   - Cấm `git commit -am`, `git add -A`, `git add .`. Luôn `git add` từng file.
-
-3. **PHỐI HỢP CÁC PHIÊN (theo LUAT_CHUNG luật 2, 9):**
-   - Phiên **"Điều phối hệ sinh thái Kha"** lập kế hoạch và giao việc HNC; hộp thư Cowork chỉ đi qua Điều phối.
-   - Phiên **"Thực thi – HNC_Master"** (Claude Code trên Mac mini M4) sửa code, chạy lệnh, xuất file, đồng bộ Google Sheets.
-
-4. **MỖI REPO MỘT PHIÊN THỰC THI:**
-   - Chỉ phiên **"Thực thi – HNC_Master"** được sửa code và commit trong repo này.
-   - Việc cần đụng repo khác (Auto-Video-Factory, Video-Post, Omni-Video) → nhắn phiên "Thực thi – <repo>" của repo đó, không tự sửa chéo.
-
-5. **TRI THỨC BRAND — NGUỒN DUY NHẤT LÀ AUTO-VIDEO-FACTORY:**
-   - Tên chuẩn, mã brand, bí danh lấy từ `Auto-Video-Factory/knowledge/brands/`. Tab Sheet `brands` được sinh ra từ đó.
-   - Không viết cứng danh sách brand trong repo này. Cần thêm/sửa brand → nhắn phiên "Thực thi – Auto-Video-Factory".
-
-6. **ĐỌC / GHI CỘT THEO TÊN TIÊU ĐỀ (LUAT_CHUNG luật 4):**
-   - Không dùng chỉ số cột cố định (`row[3]`, `col 5`); quét tiêu đề hàng 1 (SANPHAM: hàng 2) và tìm theo tên.
-   - Thiếu cột bắt buộc thì báo lỗi rõ ràng, không ghi vào cột khác.
-
-7. **THƯ MỤC DRIVE HỆ THỐNG CHỈ CHỨA DỮ LIỆU:**
-   - `My Drive/HNC/He_thong` (khai ở `hnc_paths.py`) chỉ chứa `HNC_Templates`, `HNC_Exported_Files`, `Outputs` (và `HNC_Control_Center.xlsx`).
-   - Không đưa code, tài liệu, luật hay file phát sinh của project lên Drive; mã nguồn và tài liệu nằm ở `/Users/khan/Developer/HNC_Master`.
+> Claude cùng anh Kha Lưu (chủ dự án) vận hành HNC Control Center cho **Hiệu giày Hải Nancy**.
+> Luật chung mọi repo: `~/Developer/Ecosystem-Hub/docs/LUAT_CHUNG.md` (nạp qua `~/.claude/CLAUDE.md`). Lệch nhau thì **luật chung thắng**. File này chỉ giữ luật riêng của HNC.
 
 ---
 
-## 👠 2. TỔNG QUAN KIẾN TRÚC HNC CONTROL CENTER
+## 1. Luật chung áp vào HNC (chỉ trỏ, không chép lại)
+- Git: luật 1 (commit cục bộ, đẩy khi anh nhắn "đẩy" hoặc lịch tự động 2:30; luôn `git add` từng file).
+- Mỗi repo 1 phiên Thực thi, việc repo khác thì nhắn phiên đó: luật 2. HNC: Điều phối lập kế hoạch, phiên **"Thực thi – HNC_Master"** (Mac mini M4) sửa code, chạy lệnh, xuất file, ghi Sheet.
+- Tri thức brand chỉ lấy từ Auto-Video-Factory (tab `brands`), không viết cứng danh sách brand: luật 3.
+- Đọc / ghi cột theo tên tiêu đề: luật 4 (SANPHAM: tên kỹ thuật ở **hàng 2**). Thiếu cột bắt buộc thì báo lỗi rõ, không ghi sang cột khác.
+- Việc mới phải có "làm" của anh; sửa nhỏ trong việc đã cho làm thì cứ làm: luật 10.
+- Đường dự phòng trên Mac luôn khớp web / bot: luật 15.
 
-Hệ thống điều phối dữ liệu sản phẩm, quản lý tồn kho đa nền tảng và xuất file nghiệp vụ cho thương hiệu **Hiệu giày Hải Nancy**:
+## 2. Luật riêng HNC
+1. **Không tự đoán** cột tính toán tài chính, giá, tồn kho; chưa rõ thì hỏi anh Kha.
+2. **Ghi Sheet thật và deploy bot thật** cần anh xác nhận tại phiên Thực thi – HNC_Master.
+3. **Từ 21/10/2026 web là sổ gốc** (4 sổ bán / kho / tồn / hàng hoá). Bot Zalo và menu Mac là dự phòng, đọc khoá META `che_do*` (`web` | `master`) để biết được ghi gì. Sổ tay chuyển / lùi: `docs/DEPLOY_P2_P4.md`.
+4. **Thư mục Drive hệ thống chỉ chứa dữ liệu:** `My Drive/HNC/He_thong` (khai ở `hnc_paths.py`) chỉ có `HNC_Templates`, `HNC_Exported_Files`, `Outputs`, `HNC_Control_Center.xlsx`. Mã nguồn và tài liệu nằm ở repo.
 
-1. **Website Hải Nancy:**
-   - Xuất file đăng sản phẩm mới (`WEB_PRODUCTS_*.csv`, tab-delimited UTF-8-SIG).
-   - Xuất file tồn kho (`WEB_STOCK_15E_*.csv`, `WEB_STOCK_Y3C_*.csv`) theo phiếu NHAP hoặc FULL tồn kho.
-   - Tự động cào link ảnh web chất lượng cao (tối đa 10 ảnh theo `product_code`).
-   - In tem Barcode & QR Code (ghi đè `IN.csv`).
-   - Đồng bộ SKU mới vào 2 kho `KHO15E` và `KHOY3C`.
-2. **Shopee:**
-   - Xuất file Mass Upload sản phẩm mới chuẩn template Shopee 2026.
-   - Xuất file Mass Update: Tồn kho, Giá bán (nhân 140%), hoặc cả hai.
-3. **TikTok Shop:**
-   - Xuất file đăng sản phẩm mới chuẩn 38 cột (10 trường thuộc tính chi tiết, xuất xứ Việt Nam).
-   - Xuất file cập nhật (Mass Update): Tồn kho, Giá bán, hoặc tất cả dữ liệu.
-4. **MISA eShop:**
-   - Xuất danh mục hàng hóa phân tầng Cha - Con (`MISA_PRODUCTS_NEW_*.xlsx` và `MISA_PRODUCTS_UPDATE_*.xlsx`).
-   - Xuất hóa đơn nhập kho mua hàng 22 cột (chiết khấu, thuế GTGT, tách kho `15E` / `3C`).
-5. **AI Vision Ingestion:**
-   - Gemini Multimodal API: Nhập tự động sản phẩm mới và restock từ hình ảnh chụp thực tế.
+## 3. Hệ thống (tóm tắt — chi tiết ở `docs/KIEN_TRUC.md`, bot ở `zalo_bot/README.md`)
+- **Menu Mac** (`main.py`): in tem + đồng bộ SKU 2 kho; Shopee / TikTok đăng mới + cập nhật giá / tồn; MISA danh mục + nhập kho; tư liệu sản phẩm; AI nhập từ ảnh. Việc Website (đăng, tồn, cào ảnh) đã ẩn vì web mới tự làm.
+- **Bot Zalo** (Apps Script, `zalo_bot/`): bán / kho / tồn, phiếu NCC, hoá đơn NCC, in tem QL-700, đồng bộ web.
+- **Luật kho chung** (`shared/luat_kho.js`) dùng cho bot, Mac và web.
 
----
-
-## 🛠️ 3. MÔI TRƯỜNG & LỆNH THỰC THI CHUẨN
-
-### 1. Kích hoạt môi trường ảo Python:
+## 4. Lệnh & cấu hình
 ```bash
 source venv/bin/activate
+python main.py          # hoặc nhấp đúp run.command
 ```
-
-### 2. Các lệnh điều hành chính:
-- **Khởi chạy Menu điều khiển:**
-  ```bash
-  python main.py
-  # hoặc nhấp đúp: run.command
-  ```
-- **File xuất ra:** `My Drive/HNC/He_thong/HNC_Exported_Files/` (đường dẫn khai 1 chỗ ở `hnc_paths.py`: `My Drive/HNC/He_thong` → chỗ cũ `My Drive/Spark/HNC_Master`; không thấy thì báo lỗi, không dùng thư mục local). Chứng từ thuế: `My Drive/HNC/Thue/<năm>/` (bot tìm theo ID thư mục).
-
-### 3. Cấu hình & Biến môi trường:
-- File cấu hình: `.env` (chứa `GEMINI_API_KEY`).
-- File chứng thực Google Sheets: `credentials.json` (Service Account kết nối Google Sheets).
-- Thư mục Media: `/Volumes/Media/HNC_Master/`.
+- File xuất: `My Drive/HNC/He_thong/HNC_Exported_Files/` (`hnc_paths.py`; không thấy thì báo lỗi, không dùng thư mục local). Chứng từ thuế: `My Drive/HNC/Thue/<năm>/`.
+- `.env` (khoá Gemini, `SYNC_HINT_*`), `credentials.json` (service account Google Sheets). Media: `/Volumes/Media/HNC_Master/`.
