@@ -9,14 +9,14 @@ Bot Zalo quản lý bán hàng / kho, ghi thẳng vào **HNC_Control_Center**. T
 ## Tin bot tự gửi (anh Kha 18/10: hạn chế tự động nhắn)
 
 Chỉ còn 3 loại tự lên Zalo: **đơn web mới** và **doanh thu năm hộ chạm mốc** (đều qua cửa notify, web tự lọc) và **nhắc hoá đơn NCC thứ Hai 8:00**. Tin trả lời lệnh của anh / nhân viên giữ nguyên.
-Đã tắt (chỉ ghi Nhật ký): phiếu nhập chờ chia (`pn`), MISA cuối ngày 21:00 (`misa_ngay`), tin hoá đơn MISA khi khách lấy HĐ (`misa_hd`), tin "❌ HUỶ phiếu" (`misa_huy`), báo web lỗi / chạy lại (`web_loi`), lệch giá hoá đơn (`hd_lech` — web vẫn nhận `lech_gia` / `sua_misa` trong kết quả `hoa_don ghi`). Bật lại loại nào: Script Property `AUTO_ZALO` = các mã trên, cách nhau dấu phẩy.
+Đã tắt (chỉ ghi Nhật ký): phiếu nhập chờ chia (`pn`), MISA cuối ngày (`misa_ngay`, trigger 21:00 đã gỡ 22/10 — chỉ chạy tay), tin hoá đơn MISA khi khách lấy HĐ (`misa_hd`), tin "❌ HUỶ phiếu" (`misa_huy`), báo web lỗi / chạy lại (`web_loi`), lệch giá hoá đơn (`hd_lech` — web vẫn nhận `lech_gia` / `sua_misa` trong kết quả `hoa_don ghi`). Bật lại loại nào: Script Property `AUTO_ZALO` = các mã trên, cách nhau dấu phẩy.
 
 ## Điều khiển bằng số (anh Kha "làm" 17/10, như bot xưởng)
 
 - Nhắn `menu` / `m` (hoặc chữ bot không hiểu) → menu số kèm số việc chờ (N). Tin 1 chữ số trả lời câu hỏi bot gửi sau cùng cho người đó (nhớ 720 phút, Script Property `ask_<chat_id>`). Không có câu hỏi đang mở → bot gửi menu, không đoán. `0` = để sau, `9` = về menu.
 - Menu: 1 Kiểm hàng (bot hỏi mã) · 2 Báo cáo bán (1 hôm nay · 2 hôm qua · 3 tuần này) · 3 Phiếu nhập chờ chia (duyệt lần lượt, 1 = gửi link app chia size) · 4 Hoá đơn NCC chưa có quá 7 ngày (duyệt lần lượt kèm câu nhắn gửi NCC: 1 đã có · 2 không lấy · 3 chưa, tuần sau nhắc · 0 để sau) · 5 Mã cần bổ sung (danh sách + link web) · 6 Huỷ thao tác vừa rồi (nhắn 6 hai lần trong 10 phút) · 9 Hướng dẫn lệnh chữ.
 - Nhân viên thấy 1, 2, 6, 9; Chủ (`OWNER_CHAT_ID`) thấy thêm 3, 4, 5. Lệnh chữ cũ giữ nguyên (`hd` vẫn là hướng dẫn).
-- Tin tự gửi kết bằng dòng "Nhắn số: …": phiếu chờ chia (1 mở app), nhắc hoá đơn thứ Hai (gộp 1 tin, 4 duyệt từng phiếu), MISA cuối ngày và đơn web (9 menu).
+- Tin tự gửi kết bằng dòng "Nhắn số: …": phiếu chờ chia (1 mở app), nhắc hoá đơn thứ Hai (gộp 1 tin, 4 duyệt từng phiếu) và đơn web (9 menu).
 
 ## Dự phòng khi web / app lỗi (anh Kha "làm" 17/10)
 
@@ -125,7 +125,7 @@ Chuyển hàng giữa 2 hộ (15E = Hải Nancy, Y3C = Yen Leather) không xuấ
 
 Bot soạn sẵn để nhập MISA ở quầy, theo **chủ hàng** (tính ký gửi). Gửi tới Script Property `MISA_CHAT_IDS` (nhiều chat cách nhau dấu phẩy), mặc định `OWNER_CHAT_ID`. Tên hộ lấy từ `HKD_15E` / `HKD_Y3C`.
 - **Đơn khách lấy hoá đơn** (`lay_hoa_don` trong phiếu bán): gửi ngay 1 tin / hộ: hộ, ngày, số CT (`ticket_id`), kênh, người bán, khách, công ty, MST, địa chỉ, email; từng dòng mã MISA (mã + size, như danh mục con HNC xuất), tên, ĐVT, SL × đơn giá = thành tiền; thuế (GTGT 1%, TNCN 0,5% theo danh mục MISA); tổng, thanh toán, ship.
-- **Còn lại**: trigger `dailyMisaSummary` 21:00 gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
+- **Còn lại** (chạy tay, trigger 21:00 gỡ 22/10 — bot @41 tự gỡ trigger cũ ở lần chạy đầu): `dailyMisaSummary` gửi 1 tin tổng / hộ từ các dòng BAN hôm nay (mọi kênh, cả lệnh Zalo / nhập tay), bỏ dòng đã gửi riêng vì lấy hoá đơn; tin dài tự cắt nhiều tin. Chạy thử: `dailyMisaSummary(true)` chỉ ghi Nhật ký.
 - Trigger mới: chạy `setupChangeTrigger` 1 lần sau khi triển khai. File nhập đơn MISA (mẫu `HNC_Templates/Nhap_khau_don_hang.xlsx`) do web làm vì web giữ thông tin khách / hoá đơn / thanh toán; bot chỉ soạn tin Zalo.
 
 ## In tem theo kho (V34, anh Kha "làm" 18/10)

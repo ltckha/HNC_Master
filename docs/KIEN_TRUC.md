@@ -15,7 +15,7 @@ flowchart LR
   subgraph AS[Apps Script – bot HNC<br/>gắn Sheet HNC_Control_Center]
     BOT[doPost: webhook Zalo<br/>+ cửa sale / stock / export / notify]
     PN[Nhập từ phiếu<br/>Gemini đọc → nháp → xác nhận]
-    TRG[Trigger: onEdit / onChange,<br/>flushSyncHints mỗi phút,<br/>nhắc hoá đơn T2 8:00,<br/>tin MISA 21:00]
+    TRG[Trigger: onEdit / onChange,<br/>flushSyncHints mỗi phút,<br/>nhắc hoá đơn T2 8:00]
   end
 
   subgraph MAC[Mac mini – main.py]
@@ -48,7 +48,7 @@ flowchart LR
 | Phần | Nơi chạy | Cách chạy |
 |---|---|---|
 | Bot HNC (`zalo_bot/Code.gs`) | Google Apps Script, gắn Sheet | Web App `/exec` (1 bản triển khai, link giữ nguyên). Cập nhật: `commands/bot_deploy.command` (test → `clasp push` → cập nhật đúng bản triển khai) |
-| Trigger bot | Apps Script | `onSheetEditHint` (onEdit), `onSheetChangeHint` (onChange), `flushSyncHints` mỗi 1 phút, `weeklyInvoiceReminder` thứ Hai 8:00, `dailyMisaSummary` 21:00 (tin MISA cuối ngày theo hộ). Tạo bằng hàm `setupChangeTrigger` |
+| Trigger bot | Apps Script | `onSheetEditHint` (onEdit), `onSheetChangeHint` (onChange), `flushSyncHints` mỗi 1 phút, `weeklyInvoiceReminder` thứ Hai 8:00. Tạo bằng hàm `setupChangeTrigger`. Tin MISA 21:00 bỏ 22/10 (bot @41; `dailyMisaSummary` chỉ chạy tay) |
 | Menu HNC (`main.py`) | Mac mini, `venv` | Bấm đúp `run.command`. Không có lịch tự chạy |
 | `tools/spec_fill.py` | Mac mini | `plan` / `ai` / `apply` (điền thông số còn trống trong SANPHAM) |
 | Media | NAS `/Volumes/Media/HNC_Master/` | Menu 5 gom ảnh từ Photoroom (NAS) và Downloads |
@@ -66,7 +66,7 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 
 **Drive** (`hnc_paths.py` khai 1 chỗ):
 - `My Drive/HNC/He_thong/` (cũ: `Spark/HNC_Master`): `HNC_Templates` (tpl_*), `HNC_Exported_Files` (file xuất, `channel_links.csv`, SPEC_FILL_AI_*), `Outputs`. Không thấy thì main.py dừng, không dùng thư mục local.
-- `My Drive/IN Mini Code/`: `IN.csv` / `IN_<kho>.csv` (P-touch dự phòng), `IN_BU_nhat_ky.csv`. In tự động QL-700: bot ghi lệnh vào tab ẩn `in_tem_lenh` → Mac mini (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, chạy liên tục, đọc mỗi 4 giây; cài bằng `tools/launchd/cai_in_tem.sh`) in qua USB, dựng tem `tools/label_render.py` (dùng chung với main.py task 10), tự ghi `web_label` + ô `ket_qua`. Cần: QL-700 đèn nguồn sáng, cắm USB, đèn Editor Lite tắt. In liền cả đợt, cắt 1 lần cuối (`CAT`).
+- `My Drive/IN Mini Code/`: `IN.csv` / `IN_<kho>.csv` (P-touch dự phòng), `IN_BU_nhat_ky.csv`. In tự động QL-700: bot ghi lệnh vào tab ẩn `in_tem_lenh` → Mac mini (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, chạy liên tục, đọc mỗi 4 giây lúc 7:00–22:00, ngoài giờ 30 giây; cài bằng `tools/launchd/cai_in_tem.sh`) in qua USB, dựng tem `tools/label_render.py` (dùng chung với main.py task 10), tự ghi `web_label` + ô `ket_qua`. Cần: QL-700 đèn nguồn sáng, cắm USB, đèn Editor Lite tắt. In liền cả đợt, cắt 1 lần cuối (`CAT`).
 - `My Drive/HNC/Thue/2026/`: `Hoá đơn 2026` (bot đọc theo ID `INVOICE_FOLDER_ID`), `Phiếu mua hàng` (bot ghi theo ID `PN_FOLDER_ID`: `Chưa chia/<NCC>/`, rồi `<hộ>/<NCC>/`).
 
 ## Cửa của bot (doPost)
