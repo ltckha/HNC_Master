@@ -77,7 +77,7 @@ def _goc():
     return o.rstrip('/')
 
 
-def gui(loai, body, chu=False, nguoi='mac'):
+def gui(loai, body, chu=False, nguoi='mac', dry_run=False):
     """POST 1 gói ký HMAC (như bot webForward_). Trả dict web (thêm 'web': True) hoặc {'ok': False, 'error'}."""
     key, goc = _khoa(), _goc()
     if len(key) < 16 or not goc:
@@ -86,6 +86,8 @@ def gui(loai, body, chu=False, nguoi='mac'):
     payload = {'luc': luc, 'loai': loai, 'nguon': 'mac', 'nguoi': nguoi, 'body': body}
     if chu:
         payload['chu'] = True
+    if dry_run:
+        payload['dry_run'] = True
     raw = json.dumps(payload, ensure_ascii=False)
     sig = hmac.new(key.encode(), (luc + '.' + raw).encode('utf-8'), hashlib.sha256).hexdigest()
     try:
