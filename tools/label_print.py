@@ -7,6 +7,9 @@ bot (cửa in_tem / in_bu) ghi lệnh vào tab ẩn `in_tem_lenh` (1 dòng / kho
 → ghi ô ket_qua (JSON). Lỗi trước khi gửi máy in (máy tắt, chưa cắm) → giữ lệnh, thử lại; quá 30 phút thì bỏ.
 Đã gửi máy in thì không gửi lại (tránh in trùng). Bot vẫn ghi IN_<kho>.csv lên Drive cho P-touch dự phòng.
 Chạy tay: venv/bin/python tools/label_print.py [--mot-lan]
+In thử (25/10, không ghi Sheet, không đánh Done; chỉ ĐỌC SANPHAM): tối đa 5 mã dạng MÃ/SIZE
+  venv/bin/python tools/label_print.py thu TH2040D/40 DXED/41 [--mau A|B|C|goc] [--in]
+  Mặc định chỉ xuất PNG xem trước vào .data/tem_thu/; thêm --in mới gửi máy QL-700 (1 tem / mã).
 """
 import fcntl
 import json
@@ -55,22 +58,25 @@ def find_printer():
     return devs[0]['identifier'].split('_')[0] if devs else None
 
 
-def print_records(records, kho, dry=False):
-    """In các dòng tem (mỗi dòng in F6 tờ). Trả {ok, so_tem, loi}."""
-    images = []
+def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
+    """In các dòng tem (mỗi dòng in F6 tờ). mau = mẫu tem (mặc định label_render.MAU_MAC_DINH). dry → chỉ lưu PNG. Trả {ok, so_tem, loi}."""
+    images, names = [], []
     for r in records:
         try:
             n = max(1, int(float(r.get('F6') or 1)))
         except ValueError:
             n = 1
-        img = label_render.render_label(r, kho)
+        img = label_render.render_label(r, kho, mau)
         images.extend([img] * n)
+        names.extend([str(r.get('Code128') or 'tem').replace('/', '-')] * n)
     if not images:
         return {'ok': False, 'so_tem': 0, 'loi': 'không có tem nào'}
     if dry:
-        for i, im in enumerate(images[:3]):
-            im.save(f'/tmp/tem_thu_{kho}_{i + 1}.png')
-        return {'ok': True, 'so_tem': len(images), 'loi': '', 'thu': True}
+        files = []
+        for i, im in enumerate(images[:5]):
+            files.append(os.path.join(out_dir, f'tem_{mau or label_render.MAU_MAC_DINH}_{names[i]}.png'))
+            im.save(files[-1])
+        return {'ok': True, 'so_tem': len(images), 'loi': '', 'thu': True, 'files': files}
     try:
         from brother_ql.conversion import convert
         from brother_ql.backends.helpers import send
@@ -216,7 +222,50 @@ def poll_once(ws):
         queue_write(ws, row, col, **fields)
 
 
+THU_MAX = 5
+THU_DIR = os.path.join(ROOT, '.data', 'tem_thu')
+
+
+def arg_val(name, default=None):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv and sys.argv.index(name) + 1 < len(sys.argv) else default
+
+
+def thu(items, mau=None, in_that=False):
+    """In thử / xem trước tem cho tối đa 5 mã 'MÃ/SIZE' — cùng luật dòng tem main.label_record (luật 15). Chỉ đọc SANPHAM."""
+    import gspread
+    import main as hnc
+    if not items or len(items) > THU_MAX:
+        return {'ok': False, 'loi': f'cần 1–{THU_MAX} mã dạng MÃ/SIZE'}
+    if mau and mau not in ('A', 'B', 'C', 'goc'):
+        return {'ok': False, 'loi': 'mẫu phải là A, B, C hoặc goc'}
+    sp = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json')).open_by_key(SHEET_ID).worksheet('SANPHAM').get_all_values()
+    head = [h.strip() for h in sp[1]]  # SANPHAM: tên cột kỹ thuật ở hàng 2 (luật 4)
+    need = ('product_code', 'product_name', 'product_color', 'product_price', 'web_url')
+    miss = [c for c in need if c not in head]
+    if miss:
+        return {'ok': False, 'loi': f'SANPHAM thiếu cột {miss}'}
+    pmap = {r[head.index('product_code')].strip().upper(): {c: r[head.index(c)] for c in need} for r in sp[2:] if r[head.index('product_code')].strip()}
+    recs, khong = [], []
+    for it in items:
+        code, _, size = it.partition('/')
+        code = code.strip().upper()
+        if code not in pmap:
+            khong.append(code)
+            continue
+        recs.append(hnc.label_record({'product_code': code, 'item_size': size.strip(), 'item_quantity': 1}, pmap))
+    if khong:
+        return {'ok': False, 'loi': 'SANPHAM không có mã: ' + ', '.join(khong)}
+    if not in_that:
+        os.makedirs(THU_DIR, exist_ok=True)
+        return print_records(recs, '', dry=True, mau=mau, out_dir=THU_DIR)
+    return print_records(recs, '', mau=mau)  # in thật, KHÔNG mark_done, không ghi Sheet
+
+
 def main():
+    if sys.argv[1:2] == ['thu']:
+        items = [a for a in sys.argv[2:] if not a.startswith('--') and a != arg_val('--mau')]
+        print(json.dumps(thu(items, arg_val('--mau'), '--in' in sys.argv), ensure_ascii=False))
+        return
     import logging
     logging.getLogger('brother_ql').setLevel(logging.ERROR)  # QL-700 không gửi "printing completed" — đã biết, không phải lỗi
     lock = open('/tmp/hnc_label_print.lock', 'w')

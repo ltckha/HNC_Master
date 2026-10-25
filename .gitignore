@@ -38,3 +38,4 @@ Thumbs.db
 # clasp — khoá OAuth (không bao giờ đưa lên git)
 .clasprc.json
 docs/so_lieu_*
+.data/
