@@ -76,7 +76,8 @@ def _fit_text(draw, text, box, max_size=40, min_size=14):
         draw.text((x, y + i * (min_size + 4)), ln, font=f, fill=0)
 
 
-MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá)
+MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá) · 'D' (25/10, mã + size thật to, chỉ thử)
+CHAT_LIEU_MAX = 22
 
 
 def _barcode_h(img, code, y, h, human=24):
@@ -90,9 +91,11 @@ def _barcode_h(img, code, y, h, human=24):
     for m in mods:
         w = int(m) * unit
         if bar:
-            d.rectangle([x, y, x + w - 1, y + h - human - 4], fill=0)
+            d.rectangle([x, y, x + w - 1, y + h - (human + 4 if human else 0) - 1], fill=0)
         x += w
         bar = not bar
+    if not human:  # human=0: không in chữ mã dưới vạch (mẫu D in mã to ở hàng 1)
+        return
     f = _font(human)
     tw = d.textlength(code, font=f)
     d.text(((DOTS[0] - tw) // 2, y + h - human), code, font=f, fill=0)
@@ -137,6 +140,35 @@ def _render_new(rec, kho, mau):
         _one_line(d, name, 8, 66, W - 16, 26)
         if code:
             _barcode_h(img, code, 104, 164)
+    elif mau == 'D':    # 25/10 (Bán hàng): người lớn tuổi đọc mã + size không cần kính
+        size = str(rec.get('Size', '')).strip()
+        ma = code[:-len(size)] if size and code.endswith(size) else code
+        box = 88
+        if size:  # ô size nền đen chữ trắng, góc phải trên
+            d.rectangle([W - 8 - box, 0, W - 8, box - 1], fill=0)
+            for fs in range(72, 20, -4):
+                f = _font(fs)
+                tw = d.textlength(size, font=f)
+                if tw <= box - 10:
+                    bb = d.textbbox((0, 0), size, font=f)
+                    d.text((W - 8 - box + (box - tw) / 2, (box - (bb[3] - bb[1])) / 2 - bb[1]), size, font=f, fill=255)
+                    break
+        _one_line(d, ma, 8, 2, W - 24 - (box if size else 0), 80, bold_min=36)
+        gia = price.replace(' đ', 'đ')
+        f = _font(42)
+        gw = d.textlength(gia, font=f)
+        d.text((W - 8 - gw, 92), gia, font=f, fill=0)
+        cl = str(rec.get('Chất liệu', '')).strip()
+        cl = cl[:1].upper() + cl[1:] if cl else ''
+        if len(cl) > CHAT_LIEU_MAX:
+            cl = cl[:CHAT_LIEU_MAX].rsplit(' ', 1)[0]
+        mau_cl = ' · '.join(x for x in (str(rec.get('Màu', '')).strip(), cl) if x)
+        _one_line(d, mau_cl, 8, 96, W - 32 - int(gw), 36, bold_min=20)
+        fb = _font(18)
+        brand = 'Hiệu giày Hải Nancy'
+        d.text((W - 8 - d.textlength(brand, font=fb), 144), brand, font=fb, fill=0)
+        if code:
+            _barcode_h(img, code, 168, 95, human=0)
     else:               # C: gọn, không tên · mã + size to · giá · mã vạch cao nhất
         _one_line(d, sc + tag, 8, 4, W // 2 + 40, 34)
         f = _font(44)
@@ -148,7 +180,7 @@ def _render_new(rec, kho, mau):
 
 def render_label(rec, kho='', mau=None):
     mau = mau or MAU_MAC_DINH
-    if mau in ('A', 'B', 'C'):
+    if mau in ('A', 'B', 'C', 'D'):
         return _render_new(rec, kho, mau)
     return _render_goc(rec, kho)
 

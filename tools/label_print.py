@@ -8,7 +8,7 @@ bot (cửa in_tem / in_bu) ghi lệnh vào tab ẩn `in_tem_lenh` (1 dòng / kho
 Đã gửi máy in thì không gửi lại (tránh in trùng). Bot vẫn ghi IN_<kho>.csv lên Drive cho P-touch dự phòng.
 Chạy tay: venv/bin/python tools/label_print.py [--mot-lan]
 In thử (25/10, không ghi Sheet, không đánh Done; chỉ ĐỌC SANPHAM): tối đa 5 mã dạng MÃ/SIZE
-  venv/bin/python tools/label_print.py thu TH2040D/40 DXED/41 [--mau A|B|C|goc] [--in]
+  venv/bin/python tools/label_print.py thu TH2040D/40 DXED/41 [--mau A|B|C|D|goc] [--in]
   Mặc định chỉ xuất PNG xem trước vào .data/tem_thu/; thêm --in mới gửi máy QL-700 (1 tem / mã).
 """
 import fcntl
@@ -236,8 +236,8 @@ def thu(items, mau=None, in_that=False):
     import main as hnc
     if not items or len(items) > THU_MAX:
         return {'ok': False, 'loi': f'cần 1–{THU_MAX} mã dạng MÃ/SIZE'}
-    if mau and mau not in ('A', 'B', 'C', 'goc'):
-        return {'ok': False, 'loi': 'mẫu phải là A, B, C hoặc goc'}
+    if mau and mau not in ('A', 'B', 'C', 'D', 'goc'):
+        return {'ok': False, 'loi': 'mẫu phải là A, B, C, D hoặc goc'}
     sp = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json')).open_by_key(SHEET_ID).worksheet('SANPHAM').get_all_values()
     head = [h.strip() for h in sp[1]]  # SANPHAM: tên cột kỹ thuật ở hàng 2 (luật 4)
     need = ('product_code', 'product_name', 'product_color', 'product_price', 'web_url')
@@ -245,6 +245,8 @@ def thu(items, mau=None, in_that=False):
     if miss:
         return {'ok': False, 'loi': f'SANPHAM thiếu cột {miss}'}
     pmap = {r[head.index('product_code')].strip().upper(): {c: r[head.index(c)] for c in need} for r in sp[2:] if r[head.index('product_code')].strip()}
+    cl = {r[head.index('product_code')].strip().upper(): next((r[head.index(c)].strip() for c in ('Chất liệu', 'Chất liệu quai:') if c in head and r[head.index(c)].strip()), '')
+          for r in sp[2:] if r[head.index('product_code')].strip()}  # mẫu D: màu · chất liệu
     recs, khong = [], []
     for it in items:
         code, _, size = it.partition('/')
@@ -252,7 +254,7 @@ def thu(items, mau=None, in_that=False):
         if code not in pmap:
             khong.append(code)
             continue
-        recs.append(hnc.label_record({'product_code': code, 'item_size': size.strip(), 'item_quantity': 1}, pmap))
+        recs.append(dict(hnc.label_record({'product_code': code, 'item_size': size.strip(), 'item_quantity': 1}, pmap), **{'Chất liệu': cl.get(code, '')}))
     if khong:
         return {'ok': False, 'loi': 'SANPHAM không có mã: ' + ', '.join(khong)}
     if not in_that:
