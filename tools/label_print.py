@@ -247,8 +247,6 @@ def thu(items, mau=None, in_that=False):
     pmap = {r[head.index('product_code')].strip().upper(): {c: r[head.index(c)] for c in need} for r in sp[2:] if r[head.index('product_code')].strip()}
     cl = {r[head.index('product_code')].strip().upper(): next((r[head.index(c)].strip() for c in ('Chất liệu', 'Chất liệu quai:') if c in head and r[head.index(c)].strip()), '')
           for r in sp[2:] if r[head.index('product_code')].strip()}  # mẫu D: màu · chất liệu
-    xx = {r[head.index('product_code')].strip().upper(): r[head.index('product_origin')].strip() if 'product_origin' in head else ''
-          for r in sp[2:] if r[head.index('product_code')].strip()}  # mẫu D: xuất xứ (trống → "—")
     recs, khong = [], []
     for it in items:
         code, _, size = it.partition('/')
@@ -256,8 +254,7 @@ def thu(items, mau=None, in_that=False):
         if code not in pmap:
             khong.append(code)
             continue
-        recs.append(dict(hnc.label_record({'product_code': code, 'item_size': size.strip(), 'item_quantity': 1}, pmap),
-                         **{'Chất liệu': cl.get(code, ''), 'Xuất xứ': xx.get(code, '')}))
+        recs.append(dict(hnc.label_record({'product_code': code, 'item_size': size.strip(), 'item_quantity': 1}, pmap), **{'Chất liệu': cl.get(code, '')}))
     if khong:
         return {'ok': False, 'loi': 'SANPHAM không có mã: ' + ', '.join(khong)}
     if not in_that:

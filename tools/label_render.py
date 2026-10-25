@@ -164,10 +164,8 @@ def _render_new(rec, kho, mau):
             cl = cl[:CHAT_LIEU_MAX].rsplit(' ', 1)[0]
         mau_cl = ' · '.join(x for x in (str(rec.get('Màu', '')).strip(), cl) if x)
         _one_line(d, mau_cl, 8, 96, W - 32 - int(gw), 36, bold_min=20)
-        # Xuất xứ theo nhãn gốc / hoá đơn (NĐ 37/2026, nghiên cứu 25/10): trống thì in "—", không tự điền
-        _one_line(d, 'Xuất xứ: ' + (str(rec.get('Xuất xứ', '')).strip() or '—'), 8, 138, W - 16, 26, bold_min=18)
-        if code:  # bỏ dòng "Hiệu giày Hải Nancy" (25/10: chữ nhỏ dễ đọc nhầm dấu)
-            _barcode_h(img, code, 172, 95, human=0)
+        if code:  # bỏ dòng "Hiệu giày Hải Nancy" (25/10: chữ nhỏ dễ đọc nhầm dấu) → mã vạch cao hơn
+            _barcode_h(img, code, 148, 115, human=0)
     else:               # C: gọn, không tên · mã + size to · giá · mã vạch cao nhất
         _one_line(d, sc + tag, 8, 4, W // 2 + 40, 34)
         f = _font(44)
