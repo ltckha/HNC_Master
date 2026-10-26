@@ -4060,6 +4060,7 @@ def print_main_menu():
   [5] [bold #A7FFEB]📁 QUẢN LÝ MEDIA (TƯ LIỆU SẢN PHẨM)[/bold #A7FFEB]
   [6] [bold #69F0AE]📸 AI TỰ ĐỘNG THÊM HÀNG HOÁ MỚI TỪ ẢNH[/bold #69F0AE]
   [7] 🧭 Chế độ sổ gốc: sổ bán / kho / tồn / hàng hoá — DỰ PHÒNG (Mac, bot ghi Sheet) ↔ WEB (web ghi)
+  [8] ↩️ Trả hàng / Đổi hàng (dự phòng khi web hỏng — cùng dòng như web / bot)
   -----------------------------------------------------------------
   [0] [bold red]❌ Thoát ứng dụng[/bold red]
 ==================================================================="""
@@ -4309,6 +4310,51 @@ CHE_DO_SO = [
 ]
 
 
+@sync_hint_after
+def tra_doi_hang(loader):
+    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/tra_doi.py."""
+    from tools.tra_doi import TraDoi
+    kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + bán mã khác)  [Enter] thôi: ").strip()
+    if kieu not in ('1', '2'):
+        return
+    if loader.che_do_kho() == 'web' or (kieu == '2' and loader.che_do() == 'web'):
+        print("⛔ Sổ kho / sổ bán đang ở Web — đổi trả trên app (nút Đổi / Trả). Web hỏng: đổi sổ về Dự phòng ở [7] rồi làm lại.")
+        return
+    kho = {'1': '15E', '2': 'Y3C'}.get(input("Kho [1] 15E  [2] Y3C: ").strip(), '')
+    if not kho:
+        print("❌ Chưa chọn kho.")
+        return
+    t = TraDoi(loader, MAC_RUN_ID)
+    try:
+        code = input("Mã hàng KHÁCH TRẢ (vd TH2040D): ").strip().upper()
+        size = input("Size: ").strip()
+        qty = int(input("Số lượng [1]: ").strip() or 1)
+        chu = input("Hàng của hộ nào? [Enter] = tự tìm theo lần bán gần nhất, hoặc gõ 15E / Y3C: ").strip().upper()
+        t.tra(code, size, kho, qty, chu)
+        if kieu == '2':
+            code2 = input("Mã hàng KHÁCH LẤY (vd TH2040D): ").strip().upper()
+            size2 = input("Size: ").strip()
+            gia = int(''.join(ch for ch in input("Giá bán [Enter] = giá SANPHAM: ") if ch.isdigit()) or 0)
+            tt = {'1': 'Tiền mặt', '2': 'Chuyển khoản', '3': 'Thẻ'}.get(input("Thanh toán [1] Tiền mặt  [2] Chuyển khoản  [3] Thẻ: ").strip(), 'Tiền mặt')
+            t.ban(code2, size2, kho, qty, gia, tt)
+    except (RuntimeError, ValueError) as e:
+        print(f"⛔ {e}")
+        return
+    print("\nSẽ ghi:")
+    for mo_ta, _ in t.ops:
+        print("  • " + mo_ta)
+    for g in t.ghi_chu:
+        print("  " + g)
+    if input("Ghi vào Sheet? (y/Enter = không): ").strip().lower() != 'y':
+        print("Chưa ghi gì.")
+        return
+    try:
+        t.ghi()
+        print(f"✅ Đã ghi {len(t.ops)} thay đổi.")
+    except RuntimeError as e:
+        print(f"⛔ {e} — kiểm Sheet trước khi làm lại (có thể đã ghi một phần).")
+
+
 def change_che_do(loader):
     """Menu [7]: xem / đổi 4 sổ (bán, kho, tồn, hàng hoá) Dự phòng ↔ Web, gõ lại số mới đổi — cùng luật lệnh Zalo "che do"."""
     lab = lambda v: 'WEB (web ghi)' if v == 'web' else 'DỰ PHÒNG (Mac / bot ghi Sheet)'
@@ -4408,6 +4454,9 @@ def main():
             handle_submenu_misa(loader)
         elif choice_input == "5":
             handle_submenu_media(loader)
+        elif choice_input == "8":
+            tra_doi_hang(loader)
+            input("\nNhấn Enter để quay lại Menu chính...")
         elif choice_input == "7":
             change_che_do(loader)
             input("\nNhấn Enter để quay lại Menu chính...")
