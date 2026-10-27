@@ -4337,6 +4337,18 @@ def tra_doi_hang(loader):
             gia = int(''.join(ch for ch in input("Giá bán [Enter] = giá SANPHAM: ") if ch.isdigit()) or 0)
             tt = {'1': 'Tiền mặt', '2': 'Chuyển khoản', '3': 'Thẻ'}.get(input("Thanh toán [1] Tiền mặt  [2] Chuyển khoản  [3] Thẻ: ").strip(), 'Tiền mặt')
             t.ban(code2, size2, kho, qty, gia, tt)
+            # Tiền chênh (web bb3d576, 27/10): = tổng giá món mới − giá phiếu gốc. Món mới rẻ hơn → mặc định KHÔNG hoàn;
+            # chỉ Chủ được chọn hoàn. Hoàn hay không chỉ ghi ở phiếu đổi trả trên web (xu_ly), Sheet không thêm dòng nào.
+            goc = int(''.join(ch for ch in input(f"Giá phiếu gốc món trả [Enter] = giá SANPHAM {t.sp(code)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code)['gia'])
+            moi = (gia or t.sp(code2)['gia']) * qty
+            chenh = moi - goc * qty
+            if chenh > 0:
+                print(f"💰 Khách trả thêm {chenh:,}đ".replace(',', '.'))
+            elif chenh < 0:
+                hoan = input(f"Món mới rẻ hơn {-chenh:,}đ. Hoàn tiền phần thừa? (chỉ Chủ) [y/Enter = không hoàn]: ".replace(',', '.')).strip().lower() == 'y'
+                t.ghi_chu.append(("💸 HOÀN " if hoan else "Không hoàn ") + f"{-chenh:,}đ phần thừa".replace(',', '.') +
+                                 " — Sheet không ghi dòng nào cho khoản này; web lên lại thì Chủ ghi vào phiếu Đổi / Trả trên app (xu_ly = "
+                                 + ("hoan_tien" if hoan else "khong_hoan") + ").")
     except (RuntimeError, ValueError) as e:
         print(f"⛔ {e}")
         return
