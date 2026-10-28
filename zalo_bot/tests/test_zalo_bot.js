@@ -69,7 +69,7 @@ function mockSheet(n) {
         setValues: vals => vals.forEach((rowV, k) => rowV.forEach((v, j) => { WRITES.push({ sheet: n, cell: [r + k, c + j], v }); while (d.length < r + k) d.push([]); while (d[r - 1 + k].length < c + j) d[r - 1 + k].push(''); d[r - 1 + k][c - 1 + j] = v; })),
         setFormulaR1C1: v => { WRITES.push({ sheet: n, cell: [r, c], v }); put(v); },
         getFormulaR1C1: () => { const v = (d[r - 1] || [])[c - 1]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; },
-        getFormulasR1C1: () => [Array.from({ length: nc || 1 }, (_, j) => { const v = (d[r - 1] || [])[c - 1 + j]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; })],
+        getFormulasR1C1: () => Array.from({ length: nr || 1 }, (_, k) => Array.from({ length: nc || 1 }, (_, j) => { const v = (d[r - 1 + k] || [])[c - 1 + j]; return typeof v === 'string' && v.charAt(0) === '=' ? v : ''; })),
         clearContent: () => put(''),
       };
     },
@@ -1324,5 +1324,15 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
   eq('P5b tắt (chưa có p5b_web) → bot ghi Sheet như cũ, không gọi web', [sent.length - n1, /^Done - /.test(lbRow[9])], [0, true]);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+{ // Agent đăng SP 28/10: web ghi CON_DES (chữ) đè công thức dòng cuối → mã mới lấy công thức CON_DES gần nhất phía trên, không chép chữ
+  const sp0 = DATA.SANPHAM;
+  DATA.SANPHAM = [['nhóm', '', ''], ['product_code', 'product_color', 'product_price', 'CON_DES', 'product_description'],
+    ['A1', 'Đen', 1, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]'], ['A2', 'Nâu', 1, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]'],
+    ['A3', 'Kem', 1, 'Mô tả đã duyệt A3', '=R[0]C[-1]']];
+  vm.runInContext('MEMO={};', ctx);
+  const op = ctx.appendSanphamMin_({ code: 'B1', base: 'B', color: 'Đỏ', price: 2, sizes: [] });
+  eq('mã mới: CON_DES = công thức gần nhất (A2), dòng A3 giữ mô tả đã duyệt', [op.row, DATA.SANPHAM[5][3], DATA.SANPHAM[5][4], DATA.SANPHAM[4][3]],
+    [6, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]', 'Mô tả đã duyệt A3']);
+  DATA.SANPHAM = sp0; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

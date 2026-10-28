@@ -2653,6 +2653,13 @@ function appendSanphamMin_(m) {
   if (!hasNganh) PN_NGANH_FORMULA_COLS.forEach(n => { if (col[n] !== undefined) values[n] = ''; });
 
   const formulas = last > hr + 1 ? sheet.getRange(last, 1, 1, ncol).getFormulasR1C1()[0] : [];
+  // CON_DES: web ghi mô tả đã duyệt đè công thức (Agent đăng SP 28/10) → dòng cuối có thể là chữ; lấy công thức gần nhất phía trên.
+  // Dòng mới không bao giờ ghi CON_DES dạng chữ, dòng đã có không đụng tới.
+  const cd = col.CON_DES;
+  if (cd !== undefined && last > hr + 1 && !(formulas[cd] && String(formulas[cd]).charAt(0) === '=')) {
+    const up = sheet.getRange(hr + 2, cd + 1, last - hr - 1, 1).getFormulasR1C1();
+    for (let i = up.length - 1; i >= 0; i--) if (String(up[i][0]).charAt(0) === '=') { formulas[cd] = up[i][0]; break; }
+  }
   const cols = [];
   const mem = new Array(ncol).fill('');
   for (let c = 0; c < ncol; c++) {
@@ -3607,7 +3614,7 @@ function misaCatalogExport_(dry, flags) {
     if (reasons.length) { statuses.push({ row: r + 1, value: reasons.join(', ') }); canhBao.push('Dòng ' + (r + 1) + ' ' + code + ': ' + reasons.join(', ')); continue; }
     statuses.push({ row: r + 1, value: 'Done - ' + now });
     valid.push({ parent, code, name, price, unit, color: String(v(row, 'product_color') || '').trim(), brand: String(v(row, 'Thương hiệu') || 'Hải Nancy').trim(),
-      cat: sub.cat, weight: sub.weight, desc: String(v(row, 'product_description') || v(row, 'CON_DES') || '').trim(),
+      cat: sub.cat, weight: sub.weight, desc: String(v(row, 'CON_DES') || v(row, 'product_description') || '').trim(), // mô tả đã duyệt trước (Agent đăng SP 28/10)
       sizes: unrollSizes_(v(row, 'Size')).filter(Boolean) });
   }
   const group = list => { const g = {}; list.forEach(x => (g[x.parent] = g[x.parent] || []).push(x)); return g; };

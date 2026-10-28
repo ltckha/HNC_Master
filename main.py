@@ -2310,7 +2310,7 @@ def process_export_task(choice, loader):
             sub_info = sub_dict.get(cat_b.lower()) or sub_dict.get(cat_b, {})
             hnc_cat = str(sub_info.get('Mã nhóm hàng hóa') or sub_info.get('HNC', '')).strip()
             weight = sub_info.get('Cân nặng', 1500)
-            desc = str(rec.get('product_description') or rec.get('CON_DES', '')).strip()
+            desc = str(rec.get('CON_DES') or rec.get('product_description', '')).strip()  # mô tả đã duyệt (web ghi CON_DES) trước, như Shopee / TikTok / web
             pic1 = str(rec.get('image_01') or rec.get('Pic 1', '')).strip()
 
             # Lấy dải Size chuẩn từ cột Size (đã bao gồm đầy đủ dải size và size plus)
