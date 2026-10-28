@@ -3466,16 +3466,13 @@ function testSyncHint() {
 
 // =====================================================================
 // XUẤT FILE MISA QUA BOT (web /admin/san gọi, anh Kha "làm" 17/10) — giống menu HNC mục 4 (TASK 4 danh mục, TASK 8 nhập kho).
-// POST ?stock_key  { action:"xuat_misa", loai: danh_muc | nhap_kho_15e | nhap_kho_3c, ho?: 15E | Y3C (danh_muc), nguoi, dry_run? }
+// POST ?stock_key  { action:"xuat_misa", loai: danh_muc | nhap_kho_15e | nhap_kho_3c, nguoi, dry_run? }
 // File điền vào mẫu gốc trong HNC/He_thong/HNC_Templates (sửa XML của xlsx, giữ nguyên định dạng / danh sách chọn của MISA),
 // lưu HNC/He_thong/HNC_Exported_Files; ghi cờ misa_upload (SANPHAM) / misa_stock (NHAP) như menu. Bỏ mã "cần bổ sung", dòng TRA-…
 // dry_run: chỉ đếm, không tạo file, không ghi cờ.
 // =====================================================================
 
 const MISA_LOAI = ['danh_muc', 'nhap_kho_15e', 'nhap_kho_3c'];
-// Danh mục hàng hoá MISA theo hộ (anh Kha 28/10): mỗi hộ 1 cột cờ SANPHAM. Y3C chỉ gồm mã nhập qua phiếu Y3C (NHAP, KHO = Y3C,
-// bỏ phiếu trả / đổi TRA- DOI-); hàng ký gửi 15E để ở 3C đi bằng chuyển kho nên không vào. 15E giữ như cũ (mọi mã). Như main.py MISA_DM_COT.
-const MISA_DM_COL = { '15E': 'misa_upload', 'Y3C': 'misa_upload_y3c' };
 const MISA_WAIT_DAYS = 3; // chưa có hoá đơn: chờ 3 ngày rồi mới xuất "giá tạm" (anh Kha 17/10)
 const SYSTEM_FOLDER_DEFAULT = '1rZ_ynNNKLXfviqXBlnQyMYQcJYPPeok4'; // My Drive/HNC/He_thong (theo ID; đổi bằng SYSTEM_FOLDER_ID)
 const MISA_STOCK_STATUS_COLS = ['misa_stock', 'misa_stock_y3c', 'misa_stock_15e']; // như main.py STATUS_COLUMNS[8]
@@ -3494,12 +3491,10 @@ function handleMisaExport_(body, nguoi, dryRun) {
   try {
     MEMO = {};
     const flags = body.ghi_co !== false; // ghi_co:false = tạo file để thử, không ghi cờ (hàm thuXuatMisa)
-    const ho = loai === 'danh_muc' ? KHO_ALIASES[String(body.ho || '15E').trim().toUpperCase()] : (loai === 'nhap_kho_15e' ? '15E' : 'Y3C');
-    if (!MISA_DM_COL[ho]) return { ok: false, action: 'xuat_misa', loai, error: 'ho phải là: ' + Object.keys(MISA_DM_COL).join(', ') };
-    const r = loai === 'danh_muc' ? misaCatalogExport_(dryRun, flags, ho) : misaStockExport_(loai === 'nhap_kho_15e' ? '15E' : '3C', dryRun, flags);
+    const r = loai === 'danh_muc' ? misaCatalogExport_(dryRun, flags) : misaStockExport_(loai === 'nhap_kho_15e' ? '15E' : '3C', dryRun, flags);
     if (!flags) { r.khong_ghi_co = true; r._sync = []; }
     console.log('xuat_misa ' + loai + ' bởi ' + nguoi + (dryRun ? ' (chạy thử)' : '') + ': ' + r.files.map(f => f.ten + ' ' + f.so_dong).join(', '));
-    return Object.assign({ ok: true, action: 'xuat_misa', loai, ho, dry_run: dryRun }, r);
+    return Object.assign({ ok: true, action: 'xuat_misa', loai, dry_run: dryRun }, r);
   } finally {
     lock.releaseLock();
   }
@@ -3581,30 +3576,13 @@ function misaWriteStatus_(sheetName, colIdx, statuses, field) {
   return { ok: true };
 }
 
-/** Mã nhập qua phiếu của hộ (NHAP, KHO = hộ, bỏ phiếu TRA- / DOI-) — danh mục MISA riêng hộ Y3C. */
-function misaHoCodes_(ho) {
-  const nh = sheetValues_('NHAP');
-  const c = headerMap_(nh[0]);
-  requireColumns_('NHAP', c, ['product_code', 'KHO', 'Số chứng từ (*)']);
-  const out = {};
-  nh.slice(1).forEach(r => {
-    const code = String(r[c.product_code] || '').trim().toUpperCase();
-    const so = String(r[c['Số chứng từ (*)']] || '').trim().toUpperCase();
-    if (code && KHO_ALIASES[String(r[c.KHO] || '').trim().toUpperCase()] === ho && !/^(TRA|DOI)-/.test(so)) out[code] = true;
-  });
-  return out;
-}
-
-/** Danh mục hàng hoá MISA (TASK 4) của 1 hộ: mã cha mới → tpl_misa_upload; mã cha đã lên MISA hộ đó (thêm màu) → tpl_misa_update. */
-function misaCatalogExport_(dry, flags, ho) {
-  ho = ho || '15E';
-  const fc = MISA_DM_COL[ho];
-  const chiMa = ho === '15E' ? null : misaHoCodes_(ho);
+/** Danh mục hàng hoá MISA (TASK 4): mã cha mới → tpl_misa_upload; mã cha đã lên MISA (thêm màu) → tpl_misa_update. */
+function misaCatalogExport_(dry, flags) {
   const sp = sheetValues_('SANPHAM');
   let hr = 0;
   for (let r = 0; r < Math.min(2, sp.length); r++) if (sp[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { hr = r; break; }
   const c = headerMap_(sp[hr]);
-  requireColumns_('SANPHAM', c, ['product_code', fc]);
+  requireColumns_('SANPHAM', c, ['product_code', 'misa_upload']);
   const v = (row, n) => (c[n] === undefined ? '' : row[c[n]]);
   const cats = subCategories_();
   const now = misaNow_();
@@ -3612,14 +3590,13 @@ function misaCatalogExport_(dry, flags, ho) {
   const uploadedParents = {};
   for (let r = hr + 1; r < sp.length; r++) {
     const parent = String(v(sp[r], 'parent_product_code') || v(sp[r], 'Mã hàng hóa cha') || '').trim();
-    if (parent && String(v(sp[r], fc)).toLowerCase().indexOf('done') !== -1) uploadedParents[parent] = true;
+    if (parent && String(v(sp[r], 'misa_upload')).toLowerCase().indexOf('done') !== -1) uploadedParents[parent] = true;
   }
   for (let r = hr + 1; r < sp.length; r++) {
     const row = sp[r];
     const code = String(v(row, 'product_code') || '').trim();
     if (!code && !String(v(row, 'FSKU') || '').trim()) continue;
-    if (String(v(row, fc) || '').trim()) continue;
-    if (chiMa && !chiMa[code.toUpperCase()]) continue;
+    if (String(v(row, 'misa_upload') || '').trim()) continue;
     if (needsInfo_(row, c)) { boQua.push(code.toUpperCase()); continue; }
     const parent = String(v(row, 'parent_product_code') || v(row, 'Mã hàng hóa cha') || '').trim();
     const name = String(v(row, 'product_name') || '').trim();
@@ -3643,7 +3620,7 @@ function misaCatalogExport_(dry, flags, ho) {
   const group = list => { const g = {}; list.forEach(x => (g[x.parent] = g[x.parent] || []).push(x)); return g; };
   const newRecs = valid.filter(x => !uploadedParents[x.parent]);
   const upRecs = valid.filter(x => uploadedParents[x.parent]);
-  const stamp = (ho === '15E' ? '' : ho + '_') + misaStamp_(); // tên file 15E giữ như cũ
+  const stamp = misaStamp_();
   const files = [];
   if (newRecs.length) {
     const rows = [], seen = {};
@@ -3688,9 +3665,9 @@ function misaCatalogExport_(dry, flags, ho) {
     });
     files.push(misaWriteFile_('tpl_misa_update.xlsx', 'Nhap_khau_cap_nhat_thong_tin', 3, rows, 'MISA_PRODUCTS_UPDATE_' + stamp + '.xlsx', dry));
   }
-  const co = !dry && flags !== false && statuses.length ? misaWriteStatus_('SANPHAM', c[fc], statuses, fc) : null;
-  if (co && !co.ok) canhBao.unshift('⚠ CHƯA ghi cờ ' + fc + ' (' + co.error + ') — file đã tạo, nhập MISA 1 lần rồi báo Thực thi');
-  return { ho, loi_co: co && !co.ok ? co.error : undefined, files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: valid.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['SANPHAM'] : [] };
+  const co = !dry && flags !== false && statuses.length ? misaWriteStatus_('SANPHAM', c.misa_upload, statuses, 'misa_upload') : null;
+  if (co && !co.ok) canhBao.unshift('⚠ CHƯA ghi cờ misa_upload (' + co.error + ') — file đã tạo, nhập MISA 1 lần rồi báo Thực thi');
+  return { loi_co: co && !co.ok ? co.error : undefined, files, canh_bao: canhBao, bo_qua: uniq_(boQua), so_hop_le: valid.length, so_loi: canhBao.length, _sync: !dry && statuses.length ? ['SANPHAM'] : [] };
 }
 
 /** Phiếu nhập kho MISA (TASK 8) cho 1 kho: dòng NHAP chưa có cờ misa_stock. Đơn giá = invoice_price, trống thì purchase_price (anh Kha 17/10). */

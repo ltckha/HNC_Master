@@ -1334,29 +1334,5 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('mã mới: CON_DES = công thức gần nhất (A2), dòng A3 giữ mô tả đã duyệt', [op.row, DATA.SANPHAM[5][3], DATA.SANPHAM[5][4], DATA.SANPHAM[4][3]],
     [6, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]', 'Mô tả đã duyệt A3']);
   DATA.SANPHAM = sp0; vm.runInContext('MEMO={};', ctx); }
-{ // Danh mục MISA theo hộ (anh Kha 28/10): Y3C = mã nhập qua phiếu Y3C, cờ misa_upload_y3c; 15E như cũ
-  const xm = (b, dry) => ctx.handleStock_(Object.assign({ action: 'xuat_misa', loai: 'danh_muc', nguoi: 'kha@hn.vn' }, b), !!dry);
-  let r = xm({ ho: 'ABC' }, true);
-  eq('danh mục: hộ sai → lỗi', [r.ok, /ho phải là/.test(r.error)], [false, true]);
-  const hd = DATA.SANPHAM[1], cy = hd.length, c15 = hd.indexOf('misa_upload');
-  hd.push('misa_upload_y3c');
-  DATA.SANPHAM.push(['Y9', 'Y9D', '', '', 'Chú Dũng', '', '', 'Đen', 'Giày Y9 đen', 'Giày mọi nam', 'Đôi', 900000, 400000, '40', 'male', '7', '', 'Việt Nam', '']);
-  DATA.NHAP.push(['02/10/2026', 'NK000016', 'Y9D', 'Đen', 'Y3C', 40, 1, '', '', '', '', ''], ['02/10/2026', 'TRA-021026', 'MS1D', 'Đen', 'Y3C', 40, 1, '', '', '', '', '']);
-  vm.runInContext('MEMO={};', ctx);
-  const chi = Object.keys(ctx.misaHoCodes_('Y3C'));
-  eq('mã hộ Y3C: lấy phiếu Y3C, bỏ TRA-', [chi.indexOf('Y9D') !== -1, chi.indexOf('MS1D') !== -1], [true, true]);
-  const W = [], w0 = ctx.misaWriteFile_;
-  ctx.misaWriteFile_ = (tpl, sheet, start, rows, out) => { W.push({ tpl, rows, out }); return { ten: out, url: 'x', so_dong: rows.length }; };
-  r = xm({ ho: 'Y3C' });
-  const ma = [].concat.apply([], W.map(f => f.rows.map(x => String(x[4] || x[1] || '')))).filter(Boolean);
-  const yRow = DATA.SANPHAM.findIndex(x => x[1] === 'Y9D');
-  eq('danh mục Y3C: trả ho, tên file có Y3C, chỉ mã phiếu Y3C, ghi cờ misa_upload_y3c, không đụng misa_upload',
-    [r.ok, r.ho, W.every(f => /^MISA_PRODUCTS_(NEW_|UPDATE_)?Y3C_/.test(f.out)), ma.some(x => /^Y9D/.test(x)), ma.every(x => chi.some(k => x.indexOf(k) === 0) || chi.some(k => k.indexOf(x) === 0)),
-     /^Done - /.test(DATA.SANPHAM[yRow][cy]), DATA.SANPHAM[yRow][c15] || ''],
-    [true, 'Y3C', true, true, true, true, '']);
-  W.length = 0;
-  r = xm({}, true);
-  eq('danh mục không ghi hộ → 15E như cũ', [r.ok, r.ho], [true, '15E']);
-  ctx.misaWriteFile_ = w0; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
