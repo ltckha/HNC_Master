@@ -76,7 +76,7 @@ def _fit_text(draw, text, box, max_size=40, min_size=14):
         draw.text((x, y + i * (min_size + 4)), ln, font=f, fill=0)
 
 
-MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá) · 'QR' (B18, 28/10: in thử)
+MAU_MAC_DINH = 'QR'  # B18 anh Kha 28/10 "Đổi sang tem QR"; 'A' (Code128) giữ làm dự phòng (--mau A) · mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá) · 'QR' (B18, 28/10: in thử)
 WEB_SP = 'https://giayhainancy.vn/product/'  # QR = trang sản phẩm theo mã cha, ?s=<size> (B18)
 
 
