@@ -13,6 +13,8 @@ os.environ['HNC_WEB_ORIGIN'] = 'https://beta.example'
 os.environ.pop('HNC_BOT_KEY_FILE', None)
 import main  # noqa: E402
 from tools import web_lenh  # noqa: E402
+_env0 = web_lenh._env
+web_lenh._env = lambda n: '' if n == 'HNC_BOT_KEY_FILE' else _env0(n)  # .env máy thật có HNC_BOT_KEY_FILE → test dùng khoá giả
 
 fails = 0
 
