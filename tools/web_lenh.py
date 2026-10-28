@@ -77,24 +77,35 @@ def _goc():
     return o.rstrip('/')
 
 
-def gui(loai, body, chu=False, nguoi='mac', dry_run=False):
-    """POST 1 gói ký HMAC (như bot webForward_). Trả dict web (thêm 'web': True) hoặc {'ok': False, 'error'}."""
+def _luc():
+    return datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+
+def _post(duong, payload, luc):
+    """POST payload ký HMAC hex(khoá, luc + "." + thân) tới <gốc web><duong>. Trả (requests.Response | None, lỗi)."""
     key, goc = _khoa(), _goc()
     if len(key) < 16 or not goc:
-        return {'ok': False, 'error': 'Mac chưa có khoá ký / địa chỉ web (HNC_BOT_KEY hoặc HNC_BOT_KEY_FILE, HNC_WEB_ORIGIN)'}
-    luc = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        return None, 'Mac chưa có khoá ký / địa chỉ web (HNC_BOT_KEY hoặc HNC_BOT_KEY_FILE, HNC_WEB_ORIGIN)'
+    raw = json.dumps(payload, ensure_ascii=False)
+    sig = hmac.new(key.encode(), (luc + '.' + raw).encode('utf-8'), hashlib.sha256).hexdigest()
+    try:
+        return requests.post(goc + duong, data=raw.encode('utf-8'), timeout=60,
+                             headers={'content-type': 'application/json', 'x-bot-time': luc, 'x-bot-sig': sig}), ''
+    except requests.RequestException as e:
+        return None, f'không gọi được web: {e}'
+
+
+def gui(loai, body, chu=False, nguoi='mac', dry_run=False):
+    """POST 1 gói ký HMAC (như bot webForward_). Trả dict web (thêm 'web': True) hoặc {'ok': False, 'error'}."""
+    luc = _luc()
     payload = {'luc': luc, 'loai': loai, 'nguon': 'mac', 'nguoi': nguoi, 'body': body}
     if chu:
         payload['chu'] = True
     if dry_run:
         payload['dry_run'] = True
-    raw = json.dumps(payload, ensure_ascii=False)
-    sig = hmac.new(key.encode(), (luc + '.' + raw).encode('utf-8'), hashlib.sha256).hexdigest()
-    try:
-        r = requests.post(goc + '/api/bot-lenh', data=raw.encode('utf-8'), timeout=60,
-                          headers={'content-type': 'application/json', 'x-bot-time': luc, 'x-bot-sig': sig})
-    except requests.RequestException as e:
-        return {'ok': False, 'error': f'không gọi được web: {e}'}
+    r, loi = _post('/api/bot-lenh', payload, luc)
+    if r is None:
+        return {'ok': False, 'error': loi}
     try:
         out = r.json()
     except ValueError:
@@ -137,3 +148,36 @@ def co_sp(ds):
         if not w.get('ok'):
             return dict(w, da_gui=i)
     return {'ok': True, 'web': True, 'so_ma': len(ds)}
+
+
+def ma_cho_duyet():
+    """Mã đang chờ duyệt trên web (POST /api/mo-ta/mac act 'cho', cả mã đã có nháp). Trả (danh sách mã | None, lỗi)."""
+    luc = _luc()
+    r, loi = _post('/api/mo-ta/mac', {'luc': luc, 'nguon': 'mac', 'act': 'cho', 'tat_ca': True}, luc)
+    if r is None:
+        return None, loi
+    try:
+        out = r.json()
+    except ValueError:
+        out = {}
+    if r.status_code != 200 or not out.get('ok'):
+        return None, f"web trả lỗi {r.status_code}" + (f": {str(out.get('error'))[:200]}" if out.get('error') else '')
+    return [str(x.get('code', '')).strip().upper() for x in out.get('ma', []) if x.get('code')], ''
+
+
+GOI_Y_GIA_MAX = 200
+
+
+def goi_y_gia(items, dry_run=False):
+    """items = [{'code', 'gia', 'ly_do'}] → loai goi_y_gia, lô ≤ 200. Trả {'ok', 'so', 'loi': [...], 'text'} gộp các lô."""
+    tong = {'ok': True, 'so': 0, 'loi': [], 'text': []}
+    for i in range(0, len(items), GOI_Y_GIA_MAX):
+        w = gui('goi_y_gia', {'items': items[i:i + GOI_Y_GIA_MAX]}, dry_run=dry_run)
+        if not w.get('ok'):
+            return dict(w, ok=False, da_gui=i)
+        tong['so'] += int(w.get('so') or 0)
+        tong['loi'] += list(w.get('loi') or [])
+        if w.get('text'):
+            tong['text'].append(str(w['text']))
+    tong['text'] = ' · '.join(tong['text'])
+    return tong

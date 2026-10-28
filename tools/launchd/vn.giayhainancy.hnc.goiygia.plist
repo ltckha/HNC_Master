@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- Agent đăng SP GĐ3b (anh Kha "LÀM" 28/10): 13:30 hằng ngày tính gợi ý giá mã chờ duyệt, gửi web (goi_y_gia). Chỉ Mac, không Claude (luật 18). Cài: tools/launchd/cai_goi_y_gia.sh -->
+<dict>
+  <key>Label</key><string>vn.giayhainancy.hnc.goiygia</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/khan/Developer/HNC_Master/venv/bin/python</string>
+    <string>/Users/khan/Developer/HNC_Master/tools/goi_y_gia.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/khan/Developer/HNC_Master</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/khan/Library/Logs/hnc_goi_y_gia.log</string>
+  <key>StandardErrorPath</key><string>/Users/khan/Library/Logs/hnc_goi_y_gia.log</string>
+  <key>EnvironmentVariables</key><dict><key>PYTHONWARNINGS</key><string>ignore</string><key>PYTHONUNBUFFERED</key><string>1</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>
