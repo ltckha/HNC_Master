@@ -8,7 +8,7 @@ bot (cửa in_tem / in_bu) ghi lệnh vào tab ẩn `in_tem_lenh` (1 dòng / kho
 Đã gửi máy in thì không gửi lại (tránh in trùng). Bot vẫn ghi IN_<kho>.csv lên Drive cho P-touch dự phòng.
 Chạy tay: venv/bin/python tools/label_print.py [--mot-lan]
 In thử (25/10, không ghi Sheet, không đánh Done; chỉ ĐỌC SANPHAM): tối đa 5 mã dạng MÃ/SIZE
-  venv/bin/python tools/label_print.py thu TH2040D/40 DXED/41 [--mau A|B|C|goc] [--in]
+  venv/bin/python tools/label_print.py thu TH2040D/40 DXED/41 [--mau A|B|C|QR|goc] [--in]
   Mặc định chỉ xuất PNG xem trước vào .data/tem_thu/; thêm --in mới gửi máy QL-700 (1 tem / mã).
 """
 import fcntl
@@ -236,8 +236,8 @@ def thu(items, mau=None, in_that=False):
     import main as hnc
     if not items or len(items) > THU_MAX:
         return {'ok': False, 'loi': f'cần 1–{THU_MAX} mã dạng MÃ/SIZE'}
-    if mau and mau not in ('A', 'B', 'C', 'goc'):
-        return {'ok': False, 'loi': 'mẫu phải là A, B, C hoặc goc'}
+    if mau and mau not in ('A', 'B', 'C', 'QR', 'goc'):
+        return {'ok': False, 'loi': 'mẫu phải là A, B, C, QR hoặc goc'}
     sp = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json')).open_by_key(SHEET_ID).worksheet('SANPHAM').get_all_values()
     head = [h.strip() for h in sp[1]]  # SANPHAM: tên cột kỹ thuật ở hàng 2 (luật 4)
     need = ('product_code', 'product_name', 'product_color', 'product_price', 'web_url')

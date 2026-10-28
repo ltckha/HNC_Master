@@ -76,7 +76,58 @@ def _fit_text(draw, text, box, max_size=40, min_size=14):
         draw.text((x, y + i * (min_size + 4)), ln, font=f, fill=0)
 
 
-MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá)
+MAU_MAC_DINH = 'A'  # mẫu tem đang dùng: 'goc' (giống Minicode) hoặc 'A' / 'B' / 'C' (mã vạch ngang to, có giá) · 'QR' (B18, 28/10: in thử)
+WEB_SP = 'https://giayhainancy.vn/product/'  # QR = trang sản phẩm theo mã cha, ?s=<size> (B18)
+
+
+def _render_qr(rec):
+    """B18 (anh Kha "làm" 28/10, Phân tích · Bán hàng mục 13 + chốt iii): QR phiên bản 4 (33 ô) mức M, 6 điểm / ô = 198 px,
+    góc trái trên lề 14; dưới QR "Quét QR xem sản phẩm"; cột phải x 236 → 682: mã cha to + ô size đen, tên + màu 2 dòng, giá to."""
+    import segno
+    img = Image.new('L', DOTS, 255)
+    d = ImageDraw.Draw(img)
+    W, H = DOTS
+    code, size = str(rec.get('Code128', '')).strip(), str(rec.get('Size', '')).strip()
+    ma = code[:-len(size)] if size and code.endswith(size) else code
+    q = segno.make(WEB_SP + ma + (f'?s={size}' if size else ''), error='m', version=4, boost_error=False)
+    for y, row in enumerate(q.matrix):
+        for x, on in enumerate(row):
+            if on:
+                d.rectangle([14 + x * 6, 14 + y * 6, 14 + x * 6 + 5, 14 + y * 6 + 5], fill=0)
+    f = _font(19)
+    cap = 'Quét QR xem sản phẩm'
+    d.text((14 + (198 - d.textlength(cap, font=f)) / 2, 218), cap, font=f, fill=0)
+    x0, x1 = 236, 682
+    box = 78
+    if size:
+        d.rectangle([x1 - box, 8, x1, 8 + box], fill=0)
+        for fs in range(60, 20, -4):
+            fz = _font(fs)
+            tw = d.textlength(size, font=fz)
+            if tw <= box - 8:
+                bb = d.textbbox((0, 0), size, font=fz)
+                d.text((x1 - box + (box - tw) / 2, 8 + (box - (bb[3] - bb[1])) / 2 - bb[1]), size, font=fz, fill=255)
+                break
+    _one_line(d, ma, x0, 8, x1 - x0 - (box + 12 if size else 0), 76, bold_min=30)
+    ten = str(rec.get('Tên', '')).strip()
+    if ma and ten.upper().endswith(ma.upper()):
+        ten = ten[:-len(ma)].strip()  # tên SANPHAM thường kèm mã ở cuối — mã đã in to ở hàng 1
+    mau = str(rec.get('Màu', '')).strip()
+    ten = (ten + (' màu ' + mau if mau else '')).strip()
+    f = _font(25)
+    lines = _wrap(d, ten, f, x1 - x0)
+    if len(lines) > 2:
+        lines = lines[:2]
+        while lines[1] and d.textlength(lines[1] + '…', font=f) > x1 - x0:
+            lines[1] = lines[1][:-1]
+        lines[1] += '…'
+    y = 110 if len(lines) == 2 else 126
+    for i, ln in enumerate(lines):
+        d.text((x0, y + i * 31), ln, font=f, fill=0)
+    gia = _price(rec).replace(' đ', 'đ')
+    f = _font(58)
+    d.text((x1 - d.textlength(gia, font=f), 190), gia, font=f, fill=0)
+    return img.point(lambda v: 0 if v < 128 else 255, '1')
 
 
 def _barcode_h(img, code, y, h, human=24):
@@ -148,6 +199,8 @@ def _render_new(rec, kho, mau):
 
 def render_label(rec, kho='', mau=None):
     mau = mau or MAU_MAC_DINH
+    if mau == 'QR':
+        return _render_qr(rec)
     if mau in ('A', 'B', 'C'):
         return _render_new(rec, kho, mau)
     return _render_goc(rec, kho)
