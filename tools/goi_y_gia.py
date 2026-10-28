@@ -1,7 +1,7 @@
 """Gợi ý giá bán mã mới (Agent đăng SP GĐ3b, anh Kha "LÀM" 28/10) — chạy 13:30 hằng ngày (launchd vn.giayhainancy.hnc.goiygia).
 Mã cần gợi ý: mã đang chờ duyệt trên web (POST /api/mo-ta/mac act 'cho'); web không trả được thì mã có phiếu nhập đầu tiên trong 7 ngày.
-Luật: shared/luat_gia.js (chung Mac / bot / web) — giá nhập lô mới nhất (don_gia_hd → don_gia_phieu) rồi giá theo mã (invoice_price →
-purchase_price); tỷ lệ trung vị cùng NCC + nhóm hàng (≥ 5 mã), thiếu thì cùng nhóm; làm tròn theo giá tem.
+Luật: shared/luat_gia.js (chung Mac / bot / web) — giá nhập lô mới nhất (don_gia_hd → don_gia_phieu) rồi giá theo mã (purchase_price →
+invoice_price, anh Kha 28/10); tỷ lệ trung vị cùng NCC + nhóm hàng (≥ 5 mã), thiếu thì cùng nhóm; làm tròn theo giá tem.
 Gửi web: loai goi_y_gia qua /api/bot-lenh (ký khoá Mac). Chỉ ĐỌC Sheet, không ghi.
 
   venv/bin/python tools/goi_y_gia.py [--dry] [--khong-gui] [--ma MÃ,MÃ]
