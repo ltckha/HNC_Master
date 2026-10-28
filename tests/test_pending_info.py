@@ -40,7 +40,7 @@ recs = [{"product_code": "GT1782D"}, {"product_code": "32837d"}, {"product_code"
 kept, idx = main.drop_pending_info(recs, [3, 4, 5, 6], codes)
 eq("bỏ dòng mã chưa bổ sung, giữ chỉ số dòng khớp", ([r["product_code"] for r in kept], idx), (["GT1782D", "TH2040D"], [3, 6]))
 eq("không có mã chưa bổ sung → giữ nguyên", main.drop_pending_info(recs, [3, 4, 5, 6], set()), (recs, [3, 4, 5, 6]))
-eq("tác vụ bỏ qua: MISA (15E + Y3C), Shopee, TikTok đăng mới, web cũ; KHÔNG bỏ in tem / đồng bộ kho", sorted(main.PENDING_INFO_SKIP_TASKS), [1, 2, 3, 4, 5, 8, 12])
+eq("tác vụ bỏ qua: MISA, Shopee, TikTok đăng mới, web cũ; KHÔNG bỏ in tem / đồng bộ kho", sorted(main.PENDING_INFO_SKIP_TASKS), [1, 2, 3, 4, 5, 8])
 
 print("❌ có ca sai" if fail else "✅ test_pending_info đạt")
 sys.exit(1 if fail else 0)
