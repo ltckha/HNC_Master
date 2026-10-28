@@ -112,8 +112,12 @@ STATUS_COLUMNS = {
     8: ["misa_stock", "misa_stock_y3c", "misa_stock_15e"],
     9: ["kho_sync"],
     10: ["web_label"],
-    11: ["get_images"]
+    11: ["get_images"],
+    12: ["misa_upload_y3c"],  # MISA danh mục hộ Y3C (anh Kha 28/10) — như bot MISA_DM_COL
 }
+# Danh mục MISA theo hộ: tác vụ 4 = 15E (mọi mã, như cũ), 12 = Y3C (chỉ mã nhập qua phiếu Y3C, bỏ phiếu TRA- / DOI-;
+# hàng ký gửi 15E để ở 3C đi bằng chuyển kho nên không vào). Như bot misaCatalogExport_ / misaHoCodes_.
+MISA_DM_HO = {4: '15E', 12: 'Y3C'}
 
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
@@ -122,7 +126,7 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 # Xuất MISA / Shopee / TikTok / web cũ tự BỎ QUA các mã này (giữ trạng thái trống để xuất sau khi bổ sung). Giống bot HNC (needsInfo_).
 PENDING_INFO_COLUMNS = ("Tên Ngành Hàng", "product_price")
 # Tác vụ bỏ qua mã chưa bổ sung: 1 web đăng mới, 2 Shopee đăng mới, 3 TikTok đăng mới, 4 MISA danh mục, 5 web tồn, 8 MISA phiếu nhập
-PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8}
+PENDING_INFO_SKIP_TASKS = {1, 2, 3, 4, 5, 8, 12}
 # MISA nhập kho: dòng chưa có số hoá đơn (so_hd) chờ 3 ngày rồi mới xuất "giá tạm" — giống bot (MISA_WAIT_DAYS, anh Kha 17/10)
 MISA_WAIT_DAYS = 3
 
@@ -1164,6 +1168,25 @@ def unroll_sizes(sizes_str):
 
 
 @sync_hint_after
+def ma_nhap_ho(loader, ho):
+    """Mã nhập qua phiếu của hộ: NHAP có KHO = hộ (Y3C / 3C), bỏ phiếu trả / đổi TRA- DOI- (như bot misaHoCodes_)."""
+    df, _ = loader.load_sheet('NHAP')
+    h = [str(x).strip() for x in df.iloc[0]]
+    for n in ('product_code', 'KHO', 'Số chứng từ (*)'):
+        if n not in h:
+            raise RuntimeError(f"Tab NHAP thiếu cột {n}")
+    ic, ik, iso = h.index('product_code'), h.index('KHO'), h.index('Số chứng từ (*)')
+    alias = {'Y3C': 'Y3C', '3C': 'Y3C', 'YEN': 'Y3C', '15E': '15E'}
+    out = set()
+    for r in range(1, len(df)):
+        row = df.iloc[r]
+        code = str(row[ic] if pd.notna(row[ic]) else '').strip().upper()
+        so = str(row[iso] if pd.notna(row[iso]) else '').strip().upper()
+        if code and alias.get(str(row[ik] if pd.notna(row[ik]) else '').strip().upper()) == ho and not re.match(r'^(TRA|DOI)-', so):
+            out.add(code)
+    return out
+
+
 def process_export_task(choice, loader):
     """Engine chính xử lý 11 tác vụ xuất file & cào ảnh"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -1811,7 +1834,7 @@ def process_export_task(choice, loader):
 
     # Tasks standard processing
     possible_status_cols = STATUS_COLUMNS.get(choice, [])
-    sheet_name = 'SANPHAM' if choice in [1, 2, 3, 4] else 'NHAP'
+    sheet_name = 'SANPHAM' if choice in [1, 2, 3, 4, 12] else 'NHAP'
 
     df_raw, _ = loader.load_sheet(sheet_name)
     var_row_idx, col_map = DynamicHeaderScanner.scan_data_headers(df_raw)
@@ -2283,7 +2306,17 @@ def process_export_task(choice, loader):
         return
 
     # ==================== TASK 4: MISA DANH MỤC HÀNG HÓA ====================
-    elif choice == 4:
+    elif choice in MISA_DM_HO:
+        ho = MISA_DM_HO[choice]
+        if ho != '15E':
+            chi_ma = ma_nhap_ho(loader, ho)
+            giu = [i for i, rec in enumerate(pending_records) if str(rec.get('product_code', '')).strip().upper() in chi_ma]
+            pending_records = [pending_records[i] for i in giu]
+            pending_row_indices = [pending_row_indices[i] for i in giu]
+            print(f"🏠 Danh mục hộ {ho}: {len(pending_records)} mã nhập qua phiếu {ho} chưa lên MISA hộ này")
+            if not pending_records:
+                return
+        tep = '' if ho == '15E' else f"{ho}_"  # tên file 15E giữ như cũ
         tpl_file = os.path.join(TEMPLATES_DIR, "tpl_misa_upload.xlsx")
         wb = openpyxl.load_workbook(tpl_file)
         ws_tpl = wb['Tep nhap khau']
@@ -2362,7 +2395,7 @@ def process_export_task(choice, loader):
 
         # Quét lịch sử SANPHAM để phát hiện các mã cha đã từng được xuất lên MISA trước đó
         misa_uploaded_parents = set()
-        status_col_name = STATUS_COLUMNS[4][0]
+        status_col_name = STATUS_COLUMNS[choice][0]
         status_idx_in_df = col_map.get(status_col_name)
         parent_idx_in_df = col_map.get('parent_product_code') if col_map.get('parent_product_code') is not None else col_map.get('Mã hàng hóa cha')
         if status_idx_in_df is not None and parent_idx_in_df is not None:
@@ -2475,7 +2508,7 @@ def process_export_task(choice, loader):
                             safe_write_cell(ws_new, row_num, 35, "")
                         row_num += 1
 
-            new_filename = f"MISA_PRODUCTS_NEW_{timestamp_file}.xlsx" if update_records else f"MISA_PRODUCTS_{timestamp_file}.xlsx"
+            new_filename = f"MISA_PRODUCTS_NEW_{tep}{timestamp_file}.xlsx" if update_records else f"MISA_PRODUCTS_{tep}{timestamp_file}.xlsx"
             filepath_new = os.path.join(EXPORT_DIR, new_filename)
             wb_new.save(filepath_new)
             wb_new.close()
@@ -2581,7 +2614,7 @@ def process_export_task(choice, loader):
                             safe_write_cell(ws_up, row_up, 27, "")
                         row_up += 1
 
-            update_filename = f"MISA_PRODUCTS_UPDATE_{timestamp_file}.xlsx"
+            update_filename = f"MISA_PRODUCTS_UPDATE_{tep}{timestamp_file}.xlsx"
             filepath_up = os.path.join(EXPORT_DIR, update_filename)
             wb_up.save(filepath_up)
             wb_up.close()
@@ -2591,7 +2624,7 @@ def process_export_task(choice, loader):
         loader.update_status(sheet_name, pending_row_indices, status_col_idx, row_status_list)
 
         files_str = "\n📁 ".join(exported_files)
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ: {len(valid_records)}, Cảnh báo: {len(warning_rows)})\n📁 {files_str}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột 'misa_upload' trên Google Sheet!\n"
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ: {len(valid_records)}, Cảnh báo: {len(warning_rows)})\n📁 {files_str}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột '{status_col_name}' trên Google Sheet!\n"
         if HAS_RICH:
             console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT MISA DANH MỤC TỰ ĐỘNG PHÂN LOẠI[/bold green]", border_style="green"))
         else:
@@ -4126,6 +4159,7 @@ def print_submenu_misa():
 -------------------------------------------------------------------
   [1] 📊 Xuất File Danh Mục Hàng Hoá (MISA: Mẫu → Mã hàng)
   [2] 📥 Xuất File Phiếu Nhập Kho (MISA, tách Kho 15E / Kho Y3C, giá theo hoá đơn mua hàng)
+  [3] 📊 Xuất File Danh Mục Hàng Hoá hộ Y3C (mã nhập qua phiếu Y3C, cờ misa_upload_y3c)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4236,9 +4270,9 @@ def handle_submenu_misa(loader):
         print_submenu_misa()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-2][/bold blue]", default="0")
+            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-3][/bold blue]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ MISA [0-2]: ").strip()
+            sub_choice = input("Mời chọn tác vụ MISA [0-3]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4246,6 +4280,8 @@ def handle_submenu_misa(loader):
             process_export_task(4, loader)
         elif sub_choice == "2":
             process_export_task(8, loader)
+        elif sub_choice == "3":
+            process_export_task(12, loader)
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
