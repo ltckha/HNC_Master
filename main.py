@@ -3795,6 +3795,15 @@ def batch_commit_ingestion(loader, confirmed_products):
     var_idx_sp, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
     num_sp_cols = len(df_sp.columns)
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
+    from tools.tu_dien_sanpham import COT_MOI
+    COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # cột mới không phụ thuộc màu (mau_phoi không chép)
+    mau_cha = {}
+    if 'product_code' in head_sp:
+        for k in range(var_idx_sp + 1, len(df_sp)):
+            dong = ['' if pd.isna(v) else v for v in df_sp.iloc[k].values]
+            ma = str(dong[head_sp.index('product_code')]).strip().upper()
+            if ma and ma[:-1] not in mau_cha:
+                mau_cha[ma[:-1]] = dong
 
     # Cột theo tên hàng 2 (luật 4) — thiếu cột thì DỪNG, không ghi sang cột khác
     idx_parent = DynamicHeaderScanner.get_col_idx(map_sp, 'parent_product_code', 'Mã hàng hóa cha')
@@ -3915,6 +3924,12 @@ def batch_commit_ingestion(loader, confirmed_products):
                     row_values[head_sp.index(ten)] = moi
             if 'gioi_tinh' in head_sp:  # cột cũ "Giới tính" là công thức REGEXMATCH(ngành; "nam") → cùng luật
                 row_values[head_sp.index('gioi_tinh')] = 'nam' if re.search('nam', str(data.get('category_name', ''))) else 'nữ'
+            # Mã cùng mẫu cha đã có → chép cột mới từ mẫu (như bot / web, Phân tích 29/10); mẫu trống ô nào thì giữ giá trị ở trên
+            mau = mau_cha.get(str(data.get('product_code', '')).strip().upper()[:-1])
+            if mau:
+                for ten in COT_MOI_MAU:
+                    if ten in head_sp and str(mau[head_sp.index(ten)]).strip():
+                        row_values[head_sp.index(ten)] = str(mau[head_sp.index(ten)]).strip()
 
             sp_new_rows.append(row_values)
             sp_added_count += 1
