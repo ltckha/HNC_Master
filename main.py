@@ -1026,7 +1026,7 @@ def map_tiktok_attributes(sub_info, sp=None):
     origin = "Việt Nam"
 
     # Chất liệu
-    mat_raw = _moi('chat_lieu', cu='Chất liệu').lower()
+    mat_raw = _moi('chat_lieu', cu='Chất liệu').split(',')[0].lower()  # chọn nhiều → ô sàn 1 giá trị lấy giá trị đầu (29/10)
     if 'bò' in mat_raw or 'da' in mat_raw:
         material = 'Da'
     elif 'vải' in mat_raw or 'lưới' in mat_raw or 'bố' in mat_raw:

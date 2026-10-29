@@ -28,15 +28,15 @@ OUT = os.path.join(ROOT, 'docs', 'sanpham_chuan')
 # Cột mới (thứ tự thêm ở cuối SANPHAM): tên hàng 2, nhãn hàng 1, kiểu ô (ds = 1 giá trị TU_DIEN, nhieu = chọn nhiều, so = số)
 COT_MOI = [
     ('gioi_tinh', 'Giới tính (chuẩn)', 'ds'),
-    ('chat_lieu', 'Chất liệu mũ / thân', 'ds'),
+    ('chat_lieu', 'Chất liệu mũ / thân', 'nhieu'),  # chọn nhiều (29/10)
     ('kieu_dong', 'Kiểu mang', 'ds'),
     ('kieu_quai', 'Kiểu quai (dép / sandal)', 'nhieu'),  # chọn nhiều (29/10)
     ('dang_mui', 'Dáng mũi', 'ds'),
     ('kieu_de', 'Kiểu đế', 'ds'),
     ('cao_got_cm', 'Cao gót (cm)', 'so'),
     ('tang_cao_cm', 'Tăng chiều cao (cm)', 'so'),
-    ('chat_lieu_de', 'Chất liệu đế (chuẩn)', 'ds'),
-    ('lot_trong', 'Lót thân', 'ds'),
+    ('chat_lieu_de', 'Chất liệu đế (chuẩn)', 'nhieu'),  # chọn nhiều (29/10)
+    ('lot_trong', 'Lót thân', 'nhieu'),  # chọn nhiều (29/10)
     ('lot_de', 'Mặt lót đế (chất liệu)', 'nhieu'),  # chọn nhiều: lót 2 lớp (29/10)
     ('be_mat', 'Bề mặt da', 'ds'),
     ('co_giay', 'Cổ giày', 'ds'),
