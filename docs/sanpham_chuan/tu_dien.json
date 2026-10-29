@@ -131,19 +131,21 @@
      ]
     },
     {
+     "gia_tri": "khoá kéo 1 bên",
+     "so_ma": 14,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"dây kéo\"",
+      "Đặc điểm \"khoá kéo 1 bên\"",
+      "Đặc điểm \"khoá kéo\""
+     ]
+    },
+    {
      "gia_tri": "cổ thun",
      "so_ma": 14,
      "nguon": "sheet",
      "gop_tu": [
       "Đặc điểm \"cổ thun\""
-     ]
-    },
-    {
-     "gia_tri": "khoá kéo 1 bên",
-     "so_ma": 12,
-     "nguon": "sheet",
-     "gop_tu": [
-      "Đặc điểm \"khoá kéo 1 bên\""
      ]
     },
     {
@@ -175,7 +177,7 @@
      "gop_tu": []
     }
    ],
-   "ghi_chu": "Đặc điểm \"khoá kéo\" / \"dây kéo\" (1 mã mỗi chữ, hàng da Yen) và Bonus \"giày giả cột dây có thun hai bên\" chưa đưa vào."
+   "ghi_chu": "\"khoá kéo\" / \"dây kéo\" gộp vào \"khoá kéo 1 bên\" (Phân tích 29/10). Bonus \"giày giả cột dây có thun hai bên\" chưa đưa vào."
   },
   {
    "cot": "kieu_quai",
@@ -563,7 +565,7 @@
      "gop_tu": []
     }
    ],
-   "ghi_chu": "\"mềm êm\" / \"mềm êm, có độ đàn hồi\" (độ êm, không phải chất liệu) chưa có cột nhận — kế hoạch 4.2 có lot_de_em nhưng danh sách GĐ A không có."
+   "ghi_chu": "\"mềm êm\" / \"mềm êm, có độ đàn hồi\" giữ ở cột cũ, không có cột mới (lời hứa cảm giác — Phân tích 29/10, không thêm lot_de_em)."
   },
   {
    "cot": "be_mat",
@@ -607,7 +609,41 @@
      "gop_tu": []
     }
    ],
-   "ghi_chu": "Nhấn mạnh \"cao cấp\" / \"big size\" / \"mix màu\" không phải bề mặt → không đưa vào."
+   "ghi_chu": "Nhấn mạnh \"cao cấp\" / \"mix màu\" giữ cột cũ; big size do máy tính từ size, không có cột."
+  },
+  {
+   "cot": "co_giay",
+   "nhan": "Cổ giày",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "cổ cao nửa ống",
+     "so_ma": 37,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Bonus: \"cổ giày cao nửa ống chân.\""
+     ]
+    },
+    {
+     "gia_tri": "cổ thấp",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "cổ lửng",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "cổ cao",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Theo kế hoạch 4.2; Bonus \"cổ giày cao nửa ống chân.\" → \"cổ cao nửa ống\"."
   },
   {
    "cot": "form",

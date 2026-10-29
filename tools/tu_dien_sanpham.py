@@ -1,5 +1,5 @@
 """Bộ chuẩn SANPHAM GĐ A (anh Kha "Làm" 29/10 tại Phân tích · Bán hàng; kế hoạch Website docs/vision/thuoc_tinh_sanpham.md mục 4.2, 6–7).
-Soạn tab TU_DIEN (cột mới → giá trị cho phép) + tiêu đề 14 cột mới thêm ở CUỐI SANPHAM. CHỈ ĐỌC Sheet, xuất file để soát:
+Soạn tab TU_DIEN (cột mới → giá trị cho phép) + tiêu đề 15 cột mới thêm ở CUỐI SANPHAM. CHỈ ĐỌC Sheet, xuất file để soát:
   docs/sanpham_chuan/tu_dien.json      — đủ: nhãn, kiểu ô, giá trị, số mã đang có, gộp từ chữ cũ nào, nguồn (sheet / ke_hoach)
   docs/sanpham_chuan/TU_DIEN.csv       — đúng bố cục tab TU_DIEN: hàng 1 tên cột snake_case, hàng 2 nhãn Việt, từ hàng 3 giá trị
   docs/sanpham_chuan/cot_moi_sanpham.csv — cột Sheet, hàng 1 (nhãn), hàng 2 (tên), kiểm tra ô (danh sách thả TU_DIEN / số)
@@ -38,6 +38,7 @@ COT_MOI = [
     ('lot_trong', 'Lót thân', 'ds'),
     ('lot_de', 'Mặt lót đế (chất liệu)', 'ds'),
     ('be_mat', 'Bề mặt da', 'ds'),
+    ('co_giay', 'Cổ giày', 'ds'),
     ('form', 'Form chân', 'ds'),
     ('dip', 'Dịp mang', 'nhieu'),
 ]
@@ -50,7 +51,8 @@ GOP = {
                       'vải lưới': 'vải lưới', 'vải lưới cao cấp': 'vải lưới', 'vải sợi': 'vải sợi', 'vải sợi cao cấp': 'vải sợi',
                       'da cừu': 'da cừu', 'microfiber': 'microfiber'} for c in ('Chất liệu', 'Chất liệu quai:')},
     'kieu_dong': {'Đặc điểm': {'xỏ chân': 'xỏ chân', 'cột dây': 'cột dây', 'cổ thun': 'cổ thun', 'khoá kéo 1 bên': 'khoá kéo 1 bên',
-                               'khoá kéo 2 bên': 'khoá kéo 2 bên', 'xé dán': 'xé dán'}},
+                               'khoá kéo 2 bên': 'khoá kéo 2 bên', 'xé dán': 'xé dán',
+                               'khoá kéo': 'khoá kéo 1 bên', 'dây kéo': 'khoá kéo 1 bên'}},
     'kieu_quai': {'Đặc điểm': {'quai ngang': 'quai ngang', 'quai chéo': 'quai chéo', 'quai kẹp': 'quai kẹp', 'dép h': 'quai chữ H'}},
     'dang_mui': {'Dáng giày mũi:': {'tròn': 'tròn', 'vuông': 'vuông', 'nhọn': 'nhọn'},
                  'Đặc điểm': {'mũi tròn': 'tròn', 'mũi vuông': 'vuông', 'mũi nhọn': 'nhọn'}},
@@ -61,6 +63,7 @@ GOP = {
     'lot_trong': {'Lót trong:': {'da heo': 'da heo', 'da bò': 'da bò', 'vải nhung': 'vải nhung', 'microfiber': 'microfiber', 'da cừu': 'da cừu'}},
     'lot_de': {'Mặt lót đế:': {'da bò hút ẩm': 'da bò', 'microfiber': 'microfiber', 'da cừu': 'da cừu'}},
     'be_mat': {'Nhấn mạnh': {'trơn': 'trơn', 'hạt mềm': 'hạt mềm', 'vân': 'vân'}},
+    'co_giay': {'Bonus:': {'cổ giày cao nửa ống chân.': 'cổ cao nửa ống'}},
     'dip': {'Sử dụng:': {'hằng ngày': 'hằng ngày', 'hằng ngày, dự tiệc...': 'hằng ngày, dự tiệc'}},
 }
 # Cột số: lấy số trong chữ cũ (vd "gót 3cm" → 3; "… cao thêm 5,5cm." → 5.5)
@@ -68,17 +71,18 @@ SO_TU = {'cao_got_cm': ('Phần dưới giày:', r'gót\s*(\d+(?:[.,]\d+)?)\s*cm
 # Giá trị trong danh sách kế hoạch 4.2 mà Sheet chưa có mã nào (Phân tích soát giữ / bỏ)
 KE_HOACH = {
     'gioi_tinh': ['unisex'], 'chat_lieu': ['da bò lộn', 'da heo'], 'kieu_dong': ['khoá cài', 'quai hậu'], 'kieu_quai': ['quai hậu', 'nhiều quai'],
-    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn'], 'lot_de': ['da heo', 'mút'], 'be_mat': ['lộn', 'bóng'],
+    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn'], 'lot_de': ['da heo', 'mút'], 'be_mat': ['lộn', 'bóng'], 'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'],
     'form': ['chuẩn', 'ôm', 'rộng ngang', 'nên lên 1 size', 'nên xuống 1 size'], 'dip': ['đi làm', 'cưới', 'dạo phố', 'du lịch'],
 }
 # Ghi chú cho Phân tích soát (chữ cũ chưa có chỗ ở cột mới, hoặc gộp có chọn)
 GHI_CHU = {
     'chat_lieu': 'Bỏ "cao cấp" (tên hàng giữ). "microfiber" giữ chữ đang dùng (kế hoạch ghi "da tổng hợp (microfiber)").',
-    'kieu_dong': 'Đặc điểm "khoá kéo" / "dây kéo" (1 mã mỗi chữ, hàng da Yen) và Bonus "giày giả cột dây có thun hai bên" chưa đưa vào.',
+    'kieu_dong': '"khoá kéo" / "dây kéo" gộp vào "khoá kéo 1 bên" (Phân tích 29/10). Bonus "giày giả cột dây có thun hai bên" chưa đưa vào.',
     'kieu_quai': '"dép h" (1 mã) → "quai chữ H".',
     'chat_lieu_de': 'Gộp theo kế hoạch: "EVA cao cấp" → "EVA", "phylon siêu nhẹ" → "phylon", "da mộc, cao su" → "da mộc + cao su".',
-    'lot_de': '"mềm êm" / "mềm êm, có độ đàn hồi" (độ êm, không phải chất liệu) chưa có cột nhận — kế hoạch 4.2 có lot_de_em nhưng danh sách GĐ A không có.',
-    'be_mat': 'Nhấn mạnh "cao cấp" / "big size" / "mix màu" không phải bề mặt → không đưa vào.',
+    'lot_de': '"mềm êm" / "mềm êm, có độ đàn hồi" giữ ở cột cũ, không có cột mới (lời hứa cảm giác — Phân tích 29/10, không thêm lot_de_em).',
+    'be_mat': 'Nhấn mạnh "cao cấp" / "mix màu" giữ cột cũ; big size do máy tính từ size, không có cột.',
+    'co_giay': 'Theo kế hoạch 4.2; Bonus "cổ giày cao nửa ống chân." → "cổ cao nửa ống".',
     'dip': 'Chọn nhiều: ô ghi các giá trị cách nhau dấu phẩy (vd "hằng ngày, dự tiệc"); TU_DIEN liệt kê từng giá trị lẻ.',
     'cao_got_cm': 'Số 0–10. "đế bằng" chưa tự ghi 0 (GĐ B chốt).',
     'tang_cao_cm': 'Số; chỉ ngành tăng chiều cao.',
