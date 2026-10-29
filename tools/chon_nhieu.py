@@ -19,9 +19,11 @@ sys.path.insert(0, ROOT)
 from tools.tach_cot_sanpham import _mo  # noqa: E402
 from tools.tu_dien_sanpham import SHEET_ID  # noqa: E402
 
-CHON_NHIEU = ('chat_lieu', 'chat_lieu_de', 'lot_trong', 'lot_de', 'kieu_quai', 'dip', 'mau_phoi')
+CHON_NHIEU = ('chat_lieu', 'chat_lieu_de', 'lot_trong', 'lot_de', 'kieu_quai', 'kieu_dong', 'be_mat', 'kieu_giay_tay', 'dip', 'mau_phoi')
 NHAN = {'chat_lieu': 'Chất liệu quai / thân'}
 MAU_PHOI = ('mau_phoi', 'Màu phối')
+# Trả cột cũ "Mặt lót đế:" về chữ trước khi web ghi lúc anh duyệt thử 29/10 (luật cột cũ không đụng; lot_de mới giữ như anh duyệt)
+TRA_COT_CU = {('D13274K', 'Mặt lót đế:'): 'mềm êm', ('Q040D', 'Mặt lót đế:'): 'mềm êm, có độ đàn hồi'}
 
 
 def main():
@@ -51,6 +53,12 @@ def main():
                 ws.add_cols(len(h) + 1 - ws.col_count)
             ws.update(range_name=gspread.utils.rowcol_to_a1(1, len(h) + 1), values=[[MAU_PHOI[1]], [MAU_PHOI[0]]], value_input_option='RAW')
             h = [x.strip() for x in ws.row_values(2)]
+        ic = h.index('product_code')
+        for (ma, c), v in TRA_COT_CU.items():
+            i = next((k for k, r in enumerate(sp) if k >= 2 and r[ic].strip().upper() == ma), None)
+            if i is not None and sp[i][h.index(c)].strip() != v:
+                ws.update(range_name=gspread.utils.rowcol_to_a1(i + 1, h.index(c) + 1), values=[[v]], value_input_option='RAW')
+                print(f'  trả cột cũ {ma} "{c}": "{sp[i][h.index(c)]}" → "{v}"')
         for c, n in NHAN.items():
             ws.update(range_name=gspread.utils.rowcol_to_a1(1, h.index(c) + 1), values=[[n]], value_input_option='RAW')
             td.update(range_name=gspread.utils.rowcol_to_a1(2, th.index(c) + 1), values=[[n]], value_input_option='RAW')

@@ -1069,7 +1069,7 @@ def map_tiktok_attributes(sub_info, sp=None):
         heel_height = 'Gót phẳng (1 cm trở xuống)'
 
     # Loại buộc
-    feat_raw = _moi('kieu_dong', cu='Đặc điểm').lower()
+    feat_raw = _moi('kieu_dong', cu='Đặc điểm').split(',')[0].lower()  # chọn nhiều → giá trị đầu (khớp web 29/10)
     if 'cột' in feat_raw or 'dây' in feat_raw:
         closure = 'Dây buộc'
     elif 'xé' in feat_raw or 'dán' in feat_raw:
