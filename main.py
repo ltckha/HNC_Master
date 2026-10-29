@@ -1001,12 +1001,20 @@ def parse_price_multiplier(val, default=1.0):
         return default
 
 
-def map_tiktok_attributes(sub_info):
-    """Ánh xạ tự động các thuộc tính bổ sung của TikTok Shop từ tab SUB."""
+def map_tiktok_attributes(sub_info, sp=None):
+    """Ánh xạ thuộc tính bổ sung TikTok Shop. Chất liệu / dịp / mũi / gót / kiểu buộc đọc thẳng dòng SANPHAM của mã (sp, theo tên cột
+    hàng 2 — luật 4); các cột cùng tên ở SUB chỉ là danh sách thả, không gắn ngành (Phân tích · Bán hàng rà 29/10). Khớp san.js web (luật 15).
+    Tổ chức chịu trách nhiệm vẫn lấy ở SUB."""
+    sp = {str(k).strip(): v for k, v in (sp or {}).items()}
+
+    def _sp(name):
+        v = sp.get(name, '')
+        return '' if v is None or (isinstance(v, float) and pd.isna(v)) else str(v)
+
     origin = "Việt Nam"
 
     # Chất liệu
-    mat_raw = str(sub_info.get('Chất liệu', '')).lower()
+    mat_raw = _sp('Chất liệu').lower()
     if 'bò' in mat_raw or 'da' in mat_raw:
         material = 'Da'
     elif 'vải' in mat_raw or 'lưới' in mat_raw or 'bố' in mat_raw:
@@ -1015,7 +1023,7 @@ def map_tiktok_attributes(sub_info):
         material = 'Da'
 
     # Dịp
-    use_raw = str(sub_info.get('Sử dụng:', '')).lower()
+    use_raw = _sp('Sử dụng:').lower()
     if 'tiệc' in use_raw or 'cưới' in use_raw:
         occasion = 'Lễ cưới'
     elif 'công sở' in use_raw or 'kinh doanh' in use_raw:
@@ -1026,7 +1034,7 @@ def map_tiktok_attributes(sub_info):
     season = "Bốn mùa"
 
     # Hình dáng ngón chân
-    toe_raw = str(sub_info.get('Mũi giày:', '')).lower()
+    toe_raw = _sp('Dáng giày mũi:').lower()
     if 'nhọn' in toe_raw:
         toe_shape = 'Mũi nhọn'
     elif 'vuông' in toe_raw:
@@ -1037,7 +1045,7 @@ def map_tiktok_attributes(sub_info):
         toe_shape = 'Mũi tròn'
 
     # Chiều cao gót
-    heel_raw = str(sub_info.get('Gót giày:', '')).lower()
+    heel_raw = _sp('Phần dưới giày:').lower()
     if '5' in heel_raw or '7' in heel_raw or 'cao' in heel_raw:
         heel_height = 'Gót vừa (3-5 cm)'
     elif '2' in heel_raw or '3' in heel_raw or 'thấp' in heel_raw:
@@ -1046,7 +1054,7 @@ def map_tiktok_attributes(sub_info):
         heel_height = 'Gót phẳng (1 cm trở xuống)'
 
     # Loại buộc
-    feat_raw = str(sub_info.get('Đặc điểm', '')).lower()
+    feat_raw = _sp('Đặc điểm').lower()
     if 'cột' in feat_raw or 'dây' in feat_raw:
         closure = 'Dây buộc'
     elif 'xé' in feat_raw or 'dán' in feat_raw:
@@ -1629,7 +1637,7 @@ def process_export_task(choice, loader):
             length = sub_info.get('Chiều dài', 32)
             width = sub_info.get('Chiều rộng', 20)
             height = sub_info.get('Chiều cao', 12)
-            attrs = map_tiktok_attributes(sub_info)
+            attrs = map_tiktok_attributes(sub_info, {k: row[i] for k, i in col_map_sp.items()})
 
             sheet_pics = [row[col_map_sp['image_0' + str(n)]] if col_map_sp.get('image_0' + str(n)) is not None else '' for n in range(1, 10)]
             if col_map_sp.get('image_01') is None and col_map_sp.get('Pic 1') is not None:
@@ -2134,7 +2142,7 @@ def process_export_task(choice, loader):
             all_sizes = unroll_sizes(rec.get('Size', ''))
 
             # Ánh xạ thuộc tính bổ sung TikTok
-            attr_dict = map_tiktok_attributes(sub_info)
+            attr_dict = map_tiktok_attributes(sub_info, rec)
 
             # KIỂM TRA TÍNH TOÀN VẸN DỮ LIỆU (STRICT QA GATE)
             missing_reasons = []
@@ -3752,6 +3760,9 @@ def col_to_letter(col_idx):
     return gspread.utils.rowcol_to_a1(1, col_idx + 1).rstrip('0123456789')
 
 
+NHAP_COT_CAN = ('Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code', 'product_color', 'KHO', 'item_size', 'Số lượng (*)', 'FSKU')
+
+
 def batch_commit_ingestion(loader, confirmed_products):
     """Ghi hàng loạt sản phẩm mới vào SANPHAM và toàn bộ dòng nhập kho vào NHAP (Quét Header Động)."""
     if not confirmed_products:
@@ -3768,39 +3779,56 @@ def batch_commit_ingestion(loader, confirmed_products):
     var_idx_sp, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
     num_sp_cols = len(df_sp.columns)
 
-    # Dynamic Column Indices
-    idx_parent = DynamicHeaderScanner.get_col_idx(map_sp, 'parent_product_code', 'Mã hàng hóa cha', default=0)
-    idx_cat = DynamicHeaderScanner.get_col_idx(map_sp, 'Tên Ngành Hàng', 'Tên nhóm hàng hóa', 'category_name', default=1)
-    idx_feat = DynamicHeaderScanner.get_col_idx(map_sp, 'Đặc điểm', 'feature', default=2)
-    idx_brand = DynamicHeaderScanner.get_col_idx(map_sp, 'Thương hiệu', 'brand', default=3)
-    idx_gender = DynamicHeaderScanner.get_col_idx(map_sp, 'Giới tính', 'gender', default=4)
-    idx_sizeplus = DynamicHeaderScanner.get_col_idx(map_sp, 'Size Plus', 'size_plus', default=5)
-    idx_size = DynamicHeaderScanner.get_col_idx(map_sp, 'Size', 'Kích thước', default=6)
-    idx_mat = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu', 'material', default=7)
-    idx_hl = DynamicHeaderScanner.get_col_idx(map_sp, 'Nhấn mạnh', 'highlight', default=8)
-    idx_strap = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu quai: ', 'Chất liệu quai:', 'Chất liệu quai', default=9)
-    idx_sole = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu đế: ', 'Chất liệu đế:', 'Chất liệu đế', default=10)
-    idx_lining = DynamicHeaderScanner.get_col_idx(map_sp, 'Lót trong: ', 'Lót trong:', 'Lót trong', default=11)
-    idx_insole = DynamicHeaderScanner.get_col_idx(map_sp, 'Mặt lót đế: ', 'Mặt lót đế:', 'Mặt lót đế', default=12)
-    idx_toe = DynamicHeaderScanner.get_col_idx(map_sp, 'Dáng giày mũi: ', 'Dáng giày mũi:', 'Dáng giày mũi', default=13)
-    idx_bottom = DynamicHeaderScanner.get_col_idx(map_sp, 'Phần dưới giày: ', 'Phần dưới giày:', 'Phần dưới giày', default=14)
-    idx_outfit = DynamicHeaderScanner.get_col_idx(map_sp, 'Kết hợp trang phục: ', 'Kết hợp trang phục:', 'Kết hợp trang phục', default=15)
-    idx_usage = DynamicHeaderScanner.get_col_idx(map_sp, 'Sử dụng: ', 'Sử dụng:', 'Sử dụng', default=16)
-    idx_bonus = DynamicHeaderScanner.get_col_idx(map_sp, 'Bonus:', 'Bonus', default=17)
-    idx_countif = 18 # Col S (countif)
-    idx_con_name = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_NAME', default=19)
-    idx_con_des = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_DES', default=20)
-    idx_code = DynamicHeaderScanner.get_col_idx(map_sp, 'product_code', 'Mã sản phẩm', default=22)
-    idx_name = DynamicHeaderScanner.get_col_idx(map_sp, 'product_name', 'Tên sản phẩm', default=23)
-    idx_price = DynamicHeaderScanner.get_col_idx(map_sp, 'product_price', 'Giá bán', default=24)
-    idx_unit = DynamicHeaderScanner.get_col_idx(map_sp, 'product_unit', 'ĐVT', default=25)
-    idx_origin = DynamicHeaderScanner.get_col_idx(map_sp, 'product_origin', 'Xuất xứ', default=26)
-    idx_color = DynamicHeaderScanner.get_col_idx(map_sp, 'product_color', 'Màu sắc', default=27)
-    idx_cat_id = DynamicHeaderScanner.get_col_idx(map_sp, 'product_category_id', 'Mã danh mục', default=28)
-    idx_desc = DynamicHeaderScanner.get_col_idx(map_sp, 'product_description', 'Mô tả sản phẩm', default=29)
-    idx_purch = DynamicHeaderScanner.get_col_idx(map_sp, 'purchase_price', 'Giá mua', default=30)
-    idx_inv = DynamicHeaderScanner.get_col_idx(map_sp, 'invoice_price', 'Đơn giá', default=31)
-    idx_sup = DynamicHeaderScanner.get_col_idx(map_sp, 'supplier', 'Nhà cung cấp', default=32)
+    # Cột theo tên hàng 2 (luật 4) — thiếu cột thì DỪNG, không ghi sang cột khác
+    idx_parent = DynamicHeaderScanner.get_col_idx(map_sp, 'parent_product_code', 'Mã hàng hóa cha')
+    idx_cat = DynamicHeaderScanner.get_col_idx(map_sp, 'Tên Ngành Hàng', 'Tên nhóm hàng hóa', 'category_name')
+    idx_feat = DynamicHeaderScanner.get_col_idx(map_sp, 'Đặc điểm', 'feature')
+    idx_brand = DynamicHeaderScanner.get_col_idx(map_sp, 'Thương hiệu', 'brand')
+    idx_gender = DynamicHeaderScanner.get_col_idx(map_sp, 'Giới tính', 'gender')
+    idx_sizeplus = DynamicHeaderScanner.get_col_idx(map_sp, 'Size Plus', 'size_plus')
+    idx_size = DynamicHeaderScanner.get_col_idx(map_sp, 'Size', 'Kích thước')
+    idx_mat = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu', 'material')
+    idx_hl = DynamicHeaderScanner.get_col_idx(map_sp, 'Nhấn mạnh', 'highlight')
+    idx_strap = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu quai: ', 'Chất liệu quai:', 'Chất liệu quai')
+    idx_sole = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu đế: ', 'Chất liệu đế:', 'Chất liệu đế')
+    idx_lining = DynamicHeaderScanner.get_col_idx(map_sp, 'Lót trong: ', 'Lót trong:', 'Lót trong')
+    idx_insole = DynamicHeaderScanner.get_col_idx(map_sp, 'Mặt lót đế: ', 'Mặt lót đế:', 'Mặt lót đế')
+    idx_toe = DynamicHeaderScanner.get_col_idx(map_sp, 'Dáng giày mũi: ', 'Dáng giày mũi:', 'Dáng giày mũi')
+    idx_bottom = DynamicHeaderScanner.get_col_idx(map_sp, 'Phần dưới giày: ', 'Phần dưới giày:', 'Phần dưới giày')
+    idx_outfit = DynamicHeaderScanner.get_col_idx(map_sp, 'Kết hợp trang phục: ', 'Kết hợp trang phục:', 'Kết hợp trang phục')
+    idx_usage = DynamicHeaderScanner.get_col_idx(map_sp, 'Sử dụng: ', 'Sử dụng:', 'Sử dụng')
+    idx_bonus = DynamicHeaderScanner.get_col_idx(map_sp, 'Bonus:', 'Bonus')
+    idx_con_name = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_NAME')
+    idx_con_des = DynamicHeaderScanner.get_col_idx(map_sp, 'CON_DES')
+    idx_code = DynamicHeaderScanner.get_col_idx(map_sp, 'product_code', 'Mã sản phẩm')
+    idx_name = DynamicHeaderScanner.get_col_idx(map_sp, 'product_name', 'Tên sản phẩm')
+    idx_price = DynamicHeaderScanner.get_col_idx(map_sp, 'product_price', 'Giá bán')
+    idx_unit = DynamicHeaderScanner.get_col_idx(map_sp, 'product_unit', 'ĐVT')
+    idx_origin = DynamicHeaderScanner.get_col_idx(map_sp, 'product_origin', 'Xuất xứ')
+    idx_color = DynamicHeaderScanner.get_col_idx(map_sp, 'product_color', 'Màu sắc')
+    idx_cat_id = DynamicHeaderScanner.get_col_idx(map_sp, 'product_category_id', 'Mã danh mục')
+    idx_desc = DynamicHeaderScanner.get_col_idx(map_sp, 'product_description', 'Mô tả sản phẩm')
+    idx_purch = DynamicHeaderScanner.get_col_idx(map_sp, 'purchase_price', 'Giá mua')
+    idx_inv = DynamicHeaderScanner.get_col_idx(map_sp, 'invoice_price', 'Đơn giá')
+    idx_sup = DynamicHeaderScanner.get_col_idx(map_sp, 'supplier', 'Nhà cung cấp')
+
+    can = {'Tên Ngành Hàng': idx_cat, 'Đặc điểm': idx_feat, 'Thương hiệu': idx_brand, 'Giới tính': idx_gender, 'Size Plus': idx_sizeplus,
+           'Size': idx_size, 'Chất liệu': idx_mat, 'Nhấn mạnh': idx_hl, 'Chất liệu quai:': idx_strap, 'Chất liệu đế:': idx_sole,
+           'Lót trong:': idx_lining, 'Mặt lót đế:': idx_insole, 'Dáng giày mũi:': idx_toe, 'Phần dưới giày:': idx_bottom,
+           'Kết hợp trang phục:': idx_outfit, 'Sử dụng:': idx_usage, 'Bonus:': idx_bonus, 'CON_NAME': idx_con_name, 'CON_DES': idx_con_des,
+           'product_code': idx_code, 'product_name': idx_name, 'product_price': idx_price, 'product_unit': idx_unit, 'product_color': idx_color}
+    thieu = [n for n, i in can.items() if i is None]
+    if thieu:
+        raise RuntimeError(f"Tab SANPHAM thiếu cột {thieu} (hàng 2) — đã DỪNG, chưa ghi.")
+    _, map_nhap_truoc = DynamicHeaderScanner.scan_data_headers(loader.load_sheet('NHAP')[0].head(4))
+    thieu = [n for n in NHAP_COT_CAN if n not in map_nhap_truoc]
+    if thieu:
+        raise RuntimeError(f"Tab NHAP thiếu cột {thieu} — đã DỪNG, chưa ghi SANPHAM / NHAP.")
+    # Cột đếm trùng mã (=countif) không có tên: nhận theo công thức ở dòng dữ liệu cuối, không thấy thì bỏ qua
+    idx_countif = None
+    if start_sp_row > 3 and loader.spreadsheet is not None:
+        f_last = loader.spreadsheet.worksheet('SANPHAM').row_values(start_sp_row - 1, value_render_option='FORMULA')
+        idx_countif = next((i for i, f in enumerate(f_last) if str(f).strip().lower().startswith('=countif(')), None)
 
     # Dynamic Column Letters
     c_cat = col_to_letter(idx_cat) if idx_cat is not None else 'B'
@@ -3878,14 +3906,17 @@ def batch_commit_ingestion(loader, confirmed_products):
     var_idx_nhap, map_nhap = DynamicHeaderScanner.scan_data_headers(df_nhap)
     num_nhap_cols = len(df_nhap.columns)
 
-    idx_n_date = DynamicHeaderScanner.get_col_idx(map_nhap, 'Ngày chứng từ (*)', default=0)
-    idx_n_doc = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số chứng từ (*)', default=1)
-    idx_n_code = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_code', default=2)
-    idx_n_color = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_color', default=3)
-    idx_n_kho = DynamicHeaderScanner.get_col_idx(map_nhap, 'KHO', default=4)
-    idx_n_size = DynamicHeaderScanner.get_col_idx(map_nhap, 'item_size', default=5)
-    idx_n_qty = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số lượng (*)', default=6)
-    idx_n_fsku = DynamicHeaderScanner.get_col_idx(map_nhap, 'FSKU', default=7)
+    idx_n_date = DynamicHeaderScanner.get_col_idx(map_nhap, 'Ngày chứng từ (*)')
+    idx_n_doc = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số chứng từ (*)')
+    idx_n_code = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_code')
+    idx_n_color = DynamicHeaderScanner.get_col_idx(map_nhap, 'product_color')
+    idx_n_kho = DynamicHeaderScanner.get_col_idx(map_nhap, 'KHO')
+    idx_n_size = DynamicHeaderScanner.get_col_idx(map_nhap, 'item_size')
+    idx_n_qty = DynamicHeaderScanner.get_col_idx(map_nhap, 'Số lượng (*)')
+    idx_n_fsku = DynamicHeaderScanner.get_col_idx(map_nhap, 'FSKU')
+    thieu = [n for n in NHAP_COT_CAN if n not in map_nhap]
+    if thieu:  # đã kiểm trước khi ghi SANPHAM; còn thiếu là tiêu đề NHAP vừa bị đổi
+        raise RuntimeError(f"Tab NHAP thiếu cột {thieu} — đã ghi SANPHAM, DỪNG trước khi ghi NHAP.")
     idx_n_madong = DynamicHeaderScanner.get_col_idx(map_nhap, 'ma_dong')  # P0: chỉ ghi khi Sheet có cột (khớp bot rowSrcFields_)
     idx_n_nguon = DynamicHeaderScanner.get_col_idx(map_nhap, 'nguon')
     idx_n_price = DynamicHeaderScanner.get_col_idx(map_nhap, 'don_gia_phieu')  # giá nhập SANPHAM khi chưa có giá phiếu (anh Kha 19/10, khớp bot appendNhap_)
