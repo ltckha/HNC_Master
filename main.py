@@ -1046,9 +1046,12 @@ def map_tiktok_attributes(sub_info, sp=None):
 
     # Chiều cao gót
     heel_raw = _sp('Phần dưới giày:').lower()
-    if '5' in heel_raw or '7' in heel_raw or 'cao' in heel_raw:
+    # Theo số cm (khớp san.js web 29/10): luật cũ dò ký tự '5' / '2' nên "gót 4cm" ra phẳng, "gót 2,5cm" ra vừa
+    so_cm = re.search(r'(\d+(?:[.,]\d+)?)', heel_raw)
+    cm = float(so_cm.group(1).replace(',', '.')) if so_cm else None
+    if (cm is not None and cm > 3) or (cm is None and 'cao' in heel_raw):
         heel_height = 'Gót vừa (3-5 cm)'
-    elif '2' in heel_raw or '3' in heel_raw or 'thấp' in heel_raw:
+    elif (cm is not None and cm > 1) or (cm is None and 'thấp' in heel_raw):
         heel_height = 'Gót thấp (1-3 cm)'
     else:
         heel_height = 'Gót phẳng (1 cm trở xuống)'
