@@ -1216,6 +1216,16 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const inv = ctx.invoiceTickets_().some(t => (t.rows || []).indexOf(kkRow) !== -1);
   eq('kiểm kho KK-: không vào in tem theo ngày, không thành phiếu hoá đơn', [(lt.rows || []).some(r => r.dong === kkRow), inv], [false, false]);
   DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
+// Tách / đổi mã "DOI-ddMMyy" (web ghi dòng NHAP mã mới): in tem khi chọn đúng số phiếu; theo ngày vẫn bỏ; lỗi ghi "Tiệm 3C" (29/10)
+{ const ix = n => DATA.NHAP[0].indexOf(n); const row = new Array(DATA.NHAP[0].length).fill('');
+  row[ix('Ngày chứng từ (*)')] = '28/10/2026'; row[ix('Số chứng từ (*)')] = 'DOI-281026'; row[ix('product_code')] = 'TH2040N'; row[ix('KHO')] = 'Y3C'; row[ix('item_size')] = 41; row[ix('Số lượng (*)')] = 6;
+  DATA.NHAP.push(row); const dRow = DATA.NHAP.length; vm.runInContext('MEMO={};', ctx);
+  const a1 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', so_chung_tu: 'DOI-281026', kho: 'Y3C' }, true);
+  const a2 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', ngay: '28/10/2026', kho: 'Y3C' }, true);
+  const a3 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', so_chung_tu: 'DOI-281026', kho: '15E' }, true);
+  eq('DOI-: in theo số phiếu ra 6 tem mã mới; theo ngày bỏ; sai kho → "Tiệm 15E"', [a1.ok, a1.so_tem, a1.rows[0].dong === dRow, (a2.rows || []).some(r => r.dong === dRow), a3.error],
+    [true, 6, true, false, 'không có dòng nhập nào khớp (Tiệm 15E)']);
+  DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }
 // huy_nhap: web gửi ticket "PN-<ticket>" → bot vẫn nhận
 { vm.runInContext('MEMO={};', ctx);
   GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX5004', ngay: '2026-10-20', dong: [{ ma_ncc: 'QT', mo_ta: 'Giày QT', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };

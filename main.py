@@ -2895,7 +2895,7 @@ def process_export_task(choice, loader):
                 if not code or code == 'product_code':
                     continue
                 doc = str(row[doc_idx]).strip().upper() if (doc_idx is not None and pd.notna(row[doc_idx])) else ""
-                if doc.startswith(('TRA-', 'KK-', 'DOI-')):
+                if doc.startswith(('TRA-', 'KK-')) or (doc.startswith('DOI-') and doc != filt):  # DOI- (tách / đổi mã → mã mới) chỉ in khi gõ đúng số phiếu, như bot in_tem
                     continue
                 if kho_want and kho_norm(row[kho_idx2]) != kho_want:
                     continue

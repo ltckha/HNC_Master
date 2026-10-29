@@ -4483,7 +4483,10 @@ function invoiceDate_(v) {
 const LABEL_COLUMNS = ['QR code', 'Tên', 'Màu', 'Size', 'Size Color', 'F6', 'Code128', 'Gía']; // như main.py task 10 (mẫu P-touch .lbx đọc đúng tên)
 const LABEL_FOLDER_NAME = 'IN Mini Code';
 
-/** Dòng NHAP theo bộ lọc (bỏ phiếu trả hàng TRA-). */
+/** Tên kho cho người đọc trong câu lỗi: 15E → Tiệm 15E, Y3C → Tiệm 3C. */
+function khoTen_(kho) { return kho === 'Y3C' ? 'Tiệm 3C' : kho === '15E' ? 'Tiệm 15E' : String(kho || ''); }
+
+/** Dòng NHAP theo bộ lọc (bỏ phiếu trả hàng TRA- / kiểm kho KK-; DOI- chỉ khi chọn đúng số phiếu / dòng). */
 function labelSelect_(body) {
   const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
   if (!kho) return { error: 'kho phải là 15E hoặc Y3C' };
@@ -4504,7 +4507,9 @@ function labelSelect_(body) {
     const code = String(nh[r][c.product_code] || '').trim().toUpperCase();
     if (!code || code === 'PRODUCT_CODE') continue;
     const doc = String(nh[r][c['Số chứng từ (*)']] || '').trim().toUpperCase();
-    if (/^(TRA|KK|DOI)-/.test(doc)) continue; // khách trả / kiểm kho "KK-ddMMyy" / đổi mã "DOI-ddMMyy" (web ghi) không in tem
+    if (/^(TRA|KK)-/.test(doc)) continue; // khách trả / kiểm kho "KK-ddMMyy" (web ghi) không in tem
+    // đổi / tách mã "DOI-ddMMyy" (web ghi): dòng NHAP là MÃ MỚI → in khi chọn đúng số phiếu hoặc theo dòng; in theo ngày vẫn bỏ (29/10)
+    if (/^DOI-/.test(doc) && !rowsWanted && doc !== so) continue;
     if (KHO_ALIASES[String(nh[r][c.KHO] || '').trim().toUpperCase()] !== kho) continue;
     if (rowsWanted) { if (rowsWanted.indexOf(r + 1) === -1) continue; }
     else if (so) { if (doc !== so) continue; }
@@ -4561,7 +4566,7 @@ function labelPrint_(body, dryRun) {
   MEMO = {};
   const sel = labelSelect_(body);
   if (sel.error) return { ok: false, action: 'in_tem', error: sel.error };
-  if (!sel.rows.length) return { ok: false, action: 'in_tem', error: 'không có dòng nhập nào khớp (kho ' + sel.kho + ')' };
+  if (!sel.rows.length) return { ok: false, action: 'in_tem', error: 'không có dòng nhập nào khớp (' + khoTen_(sel.kho) + ')' };
   const records = sel.rows.map(labelRecord_);
   const soTem = records.reduce((t, r) => t + r.F6, 0);
   const out = { ok: true, action: 'in_tem', kho: sel.kho, dry_run: dryRun, so_dong: records.length, so_tem: soTem,
@@ -4605,7 +4610,7 @@ function labelQueueRow_(kho) {
   const c = headerMap_(v[0]);
   requireColumns_(LABEL_QUEUE_TAB, c, ['kho', 'lenh', 'ket_qua', 'cap_nhat']);
   for (let r = 1; r < v.length; r++) if (String(v[r][c.kho]).trim().toUpperCase() === kho) return { sheet, c, row: r + 1, vals: v[r] };
-  throw new Error('Tab ' + LABEL_QUEUE_TAB + ' thiếu dòng kho ' + kho);
+  throw new Error('Tab ' + LABEL_QUEUE_TAB + ' thiếu dòng ' + khoTen_(kho));
 }
 
 function labelQueueSet_(kho, fields) {
@@ -4664,7 +4669,7 @@ function labelDone_(body, nguoi, dryRun) {
   MEMO = {};
   const sel = labelSelect_(body);
   if (sel.error) return { ok: false, action: 'da_in_tem', error: sel.error };
-  if (!sel.rows.length) return { ok: false, action: 'da_in_tem', error: 'không có dòng nhập nào khớp' };
+  if (!sel.rows.length) return { ok: false, action: 'da_in_tem', error: 'không có dòng nhập nào khớp (' + khoTen_(sel.kho) + ')' };
   if (dryRun) return { ok: true, action: 'da_in_tem', dry_run: true, so_dong: sel.rows.length };
   const sheet = getSheet_('NHAP');
   const c = headerMap_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
