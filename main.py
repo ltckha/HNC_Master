@@ -3797,7 +3797,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
     from tools.tu_dien_sanpham import COT_MOI
     from tools.mac_dinh_nganh import mac_dinh as mac_dinh_nganh
-    COT_MOI_MAU = [c for c, _, _ in COT_MOI if c not in ('do_om', 'chon_size')]  # mau_phoi / do_om / chon_size không chép: người nhập chọn (29/10)
+    COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # chép cả do_om / chon_size (cùng khuôn); mau_phoi không chép (theo màu). Mẫu mới hẳn: để người nhập chọn (29/10)
     mau_cha = {}
     if 'product_code' in head_sp:
         for k in range(var_idx_sp + 1, len(df_sp)):
