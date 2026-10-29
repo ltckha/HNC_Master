@@ -396,7 +396,7 @@ clasp create-deployment -i <deployment_id> -V <số phiên bản cũ>
 
 ## Gọn bot (@44 → @45, anh Kha 29/10)
 - Zalo còn: tra tồn (nhắn mã), hoá đơn NCC (menu 2 / `hoadon`, nhắc 8:00 thứ Hai), tin web nhờ gửi (`notify_key`).
-- Menu số: `1` Kiểm tồn · `2` Hoá đơn (Chủ) · `9` Hướng dẫn · `0` Để sau. Số đã bỏ (3 / 4 / 5 / 6 / 8) → hiện lại menu.
+- Menu số: `1` Kiểm tồn · `2` Hoá đơn (Chủ) · `8` Dự phòng (chỉ sang menu Mac) · `9` Hướng dẫn · `0` Để sau. Số đã bỏ (3 / 4 / 5 / 6) → hiện lại menu.
 - Lệnh ghi sổ (ban / nhap / xuat / chuyen kho / huy) → 1 dòng link màn app; `bc` → link trang quản lý `/admin`.
 - Phần chạy ngầm cho app / web / Mac giữ nguyên (in tem, đọc phiếu, xuat_misa, hoa_don, onEdit / onChange, `che do`).
 - Bật lại menu + lệnh Zalo cũ không cần deploy: Script Property `ZALO_GHI_SO` = `1`.

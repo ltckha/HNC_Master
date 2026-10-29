@@ -538,7 +538,7 @@ function parseReportDate_(n) {
 // ĐIỀU KHIỂN BẰNG SỐ (anh Kha "làm" 17/10, như bot xưởng)
 // Mỗi người 1 câu hỏi đang mở (Script Property ask_<chat_id>, hạn 720 phút); tin số trả lời câu gửi sau cùng.
 // "menu" / "m" / chữ không hiểu → menu số kèm số việc chờ. "0" để sau, "9" về menu. Lệnh chữ cũ giữ nguyên.
-// Gọn (@45, mặc định): 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 9 Hướng dẫn · 0. ZALO_GHI_SO=1: menu cũ 1 Kiểm hàng · 2 Báo cáo · 6 Huỷ · 9 (Chủ thêm 3 · 4 · 5).
+// Gọn (@45, mặc định): 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 8 Dự phòng · 9 Hướng dẫn · 0. ZALO_GHI_SO=1: menu cũ 1 Kiểm hàng · 2 Báo cáo · 6 Huỷ · 9 (Chủ thêm 3 · 4 · 5).
 // =====================================================================
 
 const ASK_TTL_MS = 720 * 60000;
@@ -570,7 +570,7 @@ const HELP_GON_TEXT = [
 
 // Gọn bot (anh Kha 29/10): lệnh chữ ghi sổ (bán / nhập / xuất / chuyển kho / chuyển vị trí / trả hàng / huỷ) không chạy qua Zalo nữa,
 // bot trả link màn app. Dự phòng khi web hỏng = menu Mac (main.py). Bật lại lệnh Zalo không cần deploy: Script Property ZALO_GHI_SO = 1.
-// @45 (anh Kha 29/10): menu gọn còn 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 9 Hướng dẫn · 0 Để sau; "bc" → link trang quản lý.
+// @45 (anh Kha 29/10): menu gọn còn 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 8 Dự phòng · 9 Hướng dẫn · 0 Để sau; "bc" → link trang quản lý.
 const APP_MAN = { BÁN: 'ban', NHẬP: 'kho-nhap', TRA: 'kho-tra', XUẤT: 'kho-tra-ncc', 'CHUYỂN KHO': 'kho-chuyen', 'CHUYỂN VỊ TRÍ': 'kho-vi-tri', HUỶ: 'don' };
 function zaloGhiSo_() {
   return String(PropertiesService.getScriptProperties().getProperty('ZALO_GHI_SO') || '').trim() === '1';
@@ -658,7 +658,7 @@ function navMenu_(chatId) {
       try { c = navCounts_(); } catch (err) { console.error(err && err.stack ? err.stack : err); }
       g.push('2 Hoá đơn mua hàng chưa có (' + c.hd + ')');
     }
-    g.push('9 Hướng dẫn', '0 Để sau', '(Bán / nhập / xuất / chuyển kho / huỷ làm trên app: ' + appLink_('kho') + ')');
+    g.push('8 Dự phòng (web / app lỗi)', '9 Hướng dẫn', '0 Để sau', '(Bán / nhập / xuất / chuyển kho / huỷ làm trên app: ' + appLink_('kho') + ')');
     navSetAsk_(chatId, 'menu', {});
     return g.join('\n');
   }
@@ -728,10 +728,11 @@ function navHandle_(text, chatId, dryRun) {
 }
 
 function navMenuPick_(n, chatId, owner) {
-  if (!zaloGhiSo_()) { // menu gọn @45: 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 9 Hướng dẫn; số khác → menu
+  if (!zaloGhiSo_()) { // menu gọn @45: 1 Kiểm tồn · 2 Hoá đơn (Chủ) · 8 Dự phòng · 9 Hướng dẫn; số khác → menu
     if (n === 2 && !owner) return { text: '🔒 Mục này chỉ Chủ dùng.\n\n' + navMenu_(chatId) };
     if (n === 2) n = 4;
     else if (n === 9) { navClearAsk_(chatId); return { text: HELP_GON_TEXT + '\n\nNhắn số: 9 Menu' }; }
+    else if (n === 8) { navClearAsk_(chatId); return { text: DU_PHONG_GON_TEXT + '\nNhắn số: 9 Menu' }; }
     else if (n !== 1) return { text: navMenu_(chatId) };
   }
   if ([3, 4, 5].indexOf(n) !== -1 && !owner) return { text: '🔒 Mục này chỉ Chủ dùng.\n\n' + navMenu_(chatId) };
