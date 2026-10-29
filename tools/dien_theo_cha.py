@@ -2,7 +2,8 @@
 (parent_product_code; trống thì mã bỏ ký tự màu cuối) — chỉ cột không phụ thuộc màu. Các mã cùng cha ghi khác nhau → mo_ho, không điền.
 CHẠY THỬ (chỉ đọc Sheet) → docs/sanpham_chuan/gd_c1_dien.csv (ma, cot, gia_tri, lay_tu, trang_thai) + gd_c1_dem.csv.
 
-  venv/bin/python tools/dien_theo_cha.py [--sheet ID]
+  venv/bin/python tools/dien_theo_cha.py [--sheet ID]          # chạy thử
+  venv/bin/python tools/dien_theo_cha.py --ghi [--sheet ID]    # GHI (Phân tích soát + anh cho ghi 29/10)
 """
 import csv
 import os
@@ -51,8 +52,28 @@ def de_xuat(sp, head):
     return out
 
 
+def ghi(sid):
+    """GHI THẬT các ô 'dien' (đọc lại Sheet ngay trước khi ghi, chỉ ô còn trống), 1 lần batch_update, rồi đọc lại đếm."""
+    import gspread
+    ws = _mo(sid, ghi=True)
+    sp = ws.get_all_values()
+    head = [h.strip() for h in sp[1]]
+    ic = head.index('product_code')
+    hang = {r[ic].strip().upper(): i + 1 for i, r in enumerate(sp) if i >= 2 and r[ic].strip()}
+    ds = [(ma, c, v) for ma, c, v, _, tt in de_xuat(sp, head) if tt == 'dien']
+    up = [{'range': gspread.utils.rowcol_to_a1(hang[ma], head.index(c) + 1), 'values': [[v]]} for ma, c, v in ds]
+    if up:
+        ws.batch_update(up, value_input_option='USER_ENTERED')  # số (cao_got_cm) vào đúng kiểu số
+    lai = ws.get_all_values()
+    khop = sum(1 for ma, c, v in ds if str(lai[hang[ma] - 1][head.index(c)]).strip() == str(v))
+    print(f'✅ Sheet {sid[:6]}…: ghi {len(up)} ô, đọc lại khớp {khop}')
+    return 0
+
+
 def main():
     sid = sys.argv[sys.argv.index('--sheet') + 1] if '--sheet' in sys.argv else SHEET_ID
+    if '--ghi' in sys.argv:
+        return ghi(sid)
     ws = _mo(sid)
     sp = ws.get_all_values()
     head = [h.strip() for h in sp[1]]
