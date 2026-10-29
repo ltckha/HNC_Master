@@ -77,7 +77,7 @@ KE_HOACH = {  # có gót: giày nam (anh Kha 29/10); đổi tên / gộp / thêm
     'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn', 'có gót'], 'lot_de': ['da heo', 'mút'], 'be_mat': ['da lộn', 'da bóng'],
     'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'], 'chat_lieu_de': ['cao su đúc', 'PU'],
     'do_om': ['chuẩn', 'ôm', 'rộng ngang'], 'chon_size': ['đúng size', 'lên 1 size', 'xuống 1 size'],
-    'kieu_giay_tay': ['Oxford (buộc dây kín)', 'Derby (buộc dây hở)', 'giày lười (loafer)', 'khoá cài (monk)', 'bốt cổ chun (Chelsea)', 'đục lỗ (brogue)'],
+    'kieu_giay_tay': ['Oxford (buộc dây kín)', 'Derby (buộc dây hở)', 'giày lười (loafer)', 'khoá cài (monk)', 'bốt cổ chun (Chelsea)', 'đục lỗ (brogue)', 'xỏ chân (slip-on)'],
     'dip': ['công sở', 'cưới', 'dạo phố', 'du lịch'],
 }
 # Ghi chú cho Phân tích soát (chữ cũ chưa có chỗ ở cột mới, hoặc gộp có chọn)
