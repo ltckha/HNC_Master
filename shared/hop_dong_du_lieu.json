@@ -1346,5 +1346,36 @@
   "ten": "HNC_Master_BAN_THU",
   "ghi_chu": "Bản sao 20/10 (V115) để thử P0 mục 3–5 và diễn tập web; đã có cột ma_dong / nguon và META che_do = master. Không dùng bán thật."
  },
- "luat_dong_kho": "Mã + size chưa có dòng ở tab KHO của kho: (1) ghi dòng làm tồn TĂNG (nhập lẻ / phiếu NCC / khách trả / phần nhập của chuyển kho) → TẠO dòng KHO có công thức (cong_thuc_mau) TRƯỚC rồi mới ghi NHAP; (2) cần ghi ô ký gửi cua_… ở kho chưa có dòng → tạo dòng như (1); (3) xuất / bán từ kho chưa có dòng → KHÔNG tạo, chỉ cảnh báo \"tồn không trừ\"; (4) tao_ma → dòng 2 kho × dãy size. Bot từ 20/10 (appendKhoRow_), web làm giống."
+ "luat_dong_kho": "Mã + size chưa có dòng ở tab KHO của kho: (1) ghi dòng làm tồn TĂNG (nhập lẻ / phiếu NCC / khách trả / phần nhập của chuyển kho) → TẠO dòng KHO có công thức (cong_thuc_mau) TRƯỚC rồi mới ghi NHAP; (2) cần ghi ô ký gửi cua_… ở kho chưa có dòng → tạo dòng như (1); (3) xuất / bán từ kho chưa có dòng → KHÔNG tạo, chỉ cảnh báo \"tồn không trừ\"; (4) tao_ma → dòng 2 kho × dãy size. Bot từ 20/10 (appendKhoRow_), web làm giống.",
+ "mac_dinh_theo_nganh": {
+  "ghi_chu": "Luật mặc định thuộc tính theo ngành (anh Kha 29/10). Mac (tools/mac_dinh_nganh.py, main.py nhập mã mới không có mẫu cha) + web dùng chung (luật 15). Chỉ điền ô TRỐNG, không đè. So ngành: bỏ khoảng trắng thừa, không phân biệt hoa thường. Mỗi cột lấy luật ĐẦU TIÊN khớp. nganh = đúng tên ngành SUB; nganh_chua = ngành giày dép có chứa 1 chữ; giay_dep = mọi ngành giày dép (khớp regex giay_dep).",
+  "giay_dep": "^(giày|dép|sandal|sapo|guốc)",
+  "luat": [
+   {
+    "cot": "kieu_de",
+    "gia_tri": "đế bằng",
+    "nganh": [
+     "Giày mọi nam",
+     "Giày mọi nữ",
+     "Giày rọ nam",
+     "Sapo nam",
+     "Dép nam",
+     "Sandal nam"
+    ]
+   },
+   {
+    "cot": "co_giay",
+    "gia_tri": "cổ cao",
+    "nganh_chua": [
+     "bốt",
+     "boot"
+    ]
+   },
+   {
+    "cot": "co_giay",
+    "gia_tri": "cổ thấp",
+    "giay_dep": true
+   }
+  ]
+ }
 }

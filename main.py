@@ -3796,6 +3796,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     num_sp_cols = len(df_sp.columns)
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
     from tools.tu_dien_sanpham import COT_MOI
+    from tools.mac_dinh_nganh import mac_dinh as mac_dinh_nganh
     COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # cột mới không phụ thuộc màu (mau_phoi không chép)
     mau_cha = {}
     if 'product_code' in head_sp:
@@ -3930,6 +3931,10 @@ def batch_commit_ingestion(loader, confirmed_products):
                 for ten in COT_MOI_MAU:
                     if ten in head_sp and str(mau[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = str(mau[head_sp.index(ten)]).strip()
+            else:  # mẫu mới: mặc định theo ngành (anh Kha 29/10, bảng chung hop_dong_du_lieu.json mac_dinh_theo_nganh) — chỉ ô trống
+                for ten, v in mac_dinh_nganh(data.get('category_name', '')).items():
+                    if ten in head_sp and not str(row_values[head_sp.index(ten)]).strip():
+                        row_values[head_sp.index(ten)] = v
 
             sp_new_rows.append(row_values)
             sp_added_count += 1
