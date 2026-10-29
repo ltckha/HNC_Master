@@ -73,7 +73,7 @@ function mockSheet(n) {
         clearContent: () => put(''),
       };
     },
-    getRangeList: list => ({ setValue: v => WRITES.push({ sheet: n, cells: list, v }) }),
+    getRangeList: list => ({ setValue: v => WRITES.push({ sheet: n, cells: list, v }), clearContent: () => WRITES.push({ sheet: n, cells: list, v: '' }) }),
   };
 }
 const CACHE = {};
@@ -236,6 +236,17 @@ eq('channel sai', ex({ channel: 'lazada', kind: 'upload', codes: ['TH2040D'] }).
 eq('kind sai', ex({ channel: 'shopee', kind: 'x', codes: ['TH2040D'] }).ok, false);
 eq('upload thiếu codes', ex({ channel: 'shopee', kind: 'upload', codes: [] }).ok, false);
 eq('action sai', ctx.handleExport_({ action: 'x', channel: 'shopee', kind: 'update' }, true).ok, false);
+{ // unmark_exported (29/10): chỉ Chủ, xoá ô tiktok_upload theo tên cột
+  const ux = (b, dry) => ctx.handleExport_(Object.assign({ action: 'unmark_exported' }, b), !!dry);
+  const v0 = DATA.SANPHAM[3][3]; DATA.SANPHAM[3][3] = 'Done - 2026-10-29 10:00'; const w0 = WRITES.length;
+  let u = ux({ kenh: 'tiktok', ma: ['th2040n', 'KHONGCO'], nguoi: 'nv@hn.vn' });
+  eq('unmark: không phải Chủ → từ chối, không ghi', [u.ok, /chỉ Chủ/.test(u.error), WRITES.length], [false, true, w0]);
+  u = ux({ kenh: 'tiktok', ma: ['th2040n', 'KHONGCO'], nguoi: 'ltckha@gmail.com' }, true);
+  eq('unmark thử: thấy 1 ô, không ghi', [u.ok, u.written, u.not_found, WRITES.length], [true, 1, ['KHONGCO'], w0]);
+  u = ux({ kenh: 'tiktok', ma: ['TH2040N'], nguoi: 'LTCKHA@gmail.com' });
+  eq('unmark: xoá đúng ô tiktok_upload D4', [u.ok, u.written, u.da_go[0].gia_tri_cu, WRITES[w0] && WRITES[w0].cells, WRITES[w0] && WRITES[w0].v], [true, 1, 'Done - 2026-10-29 10:00', ['D4'], '']);
+  eq('unmark: kenh sai', ux({ kenh: 'lazada', ma: ['TH2040N'], nguoi: 'ltckha@gmail.com' }).ok, false);
+  DATA.SANPHAM[3][3] = v0; WRITES.length = w0; }
 const nW = WRITES.length;
 delete DATA.META;
 eq('chưa có tab META → báo lỗi, không ghi', [/chưa có tab META/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, nW]);

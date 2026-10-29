@@ -3893,10 +3893,57 @@ function xlsxReplaceRows_(xml, startRow, rows) {
 // Body: { action:"mark_exported", channel:"shopee"|"tiktok", kind:"upload"|"update", codes:[…], at:"<ISO>", stock_included?, dry_run? }
 //  - upload: SANPHAM cột shopee_upload / tiktok_upload = "Done - yyyy-MM-dd HH:mm" cho mã có trong codes (giống main.py).
 //  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab META (key | value | updated_at), dòng key = shopee_last_update / tiktok_last_update.
+// Body: { action:"unmark_exported", kenh:"shopee"|"tiktok", ma:[…], nguoi:<email Chủ>, dry_run? } (anh Kha 29/10: lỡ đánh dấu khi huỷ lưu file)
+//  - xoá ô shopee_upload / tiktok_upload của các mã đó; chỉ Chủ (nguoi thuộc OWNER_EMAILS); ghi nhật ký.
 // =====================================================================
 
 const EXPORT_CHANNELS = ['shopee', 'tiktok'];
 const EXPORT_MAX_CODES = 3000;
+
+/** Gỡ cờ đã đăng sàn (ô {kenh}_upload) cho các mã; chỉ Chủ. Đọc / ghi theo tên cột hàng tiêu đề SANPHAM. */
+function unmarkExported_(body, dryRun) {
+  const fail = msg => ({ ok: false, action: 'unmark_exported', error: msg });
+  const kenh = String(body.kenh || body.channel || '').trim().toLowerCase();
+  if (EXPORT_CHANNELS.indexOf(kenh) === -1) return fail('kenh phải là shopee hoặc tiktok');
+  const nguoi = String(body.nguoi || body.seller || '').trim().toLowerCase();
+  const owners = String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(','))
+    .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  if (!nguoi || owners.indexOf(nguoi) === -1) return fail('chỉ Chủ được gỡ đánh dấu đã đăng sàn');
+  const src = Array.isArray(body.ma) ? body.ma : (Array.isArray(body.codes) ? body.codes : []);
+  const codes = uniq_(src.map(c => String(c || '').trim().toUpperCase()).filter(Boolean));
+  if (!codes.length || codes.length > EXPORT_MAX_CODES) return fail('ma phải có 1-' + EXPORT_MAX_CODES + ' mã');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const data = sheetValues_('SANPHAM');
+    let headerRow = -1;
+    for (let r = 0; r < Math.min(2, data.length); r++) {
+      if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { headerRow = r; break; }
+    }
+    if (headerRow === -1) throw new Error('Tab SANPHAM thiếu cột product_code');
+    const col = headerMap_(data[headerRow]);
+    const statusName = kenh + '_upload';
+    requireColumns_('SANPHAM', col, ['product_code', statusName]);
+    const want = {};
+    codes.forEach(c => { want[c] = true; });
+    const found = {}, cells = [], truoc = [];
+    for (let r = headerRow + 1; r < data.length; r++) {
+      const c = String(data[r][col.product_code]).trim().toUpperCase();
+      if (!want[c]) continue;
+      found[c] = true;
+      const v = String(data[r][col[statusName]] || '').trim();
+      if (!v) continue;
+      cells.push(columnLetter_(col[statusName] + 1) + (r + 1));
+      truoc.push({ ma: c, gia_tri_cu: v });
+    }
+    if (!dryRun && cells.length) getSheet_('SANPHAM').getRangeList(cells).clearContent();
+    console.log('unmark_exported ' + statusName + ' bởi ' + nguoi + (dryRun ? ' (thử)' : '') + ': ' + truoc.map(x => x.ma + ' [' + x.gia_tri_cu + ']').join(', '));
+    return { ok: true, action: 'unmark_exported', column: statusName, dry_run: dryRun, written: cells.length, da_go: truoc,
+      not_found: codes.filter(c => !found[c]) };
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 function handleExportRequest_(e) {
   let out;
@@ -3927,7 +3974,8 @@ function handleExport_(body, dryRun) {
   MEMO = {};
   const channel = String(body.channel || '').trim().toLowerCase();
   const kind = String(body.kind || '').trim().toLowerCase();
-  if (body.action !== 'mark_exported') return { ok: false, error: 'action phải là "mark_exported"' };
+  if (body.action === 'unmark_exported') return unmarkExported_(body, dryRun);
+  if (body.action !== 'mark_exported') return { ok: false, error: 'action phải là "mark_exported" hoặc "unmark_exported"' };
   if (EXPORT_CHANNELS.indexOf(channel) === -1) return { ok: false, error: 'channel phải là shopee hoặc tiktok' };
   if (kind !== 'upload' && kind !== 'update') return { ok: false, error: 'kind phải là upload hoặc update' };
   const codes = Array.isArray(body.codes) ? uniq_(body.codes.map(c => String(c || '').trim().toUpperCase()).filter(Boolean)) : [];

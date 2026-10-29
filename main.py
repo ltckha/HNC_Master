@@ -4175,6 +4175,7 @@ def print_submenu_shopee():
 -------------------------------------------------------------------
   [1] 🛒 Xuất File Đăng Hàng Hoá Mới (Shopee Mass Upload)
   [2] ⚡ Xuất File Cập Nhật Giá Bán / Tồn Kho (Shopee Mass Update)
+  [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4191,6 +4192,7 @@ def print_submenu_tiktok():
 -------------------------------------------------------------------
   [1] 🎵 Xuất File Đăng Hàng Hoá Mới (TikTok Mass Upload - 38 Cột chuẩn)
   [2] ⚡ Xuất File Cập Nhật (TikTok Mass Update: Giá Bán, Tồn Kho hoặc Tất cả)
+  [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4232,6 +4234,41 @@ def print_submenu_media():
         print(menu_text)
 
 
+def unmark_upload(loader, kenh):
+    """Bỏ đánh dấu đã đăng sàn (xoá ô shopee_upload / tiktok_upload) cho mã gõ vào — như bot unmark_exported (29/10, luật 15)."""
+    cot = f"{kenh}_upload"
+    ma = [m.strip().upper() for m in re.split(r"[\s,;]+", input(f"Mã cần bỏ đánh dấu {cot} (cách nhau dấu cách / phẩy): ")) if m.strip()]
+    if not ma:
+        print("ℹ️ Không có mã nào.")
+        return
+    df_raw, _ = loader.load_sheet('SANPHAM')
+    var_row_idx, col_map = DynamicHeaderScanner.scan_data_headers(df_raw)
+    if 'product_code' not in col_map or cot not in col_map:
+        print(f"❌ SANPHAM thiếu cột product_code hoặc {cot} — không ghi.")
+        return
+    ip, ic = col_map['product_code'], col_map[cot]
+    start = (var_row_idx + 1) if var_row_idx is not None else 2
+    rows, thay = [], []
+    for i in range(start, len(df_raw)):
+        code = str(df_raw.iloc[i][ip]).strip().upper()
+        val = str(df_raw.iloc[i][ic]).strip() if ic < len(df_raw.columns) else ''
+        if code in ma and val:
+            rows.append(i)
+            thay.append(f"{code} [{val}]")
+    khong = [m for m in ma if m not in {str(df_raw.iloc[i][ip]).strip().upper() for i in range(start, len(df_raw))}]
+    if khong:
+        print(f"⚠️ Không thấy mã: {', '.join(khong)}")
+    if not rows:
+        print(f"ℹ️ Không có ô {cot} nào đang ghi để bỏ.")
+        return
+    print("Sẽ xoá: " + ', '.join(thay))
+    if input("Gõ y để xoá (Enter = thôi): ").strip().lower() != 'y':
+        print("ℹ️ Chưa xoá gì.")
+        return
+    ok = loader.update_status('SANPHAM', rows, ic, '')
+    print(f"✅ Đã bỏ đánh dấu {len(rows)} ô {cot}." if ok else "❌ Chưa ghi được — xem lỗi phía trên.")
+
+
 def handle_submenu_website(loader):
     """Xử lý điều hướng trong Sub-menu Website Hải Nancy"""
     while True:
@@ -4269,9 +4306,9 @@ def handle_submenu_shopee(loader):
         print_submenu_shopee()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-2][/bold yellow]", default="0")
+            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-3][/bold yellow]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ Shopee [0-2]: ").strip()
+            sub_choice = input("Mời chọn tác vụ Shopee [0-3]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4279,6 +4316,8 @@ def handle_submenu_shopee(loader):
             process_export_task(2, loader)
         elif sub_choice == "2":
             process_export_task(6, loader)
+        elif sub_choice == "3":
+            unmark_upload(loader, 'shopee')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
@@ -4293,9 +4332,9 @@ def handle_submenu_tiktok(loader):
         print_submenu_tiktok()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-2][/bold magenta]", default="0")
+            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-3][/bold magenta]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ TikTok [0-2]: ").strip()
+            sub_choice = input("Mời chọn tác vụ TikTok [0-3]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4303,6 +4342,8 @@ def handle_submenu_tiktok(loader):
             process_export_task(3, loader)
         elif sub_choice == "2":
             process_export_task(7, loader)
+        elif sub_choice == "3":
+            unmark_upload(loader, 'tiktok')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
