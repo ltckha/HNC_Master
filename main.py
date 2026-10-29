@@ -325,6 +325,14 @@ class DynamicHeaderScanner:
             if 'product_code' in vals or 'item_size' in vals or 'get_images' in vals:
                 var_row_idx = idx
 
+        # Tên ở hàng 1 trùng tên kỹ thuật cột khác (SANPHAM: nhãn Việt của cột mới, vd "Giới tính" — bộ chuẩn 29/10) → hàng kỹ thuật thắng
+        if var_row_idx > 0 and len(df):
+            hang1 = {str(v).strip(): i for i, v in enumerate(df.iloc[0].values) if pd.notna(v) and str(v).strip()}
+            for col_idx, val in enumerate(df.iloc[var_row_idx].values):
+                key = str(val).strip() if pd.notna(val) else ''
+                if key and key in hang1 and hang1[key] != col_idx:
+                    col_map[key] = col_idx
+
         return var_row_idx, col_map
 
     @staticmethod

@@ -1,0 +1,700 @@
+{
+ "nguon": "tools/tu_dien_sanpham.py",
+ "so_ma_sanpham": 2240,
+ "tab": "TU_DIEN",
+ "cot": [
+  {
+   "cot": "gioi_tinh",
+   "nhan": "Giới tính (chuẩn)",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "nam",
+     "so_ma": 1553,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Giới tính \"male\"",
+      "Đặc điểm \"nam\""
+     ]
+    },
+    {
+     "gia_tri": "nữ",
+     "so_ma": 489,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Giới tính \"female\"",
+      "Đặc điểm \"nữ\""
+     ]
+    },
+    {
+     "gia_tri": "unisex",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": ""
+  },
+  {
+   "cot": "chat_lieu",
+   "nhan": "Chất liệu mũ / thân",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "da bò",
+     "so_ma": 1636,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"da bò\"",
+      "Chất liệu quai: \"da bò cao cấp\""
+     ]
+    },
+    {
+     "gia_tri": "vải bố",
+     "so_ma": 12,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"vải bố\"",
+      "Chất liệu quai: \"vải bố cao cấp\""
+     ]
+    },
+    {
+     "gia_tri": "vải lưới",
+     "so_ma": 6,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"vải lưới\"",
+      "Chất liệu quai: \"vải lưới cao cấp\""
+     ]
+    },
+    {
+     "gia_tri": "da cừu",
+     "so_ma": 6,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"da cừu\"",
+      "Chất liệu quai: \"da cừu\""
+     ]
+    },
+    {
+     "gia_tri": "microfiber",
+     "so_ma": 5,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"microfiber\"",
+      "Chất liệu quai: \"microfiber\""
+     ]
+    },
+    {
+     "gia_tri": "vải sợi",
+     "so_ma": 2,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu \"vải sợi\"",
+      "Chất liệu quai: \"vải sợi cao cấp\""
+     ]
+    },
+    {
+     "gia_tri": "da bò lộn",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "da heo",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Bỏ \"cao cấp\" (tên hàng giữ). \"microfiber\" giữ chữ đang dùng (kế hoạch ghi \"da tổng hợp (microfiber)\")."
+  },
+  {
+   "cot": "kieu_dong",
+   "nhan": "Kiểu mang",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "xỏ chân",
+     "so_ma": 295,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"xỏ chân\""
+     ]
+    },
+    {
+     "gia_tri": "cột dây",
+     "so_ma": 136,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"cột dây\""
+     ]
+    },
+    {
+     "gia_tri": "cổ thun",
+     "so_ma": 14,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"cổ thun\""
+     ]
+    },
+    {
+     "gia_tri": "khoá kéo 1 bên",
+     "so_ma": 12,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"khoá kéo 1 bên\""
+     ]
+    },
+    {
+     "gia_tri": "xé dán",
+     "so_ma": 7,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"xé dán\""
+     ]
+    },
+    {
+     "gia_tri": "khoá kéo 2 bên",
+     "so_ma": 2,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"khoá kéo 2 bên\""
+     ]
+    },
+    {
+     "gia_tri": "khoá cài",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "quai hậu",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Đặc điểm \"khoá kéo\" / \"dây kéo\" (1 mã mỗi chữ, hàng da Yen) và Bonus \"giày giả cột dây có thun hai bên\" chưa đưa vào."
+  },
+  {
+   "cot": "kieu_quai",
+   "nhan": "Kiểu quai (dép / sandal)",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "quai ngang",
+     "so_ma": 98,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"quai ngang\""
+     ]
+    },
+    {
+     "gia_tri": "quai chéo",
+     "so_ma": 64,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"quai chéo\""
+     ]
+    },
+    {
+     "gia_tri": "quai kẹp",
+     "so_ma": 27,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"quai kẹp\""
+     ]
+    },
+    {
+     "gia_tri": "quai chữ H",
+     "so_ma": 1,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"dép h\""
+     ]
+    },
+    {
+     "gia_tri": "quai hậu",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "nhiều quai",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "\"dép h\" (1 mã) → \"quai chữ H\"."
+  },
+  {
+   "cot": "dang_mui",
+   "nhan": "Dáng mũi",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "tròn",
+     "so_ma": 749,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Dáng giày mũi: \"tròn\"",
+      "Đặc điểm \"mũi tròn\""
+     ]
+    },
+    {
+     "gia_tri": "vuông",
+     "so_ma": 84,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Dáng giày mũi: \"vuông\"",
+      "Đặc điểm \"mũi vuông\""
+     ]
+    },
+    {
+     "gia_tri": "nhọn",
+     "so_ma": 30,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Dáng giày mũi: \"nhọn\"",
+      "Đặc điểm \"mũi nhọn\""
+     ]
+    },
+    {
+     "gia_tri": "hở mũi",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": ""
+  },
+  {
+   "cot": "kieu_de",
+   "nhan": "Kiểu đế",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "đế bằng",
+     "so_ma": 468,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"đế bằng\"",
+      "Đặc điểm \"đế bằng\""
+     ]
+    },
+    {
+     "gia_tri": "đế xuồng",
+     "so_ma": 11,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Đặc điểm \"đế xuồng\""
+     ]
+    },
+    {
+     "gia_tri": "gót vuông",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "gót nhọn",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "đế độn",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": ""
+  },
+  {
+   "cot": "cao_got_cm",
+   "nhan": "Cao gót (cm)",
+   "kieu": "so",
+   "gia_tri": [
+    {
+     "gia_tri": 2,
+     "so_ma": 110,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"gót 2cm\""
+     ]
+    },
+    {
+     "gia_tri": 3,
+     "so_ma": 200,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"gót 3cm\""
+     ]
+    },
+    {
+     "gia_tri": 4,
+     "so_ma": 37,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"gót 4cm\""
+     ]
+    },
+    {
+     "gia_tri": 5,
+     "so_ma": 13,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"gót 5cm\""
+     ]
+    },
+    {
+     "gia_tri": 7,
+     "so_ma": 17,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Phần dưới giày: \"gót 7cm\""
+     ]
+    }
+   ],
+   "ghi_chu": "Số 0–10. \"đế bằng\" chưa tự ghi 0 (GĐ B chốt).",
+   "gioi_han": [
+    0,
+    10
+   ]
+  },
+  {
+   "cot": "tang_cao_cm",
+   "nhan": "Tăng chiều cao (cm)",
+   "kieu": "so",
+   "gia_tri": [
+    {
+     "gia_tri": 3,
+     "so_ma": 35,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Bonus: \"độn bên trong cao thêm 3cm.\""
+     ]
+    },
+    {
+     "gia_tri": 4,
+     "so_ma": 3,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Bonus: \"độn bên trong cao thêm 4cm.\""
+     ]
+    },
+    {
+     "gia_tri": 5.5,
+     "so_ma": 4,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Bonus: \"độn bên trong 3cm, giúp cao thêm 5,5cm.\""
+     ]
+    },
+    {
+     "gia_tri": 6,
+     "so_ma": 37,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Bonus: \"độn bên trong 3cm, giúp cao thêm 6cm.\""
+     ]
+    }
+   ],
+   "ghi_chu": "Số; chỉ ngành tăng chiều cao.",
+   "gioi_han": [
+    0,
+    15
+   ]
+  },
+  {
+   "cot": "chat_lieu_de",
+   "nhan": "Chất liệu đế (chuẩn)",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "cao su nhiệt TPR",
+     "so_ma": 759,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"cao su nhiệt tpr\""
+     ]
+    },
+    {
+     "gia_tri": "da mộc + cao su",
+     "so_ma": 26,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"da mộc, cao su\""
+     ]
+    },
+    {
+     "gia_tri": "EVA",
+     "so_ma": 17,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"eva cao cấp\""
+     ]
+    },
+    {
+     "gia_tri": "trấu mặt cao su",
+     "so_ma": 13,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"trấu mặt cao su\""
+     ]
+    },
+    {
+     "gia_tri": "cao su vỏ xe",
+     "so_ma": 11,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"cao su vỏ xe\""
+     ]
+    },
+    {
+     "gia_tri": "phylon",
+     "so_ma": 8,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"phylon siêu nhẹ\""
+     ]
+    },
+    {
+     "gia_tri": "cao su bi cá",
+     "so_ma": 7,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Chất liệu đế: \"cao su bi cá\""
+     ]
+    }
+   ],
+   "ghi_chu": "Gộp theo kế hoạch: \"EVA cao cấp\" → \"EVA\", \"phylon siêu nhẹ\" → \"phylon\", \"da mộc, cao su\" → \"da mộc + cao su\"."
+  },
+  {
+   "cot": "lot_trong",
+   "nhan": "Lót thân",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "da heo",
+     "so_ma": 690,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Lót trong: \"da heo\""
+     ]
+    },
+    {
+     "gia_tri": "da bò",
+     "so_ma": 88,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Lót trong: \"da bò\""
+     ]
+    },
+    {
+     "gia_tri": "vải nhung",
+     "so_ma": 59,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Lót trong: \"vải nhung\""
+     ]
+    },
+    {
+     "gia_tri": "microfiber",
+     "so_ma": 15,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Lót trong: \"microfiber\""
+     ]
+    },
+    {
+     "gia_tri": "da cừu",
+     "so_ma": 6,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Lót trong: \"da cừu\""
+     ]
+    }
+   ],
+   "ghi_chu": ""
+  },
+  {
+   "cot": "lot_de",
+   "nhan": "Mặt lót đế (chất liệu)",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "da bò",
+     "so_ma": 294,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Mặt lót đế: \"da bò hút ẩm\""
+     ]
+    },
+    {
+     "gia_tri": "microfiber",
+     "so_ma": 22,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Mặt lót đế: \"microfiber\""
+     ]
+    },
+    {
+     "gia_tri": "da cừu",
+     "so_ma": 2,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Mặt lót đế: \"da cừu\""
+     ]
+    },
+    {
+     "gia_tri": "da heo",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "mút",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "\"mềm êm\" / \"mềm êm, có độ đàn hồi\" (độ êm, không phải chất liệu) chưa có cột nhận — kế hoạch 4.2 có lot_de_em nhưng danh sách GĐ A không có."
+  },
+  {
+   "cot": "be_mat",
+   "nhan": "Bề mặt da",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "trơn",
+     "so_ma": 97,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Nhấn mạnh \"trơn\""
+     ]
+    },
+    {
+     "gia_tri": "hạt mềm",
+     "so_ma": 62,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Nhấn mạnh \"hạt mềm\""
+     ]
+    },
+    {
+     "gia_tri": "vân",
+     "so_ma": 37,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Nhấn mạnh \"vân\""
+     ]
+    },
+    {
+     "gia_tri": "lộn",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "bóng",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Nhấn mạnh \"cao cấp\" / \"big size\" / \"mix màu\" không phải bề mặt → không đưa vào."
+  },
+  {
+   "cot": "form",
+   "nhan": "Form chân",
+   "kieu": "ds",
+   "gia_tri": [
+    {
+     "gia_tri": "chuẩn",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "ôm",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "rộng ngang",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "nên lên 1 size",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "nên xuống 1 size",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Cột mới, tiệm điền dần mẫu bán chạy."
+  },
+  {
+   "cot": "dip",
+   "nhan": "Dịp mang",
+   "kieu": "nhieu",
+   "gia_tri": [
+    {
+     "gia_tri": "hằng ngày",
+     "so_ma": 2038,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Sử dụng: \"hằng ngày\"",
+      "Sử dụng: \"hằng ngày, dự tiệc...\""
+     ]
+    },
+    {
+     "gia_tri": "dự tiệc",
+     "so_ma": 103,
+     "nguon": "sheet",
+     "gop_tu": [
+      "Sử dụng: \"hằng ngày, dự tiệc...\""
+     ]
+    },
+    {
+     "gia_tri": "đi làm",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "cưới",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "dạo phố",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    },
+    {
+     "gia_tri": "du lịch",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
+    }
+   ],
+   "ghi_chu": "Chọn nhiều: ô ghi các giá trị cách nhau dấu phẩy (vd \"hằng ngày, dự tiệc\"); TU_DIEN liệt kê từng giá trị lẻ."
+  }
+ ]
+}
