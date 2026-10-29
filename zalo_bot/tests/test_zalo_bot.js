@@ -1223,6 +1223,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const a1 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', so_chung_tu: 'DOI-281026', kho: 'Y3C' }, true);
   const a2 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', ngay: '28/10/2026', kho: 'Y3C' }, true);
   const a3 = ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', so_chung_tu: 'DOI-281026', kho: '15E' }, true);
+  eq('web_url trống → QR link /product/<MÃ>?s=<size>', ctx.labelRecord_({ code: 'ZZ999X', size: '37', qty: 1 })['QR code'], 'https://giayhainancy.vn/product/ZZ999X?s=37');
   eq('DOI-: in theo số phiếu ra 6 tem mã mới; theo ngày bỏ; sai kho → "Tiệm 15E"', [a1.ok, a1.so_tem, a1.rows[0].dong === dRow, (a2.rows || []).some(r => r.dong === dRow), a3.error],
     [true, 6, true, false, 'không có dòng nhập nào khớp (Tiệm 15E)']);
   DATA.NHAP.pop(); vm.runInContext('MEMO={};', ctx); }

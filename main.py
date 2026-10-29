@@ -229,6 +229,12 @@ def sale_images(code, sheet_pics):
 LABEL_COLUMNS = ['QR code', 'Tên', 'Màu', 'Size', 'Size Color', 'F6', 'Code128', 'Gía']
 
 
+def label_qr_du_phong(code, size=''):
+    """web_url trống → link web theo mã (web tự chuyển /product/<MÃ>?s=<size> sang trang sản phẩm), như bot labelQrDuPhong_ (29/10)."""
+    code = str(code or '').strip().upper()
+    return f"https://giayhainancy.vn/product/{code}" + (f"?s={size}" if size else '') if code else ''
+
+
 def label_record(rec, product_map):
     """1 dòng tem từ 1 dòng NHAP: QR = web_url, Tên = product_name, giá bán dạng "450.000 đ", F6 = số tem (= số lượng)."""
     pcode = str(rec.get('product_code', '')).strip()
@@ -246,7 +252,8 @@ def label_record(rec, product_map):
     raw_price = sp_info.get('product_price') or rec.get('Giá', '')
     num_p = parse_number(raw_price)
     price_str = f"{int(num_p):,} đ".replace(",", ".") if num_p > 0 else str(raw_price)
-    return {'QR code': sp_info.get('web_url') or rec.get('QR code', ''), 'Tên': pname, 'Màu': pcolor, 'Size': sz,
+    qr = sp_info.get('web_url') or rec.get('QR code', '') or label_qr_du_phong(pcode, sz)
+    return {'QR code': qr, 'Tên': pname, 'Màu': pcolor, 'Size': sz,
             'Size Color': scolor, 'F6': f6, 'Code128': f"{pcode}{sz}" if sz else pcode, 'Gía': price_str}
 
 

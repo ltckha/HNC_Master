@@ -4520,7 +4520,13 @@ function labelSelect_(body) {
   return { kho, rows: out };
 }
 
-/** 1 dòng tem: QR = web_url, Tên = product_name, giá bán dạng "450.000 đ" (như main.py). */
+/** web_url trống → link web theo mã (web tự chuyển /product/<MÃ>?s=<size> sang trang sản phẩm; anh Kha 29/10). Như main.py label_qr_du_phong. */
+function labelQrDuPhong_(code, size) {
+  const c = String(code || '').trim().toUpperCase();
+  return c ? 'https://giayhainancy.vn/product/' + c + (size ? '?s=' + size : '') : '';
+}
+
+/** 1 dòng tem: QR = web_url (trống → labelQrDuPhong_), Tên = product_name, giá bán dạng "450.000 đ" (như main.py). */
 function labelRecord_(x) {
   const sp = sheetValues_('SANPHAM');
   if (!MEMO.__labelSp) {
@@ -4537,7 +4543,7 @@ function labelRecord_(x) {
   const p = MEMO.__labelSp[x.code] || {};
   const color = String(x.color || p.color || '').trim();
   const priceNum = moneyValue_(p.price);
-  return { 'QR code': String(p.url || '').trim(), 'Tên': String(p.name || '').trim(), 'Màu': color, 'Size': x.size,
+  return { 'QR code': String(p.url || '').trim() || labelQrDuPhong_(x.code, x.size), 'Tên': String(p.name || '').trim(), 'Màu': color, 'Size': x.size,
     'Size Color': x.size && color ? color + ' (Size ' + x.size + ')' : (color || 'Size ' + x.size), 'F6': Math.max(1, Math.round(x.qty)),
     'Code128': x.code + x.size, 'Gía': priceNum > 0 ? String(priceNum).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' đ' : String(p.price || '') };
 }
