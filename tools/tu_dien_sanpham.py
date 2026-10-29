@@ -40,8 +40,10 @@ COT_MOI = [
     ('lot_de', 'Mặt lót đế (chất liệu)', 'ds'),
     ('be_mat', 'Bề mặt da', 'ds'),
     ('co_giay', 'Cổ giày', 'ds'),
-    ('form', 'Form chân', 'ds'),
+    ('do_om', 'Độ ôm', 'ds'),
     ('dip', 'Dịp mang', 'nhieu'),
+    ('chon_size', 'Chọn size', 'ds'),
+    ('kieu_giay_tay', 'Kiểu giày tây', 'ds'),
 ]
 SO_GIOI_HAN = {'cao_got_cm': (0, 10), 'tang_cao_cm': (0, 15)}
 
@@ -54,14 +56,14 @@ GOP = {
     'kieu_dong': {'Đặc điểm': {'xỏ chân': 'xỏ chân', 'cột dây': 'cột dây', 'cổ thun': 'cổ thun', 'khoá kéo 1 bên': 'khoá kéo 1 bên',
                                'khoá kéo 2 bên': 'khoá kéo 2 bên', 'xé dán': 'xé dán',
                                'khoá kéo': 'khoá kéo 1 bên', 'dây kéo': 'khoá kéo 1 bên'}},
-    'kieu_quai': {'Đặc điểm': {'quai ngang': 'quai ngang', 'quai chéo': 'quai chéo', 'quai kẹp': 'quai kẹp', 'dép h': 'quai chữ H'}},
+    'kieu_quai': {'Đặc điểm': {'quai ngang': 'quai ngang', 'quai chéo': 'quai chéo', 'quai kẹp': 'kẹp ngón (xỏ ngón)', 'dép h': 'quai chữ H'}},
     'dang_mui': {'Dáng giày mũi:': {'tròn': 'tròn', 'vuông': 'vuông', 'nhọn': 'nhọn'},
                  'Đặc điểm': {'mũi tròn': 'tròn', 'mũi vuông': 'vuông', 'mũi nhọn': 'nhọn'}},
     'kieu_de': {'Phần dưới giày:': {'đế bằng': 'đế bằng'}, 'Đặc điểm': {'đế bằng': 'đế bằng', 'đế xuồng': 'đế xuồng'}},
     'chat_lieu_de': {'Chất liệu đế:': {'cao su nhiệt tpr': 'cao su nhiệt TPR', 'da mộc, cao su': 'da mộc + cao su', 'eva cao cấp': 'EVA',
                                        'trấu mặt cao su': 'trấu mặt cao su', 'cao su vỏ xe': 'cao su vỏ xe', 'phylon siêu nhẹ': 'phylon',
                                        'cao su bi cá': 'cao su bi cá'}},
-    'lot_trong': {'Lót trong:': {'da heo': 'da heo', 'da bò': 'da bò', 'vải nhung': 'vải nhung', 'microfiber': 'microfiber', 'da cừu': 'da cừu'}},
+    'lot_trong': {'Lót trong:': {'da heo': 'da heo', 'da bò': 'da bò', 'vải nhung': 'nỉ / nhung', 'microfiber': 'microfiber', 'da cừu': 'da cừu'}},
     'lot_de': {'Mặt lót đế:': {'da bò hút ẩm': 'da bò', 'microfiber': 'microfiber', 'da cừu': 'da cừu'}},
     'be_mat': {'Nhấn mạnh': {'trơn': 'trơn', 'hạt mềm': 'hạt mềm', 'vân': 'vân'}},
     'co_giay': {'Bonus:': {'cổ giày cao nửa ống chân.': 'cổ cao nửa ống'}},
@@ -70,10 +72,13 @@ GOP = {
 # Cột số: lấy số trong chữ cũ (vd "gót 3cm" → 3; "… cao thêm 5,5cm." → 5.5)
 SO_TU = {'cao_got_cm': ('Phần dưới giày:', r'gót\s*(\d+(?:[.,]\d+)?)\s*cm'), 'tang_cao_cm': ('Bonus:', r'cao thêm\s*(\d+(?:[.,]\d+)?)\s*cm')}
 # Giá trị trong danh sách kế hoạch 4.2 mà Sheet chưa có mã nào (Phân tích soát giữ / bỏ)
-KE_HOACH = {
-    'gioi_tinh': ['unisex'], 'chat_lieu': ['da bò lộn', 'da heo'], 'kieu_dong': ['khoá cài', 'quai hậu'], 'kieu_quai': ['quai hậu', 'nhiều quai'],
-    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn', 'có gót'],  # có gót: giày nam (anh Kha 29/10) 'lot_de': ['da heo', 'mút'], 'be_mat': ['lộn', 'bóng'], 'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'],
-    'form': ['chuẩn', 'ôm', 'rộng ngang', 'nên lên 1 size', 'nên xuống 1 size'], 'dip': ['đi làm', 'cưới', 'dạo phố', 'du lịch'],
+KE_HOACH = {  # có gót: giày nam (anh Kha 29/10); đổi tên / gộp / thêm theo anh Kha duyệt 29/10 (tools/doi_ten_thuoc_tinh.py)
+    'gioi_tinh': ['unisex'], 'chat_lieu': ['da bò lộn', 'da heo'], 'kieu_dong': ['khoá cài'], 'kieu_quai': ['quai hậu', 'nhiều quai'],
+    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn', 'có gót'], 'lot_de': ['da heo', 'mút'], 'be_mat': ['da lộn', 'da bóng'],
+    'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'], 'chat_lieu_de': ['cao su đúc', 'PU'],
+    'do_om': ['chuẩn', 'ôm', 'rộng ngang'], 'chon_size': ['đúng size', 'lên 1 size', 'xuống 1 size'],
+    'kieu_giay_tay': ['Oxford (buộc dây kín)', 'Derby (buộc dây hở)', 'giày lười (loafer)', 'khoá cài (monk)', 'bốt cổ chun (Chelsea)', 'đục lỗ (brogue)'],
+    'dip': ['công sở', 'cưới', 'dạo phố', 'du lịch'],
 }
 # Ghi chú cho Phân tích soát (chữ cũ chưa có chỗ ở cột mới, hoặc gộp có chọn)
 GHI_CHU = {
@@ -87,7 +92,7 @@ GHI_CHU = {
     'dip': 'Chọn nhiều: ô ghi các giá trị cách nhau dấu phẩy (vd "hằng ngày, dự tiệc"); TU_DIEN liệt kê từng giá trị lẻ.',
     'cao_got_cm': 'Số 0–10. "đế bằng" chưa tự ghi 0 (GĐ B chốt).',
     'tang_cao_cm': 'Số; chỉ ngành tăng chiều cao.',
-    'form': 'Cột mới, tiệm điền dần mẫu bán chạy.',
+    'do_om': 'Thay cột form (anh Kha 29/10); chon_size tách riêng. Tiệm điền dần mẫu bán chạy.',
 }
 
 
