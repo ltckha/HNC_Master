@@ -27,9 +27,10 @@ DOI = {  # cột mới → {giá trị cũ: giá trị mới}
     'lot_trong': {'nỉ': 'nỉ / nhung', 'vải nhung': 'nỉ / nhung'},
     'lot_de': {'nỉ': 'nỉ / nhung', 'vải nhung': 'nỉ / nhung', 'da heo cán mút': 'da heo'},
 }
-NHIEU = ('dip',)
+NHIEU = ('dip', 'kieu_quai', 'lot_de')  # lot_de 2 lớp (66332D, anh Kha 29/10); kieu_quai chọn nhiều (vd D13274K quai chéo + quai hậu — Phân tích 29/10)
 TD_THEM = {'chat_lieu_de': ['cao su đúc', 'PU']}
-TD_BO = {'kieu_dong': ['quai hậu']}
+TD_BO = {'kieu_dong': ['quai hậu'], 'lot_de': ['mềm êm có độ đàn hồi']}
+GAN = {('66332D', 'lot_de'): 'microfiber, cao su non (latex)'}  # anh Kha 29/10: lót 2 lớp
 FORM_DO_OM = {'chuẩn': 'chuẩn', 'ôm': 'ôm', 'rộng ngang': 'rộng ngang'}
 FORM_CHON_SIZE = {'nên lên 1 size': 'lên 1 size', 'nên xuống 1 size': 'xuống 1 size'}
 COT_THEM = [  # (tên hàng 2, nhãn hàng 1, giá trị TU_DIEN)
@@ -75,15 +76,20 @@ def lam(sid, ghi=False):
                 o.append({'range': gspread.utils.rowcol_to_a1(i, j + 1), 'values': [[doi_o(cot, r[j])]]})
                 dem[cot] += 1
                 log.append([ma, cot, r[j], doi_o(cot, r[j])])
+        for (gm, gc), gv in GAN.items():
+            if ma.upper() == gm and r[h.index(gc)].strip() != gv:
+                o = [u for u in o if u['range'] != gspread.utils.rowcol_to_a1(i, h.index(gc) + 1)]
+                o.append({'range': gspread.utils.rowcol_to_a1(i, h.index(gc) + 1), 'values': [[gv]]})
+                log.append([ma, gc, r[h.index(gc)], gv])
+                dem[gc + ' gán'] += 1
         jd, jq = h.index('kieu_dong'), h.index('kieu_quai')
         if r[jd].strip() == 'quai hậu':
             o.append({'range': gspread.utils.rowcol_to_a1(i, jd + 1), 'values': [['']]})
             dem['kieu_dong bỏ quai hậu'] += 1
-            if not r[jq].strip():
-                o.append({'range': gspread.utils.rowcol_to_a1(i, jq + 1), 'values': [['quai hậu']]})
-                log.append([ma, 'kieu_dong → kieu_quai', 'quai hậu', 'quai hậu'])
-            else:
-                bao.append(f'{ma}: kieu_dong quai hậu, kieu_quai đã có "{r[jq]}"')
+            q = ', '.join(dict.fromkeys([x for x in (doi_o('kieu_quai', r[jq]).split(', ') if r[jq].strip() else []) if x] + ['quai hậu']))
+            o = [u for u in o if u['range'] != gspread.utils.rowcol_to_a1(i, jq + 1)]  # gộp với ô đổi tên cùng ô (nếu có)
+            o.append({'range': gspread.utils.rowcol_to_a1(i, jq + 1), 'values': [[q]]})
+            log.append([ma, 'kieu_dong → kieu_quai', 'quai hậu', q])
         fv = r[jf].strip()
         if fv:
             dem['form có chữ'] += 1
@@ -154,6 +160,15 @@ def lam(sid, ghi=False):
                                                'rule': {'condition': {'type': 'ONE_OF_RANGE', 'values': [{'userEnteredValue': f'=TU_DIEN!${X}$3:${X}'}]},
                                                         'showCustomUi': True, 'strict': True}}})
         ss.batch_update({'requests': reqs})
+    # Cột chọn nhiều: danh sách thả chỉ cảnh báo
+    reqs = []
+    for cn in ('kieu_quai', 'lot_de'):
+        jq2 = h.index(cn)
+        Xq = gspread.utils.rowcol_to_a1(1, th2.index(cn) + 1).rstrip('1')
+        reqs.append({'setDataValidation': {
+            'range': {'sheetId': ws.id, 'startRowIndex': 2, 'endRowIndex': ws.row_count, 'startColumnIndex': jq2, 'endColumnIndex': jq2 + 1},
+            'rule': {'condition': {'type': 'ONE_OF_RANGE', 'values': [{'userEnteredValue': f'=TU_DIEN!${Xq}$3:${Xq}'}]}, 'showCustomUi': True, 'strict': False}}})
+    ss.batch_update({'requests': reqs})
     # form có chữ → tách: do_om (cùng cột) + chon_size
     if tach_form:
         hc = [x.strip() for x in ws.row_values(2)]
