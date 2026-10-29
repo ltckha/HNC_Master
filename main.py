@@ -1019,10 +1019,14 @@ def map_tiktok_attributes(sub_info, sp=None):
         v = sp.get(name, '')
         return '' if v is None or (isinstance(v, float) and pd.isna(v)) else str(v)
 
+    def _moi(*ten, cu=''):
+        """Bộ chuẩn 29/10: cột mới (BA–BO) trước, trống thì cột cũ — cùng thứ tự san.js web (luật 15)."""
+        return ' '.join(x for x in (_sp(t).strip() for t in ten) if x) or _sp(cu)
+
     origin = "Việt Nam"
 
     # Chất liệu
-    mat_raw = _sp('Chất liệu').lower()
+    mat_raw = _moi('chat_lieu', cu='Chất liệu').lower()
     if 'bò' in mat_raw or 'da' in mat_raw:
         material = 'Da'
     elif 'vải' in mat_raw or 'lưới' in mat_raw or 'bố' in mat_raw:
@@ -1031,7 +1035,7 @@ def map_tiktok_attributes(sub_info, sp=None):
         material = 'Da'
 
     # Dịp
-    use_raw = _sp('Sử dụng:').lower()
+    use_raw = _moi('dip', cu='Sử dụng:').lower()
     if 'tiệc' in use_raw or 'cưới' in use_raw:
         occasion = 'Lễ cưới'
     elif 'công sở' in use_raw or 'kinh doanh' in use_raw:
@@ -1042,7 +1046,7 @@ def map_tiktok_attributes(sub_info, sp=None):
     season = "Bốn mùa"
 
     # Hình dáng ngón chân
-    toe_raw = _sp('Dáng giày mũi:').lower()
+    toe_raw = _moi('dang_mui', cu='Dáng giày mũi:').lower()
     if 'nhọn' in toe_raw:
         toe_shape = 'Mũi nhọn'
     elif 'vuông' in toe_raw:
@@ -1053,7 +1057,7 @@ def map_tiktok_attributes(sub_info, sp=None):
         toe_shape = 'Mũi tròn'
 
     # Chiều cao gót
-    heel_raw = _sp('Phần dưới giày:').lower()
+    heel_raw = _moi('kieu_de', 'cao_got_cm', cu='Phần dưới giày:').lower()
     # Theo số cm (khớp san.js web 29/10): luật cũ dò ký tự '5' / '2' nên "gót 4cm" ra phẳng, "gót 2,5cm" ra vừa
     so_cm = re.search(r'(\d+(?:[.,]\d+)?)', heel_raw)
     cm = float(so_cm.group(1).replace(',', '.')) if so_cm else None
@@ -1065,7 +1069,7 @@ def map_tiktok_attributes(sub_info, sp=None):
         heel_height = 'Gót phẳng (1 cm trở xuống)'
 
     # Loại buộc
-    feat_raw = _sp('Đặc điểm').lower()
+    feat_raw = _moi('kieu_dong', cu='Đặc điểm').lower()
     if 'cột' in feat_raw or 'dây' in feat_raw:
         closure = 'Dây buộc'
     elif 'xé' in feat_raw or 'dán' in feat_raw:
@@ -3776,6 +3780,7 @@ NHAP_COT_CAN = ('Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code
 
 def batch_commit_ingestion(loader, confirmed_products):
     """Ghi hàng loạt sản phẩm mới vào SANPHAM và toàn bộ dòng nhập kho vào NHAP (Quét Header Động)."""
+    from tools.tach_cot_sanpham import tach as tach_cot
     if not confirmed_products:
         return {'sp_added': 0, 'restock_count': 0, 'nhap_rows': 0}
     for data in confirmed_products:
@@ -3789,6 +3794,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     start_sp_row = len(df_sp) + 1
     var_idx_sp, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
     num_sp_cols = len(df_sp.columns)
+    head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
 
     # Cột theo tên hàng 2 (luật 4) — thiếu cột thì DỪNG, không ghi sang cột khác
     idx_parent = DynamicHeaderScanner.get_col_idx(map_sp, 'parent_product_code', 'Mã hàng hóa cha')
@@ -3903,6 +3909,12 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_purch is not None: row_values[idx_purch] = data.get('purchase_price', 0)
             if idx_inv is not None: row_values[idx_inv] = data.get('invoice_price', 0)
             if idx_sup is not None: row_values[idx_sup] = data.get('supplier', '')
+            # Bộ chuẩn 29/10 (chạy song song): cột mới BA–BO điền từ chữ cột cũ vừa ghi, cùng bảng gộp GĐ B (tools/tach_cot_sanpham.py)
+            for ten, (moi, _, tt) in tach_cot([str(x) for x in row_values], head_sp).items():
+                if tt == 'dien' and ten in head_sp:
+                    row_values[head_sp.index(ten)] = moi
+            if 'gioi_tinh' in head_sp:  # cột cũ "Giới tính" là công thức REGEXMATCH(ngành; "nam") → cùng luật
+                row_values[head_sp.index('gioi_tinh')] = 'nam' if re.search('nam', str(data.get('category_name', ''))) else 'nữ'
 
             sp_new_rows.append(row_values)
             sp_added_count += 1

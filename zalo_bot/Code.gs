@@ -2110,6 +2110,13 @@ const PN_NEED_INFO_COLS = ['Tên Ngành Hàng', 'product_price'];
 // Cột thông tin mẫu: chép từ mẫu cùng mã cha khi tạo mã mới; form "Bổ sung thông tin" (bo_sung_sp) chỉ được ghi các cột này + product_price
 const PN_INFO_COLS = ['Tên Ngành Hàng', 'Đặc điểm', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:', 'Chất liệu đế:', 'Lót trong:', 'Mặt lót đế:',
   'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:'];
+// Bộ chuẩn SANPHAM 29/10 (chạy song song với cột cũ): 15 cột mới cuối SANPHAM, giá trị cho phép ở tab TU_DIEN (hàng 1 tên cột, giá trị từ hàng 3).
+// bo_sung_sp ghi được các cột này; ghi kèm cột cũ 1-1 cho 5 cột (không kèm Chất liệu / Giới tính / Phần dưới giày — Web chốt 29/10, luật 15).
+const SP_COT_MOI = ['gioi_tinh', 'chat_lieu', 'kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'cao_got_cm', 'tang_cao_cm', 'chat_lieu_de',
+  'lot_trong', 'lot_de', 'be_mat', 'co_giay', 'form', 'dip'];
+const SP_COT_MOI_KEM = { dang_mui: 'Dáng giày mũi:', chat_lieu_de: 'Chất liệu đế:', lot_trong: 'Lót trong:', lot_de: 'Mặt lót đế:', dip: 'Sử dụng:' };
+const SP_COT_SO = { cao_got_cm: [0, 10], tang_cao_cm: [0, 15] };
+const SP_COT_NHIEU = ['dip']; // chọn nhiều: "a, b"
 // Cột công thức phụ thuộc ngành: ngành trống thì để trống (tránh "female" / #N/A), có ngành thì chép lại công thức
 const PN_NGANH_FORMULA_COLS = ['Giới tính', 'product_category_id'];
 
@@ -2640,7 +2647,7 @@ function appendSanphamMin_(m) {
   const sib = data.slice(hr + 1).find(r => String(r[col.product_code]).trim() &&
     ((pc !== undefined && String(r[pc]).trim().toUpperCase() === m.base) || String(r[col.product_code]).trim().toUpperCase().slice(0, -1) === m.base));
   const values = { product_code: m.code, product_color: m.color, product_price: m.price };
-  PN_INFO_COLS.concat(['Thương hiệu', 'product_unit', 'product_origin']).forEach(n => {
+  PN_INFO_COLS.concat(SP_COT_MOI, ['Thương hiệu', 'product_unit', 'product_origin']).forEach(n => {
     if (sib && col[n] !== undefined && String(sib[col[n]]).trim() !== '') values[n] = sib[col[n]];
   });
   if (m.nganh && col['Tên Ngành Hàng'] !== undefined) values['Tên Ngành Hàng'] = m.nganh;
@@ -2765,6 +2772,37 @@ function productSuppliers_() {
   return MEMO.__sup;
 }
 
+/** Kiểm giá trị 15 cột mới: số trong khoảng; chữ phải có trong TU_DIEN (ô trống = xoá, cho qua). Trả danh sách lỗi. */
+function spCotMoiLoi_(values) {
+  const loi = [];
+  const moi = Object.keys(values).filter(n => SP_COT_MOI.indexOf(n) !== -1 && values[n] !== '');
+  if (!moi.length) return loi;
+  let td = null;
+  moi.forEach(n => {
+    const v = String(values[n]);
+    if (SP_COT_SO[n]) {
+      const x = Number(v.replace(',', '.'));
+      if (!(isFinite(x) && x >= SP_COT_SO[n][0] && x <= SP_COT_SO[n][1])) loi.push('"' + n + '" phải là số ' + SP_COT_SO[n][0] + '–' + SP_COT_SO[n][1]);
+      else values[n] = x;
+      return;
+    }
+    if (!td) {
+      const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('TU_DIEN');
+      if (!sh) { loi.push('Sheet chưa có tab TU_DIEN'); td = {}; return; }
+      const d = sh.getDataRange().getValues();
+      td = {};
+      (d[0] || []).forEach((h, c) => { td[String(h).trim()] = d.slice(2).map(r => String(r[c]).trim()).filter(String); });
+    }
+    const cho = td[n];
+    if (!cho) { loi.push('TU_DIEN chưa có cột "' + n + '"'); return; }
+    const phan = SP_COT_NHIEU.indexOf(n) !== -1 ? v.split(',').map(x => x.trim()).filter(String) : [v];
+    const sai = phan.filter(x => cho.indexOf(x) === -1);
+    if (sai.length) loi.push('"' + n + '": "' + sai.join('", "') + '" không có trong TU_DIEN');
+    else if (phan.length > 1) values[n] = phan.join(', ');
+  });
+  return loi;
+}
+
 /**
  * Form "Bổ sung thông tin mã mới" (web /admin): ghi đúng các cột PN_INFO_COLS (+ product_price) của 1 mã, theo tên cột hàng 2.
  * Body: { action:"bo_sung_sp", product_code, nguoi, dry_run?, cot:{"Tên Ngành Hàng": "...", …}, product_price? }
@@ -2794,12 +2832,17 @@ function productFill_(body, nguoi, dryRun) {
     const values = {};
     Object.keys(cot).forEach(k => {
       const name = String(k).trim();
-      if (PN_INFO_COLS.indexOf(name) === -1) { errors.push('cột "' + name + '" không được sửa'); return; }
+      if (PN_INFO_COLS.indexOf(name) === -1 && SP_COT_MOI.indexOf(name) === -1) { errors.push('cột "' + name + '" không được sửa'); return; }
       if (col[name] === undefined) { canhBao.push('SANPHAM không có cột "' + name + '", bỏ qua'); return; }
       const v = String(cot[k] === null || cot[k] === undefined ? '' : cot[k]).replace(/\s+/g, ' ').trim();
       if (v.length > 200) { errors.push('"' + name + '" dài quá 200 ký tự'); return; }
       if (v.charAt(0) === '=') { errors.push('"' + name + '" không được bắt đầu bằng ='); return; }
       values[name] = v;
+    });
+    errors.push.apply(errors, spCotMoiLoi_(values));
+    Object.keys(SP_COT_MOI_KEM).forEach(n => { // ghi kèm cột cũ (chạy song song) — trừ khi form gửi riêng cột cũ
+      const cu = SP_COT_MOI_KEM[n];
+      if (values[n] !== undefined && values[cu] === undefined && col[cu] !== undefined) values[cu] = values[n];
     });
     if (values['Tên Ngành Hàng'] !== undefined) {
       if (!values['Tên Ngành Hàng']) errors.push('Tên Ngành Hàng không được để trống');

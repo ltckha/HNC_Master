@@ -375,7 +375,9 @@ def cmd_apply(args):
         code = r[pc].strip().upper()
         if code and code not in row_of:
             row_of[code] = i
-    updates, skipped, doi = [], Counter(), {}
+    updates, skipped, doi, updates_moi = [], Counter(), {}, []
+    sys.path.insert(0, ROOT)
+    from tools.tach_cot_sanpham import moi_tu_cu
     for r in rows:
         ci = col_index(head, r["cot"])
         ri = row_of.get(r["product_code"].strip().upper())
@@ -388,7 +390,12 @@ def cmd_apply(args):
             continue
         updates.append({"range": gspread.utils.rowcol_to_a1(ri, ci + 1), "values": [[r["de_xuat"].strip()]]})
         doi.setdefault(r["product_code"].strip().upper(), {})[head[ci].strip()] = r["de_xuat"].strip()
-    print(f"Sẽ ghi {len(updates)} ô" + (f"; bỏ qua {dict(skipped)}" if skipped else ""))
+        # Bộ chuẩn 29/10 (chạy song song): ghi kèm cột mới tương ứng nếu đang trống, cùng bảng gộp GĐ B
+        for ten, v in moi_tu_cu(head[ci].strip(), r["de_xuat"]):
+            cj = col_index(head, ten)
+            if cj is not None and not (sp[ri - 1][cj].strip() if cj < len(sp[ri - 1]) else ""):
+                updates_moi.append({"range": gspread.utils.rowcol_to_a1(ri, cj + 1), "values": [[v]]})
+    print(f"Sẽ ghi {len(updates)} ô" + (f" (+ {len(updates_moi)} ô cột mới)" if updates_moi else "") + (f"; bỏ qua {dict(skipped)}" if skipped else ""))
     if args.dry_run or not updates:
         return
     if hh_web(ss):
@@ -401,6 +408,7 @@ def cmd_apply(args):
                 sys.exit(f"❌ {w.get('error')} — chưa ghi gì vào Sheet (web giữ thuộc tính).")
             print(f"✅ Đã gửi {len(updates)} ô ({len(doi)} mã) lên web (co_sp) — web tự chép SANPHAM.")
             return
+    updates += updates_moi  # web Dự phòng / sổ ở Sheet: ghi cả cột mới (đường web: co_sp chưa nhận cột mới — chờ Web)
     for i in range(0, len(updates), 200):
         ws.batch_update(updates[i:i + 200])
         time.sleep(1)

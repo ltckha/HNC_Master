@@ -68,6 +68,20 @@ def tach(r, head):
     return kq
 
 
+def moi_tu_cu(cot_cu, chu):
+    """1 ô cột cũ → [(cột mới, giá trị)] theo cùng bảng gộp (dùng khi Mac ghi cột cũ, chạy song song — luật 15)."""
+    out = []
+    for ten, g in GOP.items():
+        moi = g.get(cot_cu, {}).get(chuan(chu))
+        if moi is not None:
+            out.append((ten, moi))
+    for ten, (cot, mau) in SO_TU.items():
+        m = re.search(mau, chuan(chu)) if cot == cot_cu else None
+        if m:
+            out.append((ten, so_dep(float(m.group(1).replace(',', '.')))))
+    return out
+
+
 def main():
     sid = sys.argv[sys.argv.index('--sheet') + 1] if '--sheet' in sys.argv else SHEET_ID
     creds = Credentials.from_service_account_file(os.path.join(ROOT, 'credentials.json'),
