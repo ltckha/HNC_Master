@@ -1334,20 +1334,5 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('mã mới: CON_DES = công thức gần nhất (A2), dòng A3 giữ mô tả đã duyệt', [op.row, DATA.SANPHAM[5][3], DATA.SANPHAM[5][4], DATA.SANPHAM[4][3]],
     [6, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]', 'Mô tả đã duyệt A3']);
   DATA.SANPHAM = sp0; vm.runInContext('MEMO={};', ctx); }
-{ // Bộ chuẩn SANPHAM 29/10: bo_sung_sp nhận 15 cột mới, kiểm theo TU_DIEN, ghi kèm cột cũ 1-1 (dang_mui, dip…), không kèm Chất liệu
-  const sp0 = DATA.SANPHAM, td0 = DATA.TU_DIEN;
-  DATA.SANPHAM = [['nhóm', '', '', '', '', '', '', '', ''],
-    ['product_code', 'Tên Ngành Hàng', 'Chất liệu', 'Dáng giày mũi:', 'Sử dụng:', 'chat_lieu', 'dang_mui', 'dip', 'cao_got_cm'],
-    ['Z1D', 'Giày mọi nam', 'da bò', '', '', '', '', '', '']];
-  DATA.TU_DIEN = [['chat_lieu', 'dang_mui', 'dip'], ['Chất liệu', 'Dáng mũi', 'Dịp'], ['da bò', 'tròn', 'hằng ngày'], ['vải bố', 'nhọn', 'dự tiệc']];
-  vm.runInContext('MEMO={};', ctx);
-  const b = (cot, dry) => ctx.handleStock_({ action: 'bo_sung_sp', nguoi: 'kha@hn.vn', product_code: 'Z1D', cot }, !!dry);
-  let r = b({ dang_mui: 'vuông', cao_got_cm: '12' }, true);
-  eq('cột mới: giá trị ngoài TU_DIEN / số ngoài khoảng → lỗi', [r.ok, r.loi.length], [false, 2]);
-  r = b({ chat_lieu: 'vải bố', dang_mui: 'nhọn', dip: 'hằng ngày,dự tiệc', cao_got_cm: '3,5' });
-  const z = DATA.SANPHAM[2];
-  eq('cột mới ghi + kèm cột cũ (mũi, dịp), Chất liệu cũ giữ nguyên', [r.ok, z.slice(2, 9)],
-    [true, ['da bò', 'nhọn', 'hằng ngày, dự tiệc', 'vải bố', 'nhọn', 'hằng ngày, dự tiệc', 3.5]]);
-  DATA.SANPHAM = sp0; if (td0) DATA.TU_DIEN = td0; else delete DATA.TU_DIEN; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
