@@ -311,9 +311,15 @@
      "so_ma": 0,
      "nguon": "ke_hoach",
      "gop_tu": []
+    },
+    {
+     "gia_tri": "có gót",
+     "so_ma": 0,
+     "nguon": "ke_hoach",
+     "gop_tu": []
     }
    ],
-   "ghi_chu": ""
+   "ghi_chu": "Giày nam chỉ dùng \"đế bằng\" / \"có gót\" + cao_got_cm (anh Kha 29/10)."
   },
   {
    "cot": "cao_got_cm",

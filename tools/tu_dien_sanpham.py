@@ -72,7 +72,7 @@ SO_TU = {'cao_got_cm': ('Phần dưới giày:', r'gót\s*(\d+(?:[.,]\d+)?)\s*cm
 # Giá trị trong danh sách kế hoạch 4.2 mà Sheet chưa có mã nào (Phân tích soát giữ / bỏ)
 KE_HOACH = {
     'gioi_tinh': ['unisex'], 'chat_lieu': ['da bò lộn', 'da heo'], 'kieu_dong': ['khoá cài', 'quai hậu'], 'kieu_quai': ['quai hậu', 'nhiều quai'],
-    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn'], 'lot_de': ['da heo', 'mút'], 'be_mat': ['lộn', 'bóng'], 'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'],
+    'dang_mui': ['hở mũi'], 'kieu_de': ['gót vuông', 'gót nhọn', 'đế độn', 'có gót'],  # có gót: giày nam (anh Kha 29/10) 'lot_de': ['da heo', 'mút'], 'be_mat': ['lộn', 'bóng'], 'co_giay': ['cổ thấp', 'cổ lửng', 'cổ cao'],
     'form': ['chuẩn', 'ôm', 'rộng ngang', 'nên lên 1 size', 'nên xuống 1 size'], 'dip': ['đi làm', 'cưới', 'dạo phố', 'du lịch'],
 }
 # Ghi chú cho Phân tích soát (chữ cũ chưa có chỗ ở cột mới, hoặc gộp có chọn)
