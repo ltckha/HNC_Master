@@ -33,7 +33,7 @@ KHONG_AP = {'kieu_giay_tay': lambda ng: not any(x in ng for x in CHI_GIAY_TAY),
             'kieu_quai': lambda ng: not ('dép' in ng or 'sandal' in ng)}
 
 
-CHO_ANH = {('MT288D', 'kieu_de'), ('MT291N', 'kieu_de'), ('MT289V', 'kieu_de')}  # Phân tích 29/10: chờ chụp ảnh, không điền máy
+CHO_ANH = set()  # 3 mã MT (kieu_de) dùng tên hàng "đế xuồng" — Phân tích 29/10
 
 
 def tu_ten(r, h):
