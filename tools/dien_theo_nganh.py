@@ -16,7 +16,7 @@ from tools.tu_dien_sanpham import OUT, SHEET_ID  # noqa: E402
 
 COT = ['gioi_tinh', 'chat_lieu', 'kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'chat_lieu_de', 'lot_trong', 'lot_de', 'be_mat', 'co_giay', 'dip']
 BO_QUA = ('do_om', 'chon_size', 'mau_phoi', 'kieu_giay_tay', 'cao_got_cm', 'tang_cao_cm')  # không áp (anh Kha 29/10)
-TI_LE, TOI_THIEU = 0.95, 15
+TI_LE, TOI_THIEU = 0.95, 20  # nâng 15 → 20 (anh Kha 29/10)
 # Cột cũ cùng ý có chữ mà không chuyển được (vd Mặt lót đế "mềm êm" — anh nói có loại mút, có loại cao su non) → để trống, không điền theo đa số
 COT_CU = {'dang_mui': ['Dáng giày mũi:'], 'chat_lieu': ['Chất liệu', 'Chất liệu quai:'], 'chat_lieu_de': ['Chất liệu đế:'],
           'lot_trong': ['Lót trong:'], 'lot_de': ['Mặt lót đế:']}
