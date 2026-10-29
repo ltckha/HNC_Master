@@ -6,7 +6,9 @@
   gd_b_don_ten.csv  — ô CHỮ (không phải công thức) có khoảng trắng thừa / ký tự ẩn / chữ sai: ma, cot, cu, moi, loi
   + 1 dòng đề xuất sửa công thức CON_NAME (TEXTJOIN bỏ ô trống → hết 2 khoảng trắng), số mã đổi tên.
 
-  venv/bin/python tools/tach_cot_sanpham.py [--sheet ID]
+  venv/bin/python tools/tach_cot_sanpham.py [--sheet ID]             # chạy thử, chỉ đọc
+  venv/bin/python tools/tach_cot_sanpham.py --ghi [--sheet ID]       # GHI 15 cột mới (anh Kha xác nhận 29/10)
+  venv/bin/python tools/tach_cot_sanpham.py --ghi-ten [--sheet ID]   # GHI công thức CON_NAME + dọn chữ (Sheet chính: chờ web "Lên")
 """
 import csv
 import os
@@ -82,8 +84,100 @@ def moi_tu_cu(cot_cu, chu):
     return out
 
 
+# 7 ô mơ hồ: Phân tích xem ảnh 29/10 (MT288D / MT291N / MT289V kieu_de để trống chờ ảnh)
+CHON_TAY = {('HE304D', 'dang_mui'): 'nhọn', ('HE308D', 'dang_mui'): 'tròn', ('HE312K', 'dang_mui'): 'nhọn', ('SX4N', 'dang_mui'): 'tròn'}
+
+
+def _mo(sid, ghi=False):
+    scope = 'https://www.googleapis.com/auth/spreadsheets' + ('' if ghi else '.readonly')
+    creds = Credentials.from_service_account_file(os.path.join(ROOT, 'credentials.json'), scopes=[scope])
+    return gspread.authorize(creds).open_by_key(sid).worksheet('SANPHAM')
+
+
+def ghi_cot_moi(sid):
+    """GHI THẬT 15 cột mới: chỉ ô 'dien' + CHON_TAY, đọc lại Sheet ngay trước khi ghi, ô cột mới đã có chữ thì giữ. Không đụng cột cũ.
+    1 lần ghi cả khối BA3:BO<n> (ô giữ nguyên ghi lại đúng giá trị đang có)."""
+    ws = _mo(sid, ghi=True)
+    sp = ws.get_all_values()
+    head = [h.strip() for h in sp[1]]
+    ic = head.index('product_code')
+    cot = [t for t, _, _ in COT_MOI]
+    thieu = [t for t in cot if t not in head]
+    if thieu:
+        raise RuntimeError(f'SANPHAM chưa có cột {thieu} — ghi GĐ A trước')
+    j0 = head.index(cot[0])
+    if [head[j0 + k] for k in range(len(cot))] != cot:
+        raise RuntimeError('15 cột mới không liền nhau đúng thứ tự — DỪNG')
+    khoi, dem = [], Counter()
+    for r in sp[2:]:
+        r = r + [''] * (len(head) - len(r))
+        hien = [r[j0 + k] for k in range(len(cot))]
+        ma = r[ic].strip().upper()
+        out = list(hien)
+        if ma:
+            for k, (ten, (moi, _, tt)) in enumerate(tach(r, head).items()):
+                if hien[k].strip():
+                    dem['giu'] += 1
+                    continue
+                if (ma, ten) in CHON_TAY:
+                    moi, tt = CHON_TAY[(ma, ten)], 'dien'
+                if tt == 'dien':
+                    out[k] = moi
+                    dem[ten] += 1
+        khoi.append(out)
+    L0 = gspread.utils.rowcol_to_a1(3, j0 + 1)
+    L1 = gspread.utils.rowcol_to_a1(2 + len(khoi), j0 + len(cot))
+    ws.update(range_name=f'{L0}:{L1}', values=khoi, value_input_option='RAW')
+    # Đọc lại đếm
+    lai = ws.get(f'{L0}:{L1}')
+    dl = Counter()
+    for r in lai:
+        for k, v in enumerate(r):
+            if str(v).strip():
+                dl[cot[k]] += 1
+    print(f'✅ Sheet {sid[:6]}…: ghi {sum(dem[t] for t in cot)} ô mới vào {L0}:{L1} (giữ {dem["giu"]} ô đã có)')
+    for t in cot:
+        print(f'  {t}: ghi {dem[t]} · đọc lại có chữ {dl[t]}')
+    return 0
+
+
+def ghi_ten(sid):
+    """GHI THẬT: CON_NAME =CONCATENATE(…) → =TEXTJOIN(" ";TRUE;…) (ô công thức) + dọn chữ theo don() (ô chữ, như gd_b_don_ten.csv)."""
+    ws = _mo(sid, ghi=True)
+    sp = ws.get_all_values()
+    fm = ws.get_all_values(value_render_option='FORMULA')
+    head = [h.strip() for h in sp[1]]
+    ic, cn = head.index('product_code'), head.index('CON_NAME')
+    het = head.index('content_path') if 'content_path' in head else len(head)
+    ds, dem = [], Counter()
+    for i in range(2, len(sp)):
+        if not sp[i][ic].strip():
+            continue
+        f0 = str(fm[i][cn]) if cn < len(fm[i]) else ''
+        m = re.fullmatch(r'=CONCATENATE\((.*)\)', f0.strip(), re.I)
+        if m:
+            refs = [x.strip() for x in m.group(1).split(';') if x.strip() != '" "']
+            ds.append({'range': gspread.utils.rowcol_to_a1(i + 1, cn + 1), 'values': [['=TEXTJOIN(" ";TRUE;' + ';'.join(refs) + ')']]})
+            dem['CON_NAME'] += 1
+        for j, v in enumerate(sp[i][:het]):
+            if not v or not head[j] or head[j] in ('CON_DES', 'product_description') or str(fm[i][j]).startswith('='):
+                continue
+            moi, loi = don(v)
+            if loi and moi != v:
+                ds.append({'range': gspread.utils.rowcol_to_a1(i + 1, j + 1), 'values': [[moi]]})
+                dem[head[j]] += 1
+    for k in range(0, len(ds), 500):
+        ws.batch_update(ds[k:k + 500], value_input_option='USER_ENTERED')
+    print(f'✅ Sheet {sid[:6]}…: {len(ds)} ô — {dict(dem)}')
+    return 0
+
+
 def main():
     sid = sys.argv[sys.argv.index('--sheet') + 1] if '--sheet' in sys.argv else SHEET_ID
+    if '--ghi' in sys.argv:
+        return ghi_cot_moi(sid)
+    if '--ghi-ten' in sys.argv:
+        return ghi_ten(sid)
     creds = Credentials.from_service_account_file(os.path.join(ROOT, 'credentials.json'),
                                                   scopes=['https://www.googleapis.com/auth/spreadsheets.readonly'])
     ws = gspread.authorize(creds).open_by_key(sid).worksheet('SANPHAM')
