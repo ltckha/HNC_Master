@@ -247,6 +247,25 @@ eq('action sai', ctx.handleExport_({ action: 'x', channel: 'shopee', kind: 'upda
   eq('unmark: xoá đúng ô tiktok_upload D4', [u.ok, u.written, u.da_go[0].gia_tri_cu, WRITES[w0] && WRITES[w0].cells, WRITES[w0] && WRITES[w0].v], [true, 1, 'Done - 2026-10-29 10:00', ['D4'], '']);
   eq('unmark: kenh sai', ux({ kenh: 'lazada', ma: ['TH2040N'], nguoi: 'ltckha@gmail.com' }).ok, false);
   DATA.SANPHAM[3][3] = v0; WRITES.length = w0; }
+{ // dat_lai_co_san (29/10): đặt lại cờ theo file Liên kết — chỉ Chủ, thử khô không ghi, ghi gom 1 lần, khôi phục từ cu
+  const dx = (b, dry) => ctx.handleExport_(Object.assign({ action: 'dat_lai_co_san', kenh: 'tiktok', nguoi: 'ltckha@gmail.com' }, b), !!dry);
+  const col = () => DATA.SANPHAM.slice(2).map(r => [r[1], r[3]]);
+  const snap = DATA.SANPHAM.map(r => r.slice()); const w0 = WRITES.length;
+  DATA.SANPHAM[3][3] = 'Done - 2026-10-01 09:00';
+  eq('dat_lai: không phải Chủ → từ chối', dx({ nguoi: 'nv@hn.vn', set: ['TH2040D'] }).ok, false);
+  eq('dat_lai: mã ở cả set lẫn unset → từ chối', dx({ set: ['TH2040D'], unset: ['th2040d'] }).ok, false);
+  let d = dx({ set: ['th2040d', 'CXED', 'KHONGCO'], unset: ['TH2040N'] }, true);
+  eq('dat_lai thử: đặt 2 (trống + cờ lỗi), gỡ 1, không ghi', [d.ok, d.so_dat, d.so_go, d.not_found, d.written, WRITES.length], [true, 2, 1, ['KHONGCO'], 0, w0]);
+  d = dx({ set: ['TH2040D', 'CXED'], unset: ['TH2040N'] });
+  const after = col();
+  const nRow = DATA.SANPHAM.length - 2; // mock setValues ghi nhận từng ô → 1 lần ghi cả cột = nRow ô
+  eq('dat_lai thật: 1 lần ghi cả cột D, Done / trống đúng mã', [WRITES.length - w0 === nRow && WRITES.slice(w0).every(w => w.cell[1] === 4), /^Done - /.test(after[0][1]), after[1][1], /^Done - /.test(after[2][1]), d.cu.length],
+    [true, true, '', true, 3]);
+  const d2 = dx({ set: ['TH2040D'] });
+  eq('dat_lai: ô đã Done giữ nguyên, không ghi', [d2.so_dat, d2.giu_nguyen, WRITES.length - w0], [0, 1, nRow]);
+  dx({ khoi_phuc: d.cu });
+  eq('dat_lai khôi phục: về đúng giá trị cũ', col().slice(0, 3).map(x => x[1]), ['', 'Done - 2026-10-01 09:00', 'Thiếu ảnh']);
+  DATA.SANPHAM = snap; WRITES.length = w0; vm.runInContext('MEMO={};', ctx); }
 const nW = WRITES.length;
 delete DATA.META;
 eq('chưa có tab META → báo lỗi, không ghi', [/chưa có tab META/.test(ex({ channel: 'tiktok', kind: 'update' }).error), WRITES.length], [true, nW]);

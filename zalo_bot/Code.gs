@@ -3895,20 +3895,86 @@ function xlsxReplaceRows_(xml, startRow, rows) {
 //  - update: ghi mốc "lần cập nhật tồn/giá gần nhất" vào tab META (key | value | updated_at), dòng key = shopee_last_update / tiktok_last_update.
 // Body: { action:"unmark_exported", kenh:"shopee"|"tiktok", ma:[…], nguoi:<email Chủ>, dry_run? } (anh Kha 29/10: lỡ đánh dấu khi huỷ lưu file)
 //  - xoá ô shopee_upload / tiktok_upload của các mã đó; chỉ Chủ (nguoi thuộc OWNER_EMAILS); ghi nhật ký.
+// Body: { action:"dat_lai_co_san", kenh, set:[mã], unset:[mã], nguoi:<email Chủ>, dry_run?, khoi_phuc?:[{ma, gia_tri}] } (anh Kha "làm" 29/10)
+//  - đặt lại cờ {kenh}_upload theo file Liên kết Seller Center: set = có trên sàn → "Done - <giờ>" (ô đã "Done…" giữ nguyên),
+//    unset = không có trên sàn → xoá ô. Ghi gom 1 lần cả cột. Trả cu:[{ma, gia_tri}] = ô cũ đã đổi; gửi lại cu làm khoi_phuc để hoàn tác.
 // =====================================================================
 
 const EXPORT_CHANNELS = ['shopee', 'tiktok'];
 const EXPORT_MAX_CODES = 3000;
+
+function exportOwner_(body) {
+  const nguoi = String(body.nguoi || body.seller || '').trim().toLowerCase();
+  const owners = String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(','))
+    .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  return nguoi && owners.indexOf(nguoi) !== -1 ? nguoi : '';
+}
+
+/** Đặt lại cờ {kenh}_upload theo danh sách mã có / không có trên sàn; chỉ Chủ; ghi gom 1 lần cả cột (theo tên cột). */
+function datLaiCoSan_(body, dryRun) {
+  const fail = msg => ({ ok: false, action: 'dat_lai_co_san', error: msg });
+  const kenh = String(body.kenh || body.channel || '').trim().toLowerCase();
+  if (EXPORT_CHANNELS.indexOf(kenh) === -1) return fail('kenh phải là shopee hoặc tiktok');
+  const nguoi = exportOwner_(body);
+  if (!nguoi) return fail('chỉ Chủ được đặt lại cờ sàn');
+  const norm = a => uniq_((Array.isArray(a) ? a : []).map(c => String(c || '').trim().toUpperCase()).filter(Boolean));
+  const khoiPhuc = Array.isArray(body.khoi_phuc) ? body.khoi_phuc.filter(x => x && String(x.ma || '').trim()) : null;
+  const setL = norm(body.set), unsetL = norm(body.unset);
+  if (!khoiPhuc && !setL.length && !unsetL.length) return fail('cần set / unset (hoặc khoi_phuc)');
+  if (setL.length > EXPORT_MAX_CODES || unsetL.length > EXPORT_MAX_CODES || (khoiPhuc && khoiPhuc.length > EXPORT_MAX_CODES)) return fail('tối đa ' + EXPORT_MAX_CODES + ' mã mỗi danh sách');
+  const trung = setL.filter(c => unsetL.indexOf(c) !== -1);
+  if (trung.length) return fail('mã vừa ở set vừa ở unset: ' + trung.slice(0, 10).join(', '));
+  const stamp = 'Done - ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const want = {}; // mã → giá trị mới
+  if (khoiPhuc) khoiPhuc.forEach(x => { want[String(x.ma).trim().toUpperCase()] = String(x.gia_tri === undefined || x.gia_tri === null ? '' : x.gia_tri); });
+  else { setL.forEach(c => { want[c] = stamp; }); unsetL.forEach(c => { want[c] = ''; }); }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const data = sheetValues_('SANPHAM');
+    let headerRow = -1;
+    for (let r = 0; r < Math.min(2, data.length); r++) {
+      if (data[r].map(h => String(h).trim()).indexOf('product_code') !== -1) { headerRow = r; break; }
+    }
+    if (headerRow === -1) throw new Error('Tab SANPHAM thiếu cột product_code');
+    const col = headerMap_(data[headerRow]);
+    const statusName = kenh + '_upload';
+    requireColumns_('SANPHAM', col, ['product_code', statusName]);
+    const found = {}, cu = [], dat = [], go = [];
+    const cot = [];
+    for (let r = headerRow + 1; r < data.length; r++) {
+      const c = String(data[r][col.product_code]).trim().toUpperCase();
+      const v = String(data[r][col[statusName]] === undefined ? '' : data[r][col[statusName]]).trim();
+      let moi = v;
+      if (c && Object.prototype.hasOwnProperty.call(want, c)) {
+        found[c] = true;
+        const w = want[c];
+        if (khoiPhuc) moi = w;
+        else if (w && !/^Done/i.test(v)) moi = w; // có trên sàn: ô trống / cờ lỗi → Done; đã Done giữ ngày cũ
+        else if (!w) moi = '';
+        if (moi !== v) { cu.push({ ma: c, gia_tri: v }); (moi ? dat : go).push(c); }
+      }
+      cot.push([moi]);
+    }
+    const n = dat.length + go.length;
+    if (!dryRun && n) getSheet_('SANPHAM').getRange(headerRow + 2, col[statusName] + 1, cot.length, 1).setValues(cot);
+    console.log('dat_lai_co_san ' + statusName + ' bởi ' + nguoi + (dryRun ? ' (thử)' : '') + (khoiPhuc ? ' khôi phục' : '') + ': đặt ' + dat.length + ', gỡ ' + go.length +
+      (n ? ' — ' + cu.slice(0, 50).map(x => x.ma + ' [' + (x.gia_tri || 'trống') + ']').join(', ') + (n > 50 ? ' …' : '') : ''));
+    return { ok: true, action: 'dat_lai_co_san', column: statusName, dry_run: dryRun, khoi_phuc: !!khoiPhuc, written: dryRun ? 0 : n,
+      so_dat: dat.length, so_go: go.length, vi_du_dat: dat.slice(0, 10), vi_du_go: go.slice(0, 10),
+      giu_nguyen: Object.keys(want).filter(c => found[c]).length - n, not_found: Object.keys(want).filter(c => !found[c]), cu };
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 /** Gỡ cờ đã đăng sàn (ô {kenh}_upload) cho các mã; chỉ Chủ. Đọc / ghi theo tên cột hàng tiêu đề SANPHAM. */
 function unmarkExported_(body, dryRun) {
   const fail = msg => ({ ok: false, action: 'unmark_exported', error: msg });
   const kenh = String(body.kenh || body.channel || '').trim().toLowerCase();
   if (EXPORT_CHANNELS.indexOf(kenh) === -1) return fail('kenh phải là shopee hoặc tiktok');
-  const nguoi = String(body.nguoi || body.seller || '').trim().toLowerCase();
-  const owners = String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS') || OWNER_EMAILS_DEFAULT.join(','))
-    .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-  if (!nguoi || owners.indexOf(nguoi) === -1) return fail('chỉ Chủ được gỡ đánh dấu đã đăng sàn');
+  const nguoi = exportOwner_(body);
+  if (!nguoi) return fail('chỉ Chủ được gỡ đánh dấu đã đăng sàn');
   const src = Array.isArray(body.ma) ? body.ma : (Array.isArray(body.codes) ? body.codes : []);
   const codes = uniq_(src.map(c => String(c || '').trim().toUpperCase()).filter(Boolean));
   if (!codes.length || codes.length > EXPORT_MAX_CODES) return fail('ma phải có 1-' + EXPORT_MAX_CODES + ' mã');
@@ -3975,6 +4041,7 @@ function handleExport_(body, dryRun) {
   const channel = String(body.channel || '').trim().toLowerCase();
   const kind = String(body.kind || '').trim().toLowerCase();
   if (body.action === 'unmark_exported') return unmarkExported_(body, dryRun);
+  if (body.action === 'dat_lai_co_san') return datLaiCoSan_(body, dryRun);
   if (body.action !== 'mark_exported') return { ok: false, error: 'action phải là "mark_exported" hoặc "unmark_exported"' };
   if (EXPORT_CHANNELS.indexOf(channel) === -1) return { ok: false, error: 'channel phải là shopee hoặc tiktok' };
   if (kind !== 'upload' && kind !== 'update') return { ok: false, error: 'kind phải là upload hoặc update' };

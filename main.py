@@ -4176,6 +4176,7 @@ def print_submenu_shopee():
   [1] 🛒 Xuất File Đăng Hàng Hoá Mới (Shopee Mass Upload)
   [2] ⚡ Xuất File Cập Nhật Giá Bán / Tồn Kho (Shopee Mass Update)
   [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
+  [4] 🔁 Đối chiếu cờ theo file Liên kết (file Cập nhật hàng loạt tải từ Seller Center)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4193,6 +4194,7 @@ def print_submenu_tiktok():
   [1] 🎵 Xuất File Đăng Hàng Hoá Mới (TikTok Mass Upload - 38 Cột chuẩn)
   [2] ⚡ Xuất File Cập Nhật (TikTok Mass Update: Giá Bán, Tồn Kho hoặc Tất cả)
   [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
+  [4] 🔁 Đối chiếu cờ theo file Liên kết (file Cập nhật hàng loạt tải từ Seller Center)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4269,6 +4271,49 @@ def unmark_upload(loader, kenh):
     print(f"✅ Đã bỏ đánh dấu {len(rows)} ô {cot}." if ok else "❌ Chưa ghi được — xem lỗi phía trên.")
 
 
+def doi_chieu_co_san(loader, kenh):
+    """Đặt lại cờ shopee_upload / tiktok_upload theo file Liên kết Seller Center (tools/lien_ket_san.py) — cùng luật web + bot dat_lai_co_san (29/10, luật 15)."""
+    from tools import lien_ket_san
+    cot = f"{kenh}_upload"
+    path = input(f"Kéo file Liên kết / Cập nhật hàng loạt {kenh} (.xlsx / .csv) vào đây rồi Enter: ").strip().strip("'\"").replace('\\ ', ' ')
+    if not path or not os.path.isfile(path):
+        print("❌ Không thấy file.")
+        return
+    df_raw, _ = loader.load_sheet('SANPHAM')
+    var_row_idx, col_map = DynamicHeaderScanner.scan_data_headers(df_raw)
+    if 'product_code' not in col_map or cot not in col_map:
+        print(f"❌ SANPHAM thiếu cột product_code hoặc {cot} — không ghi.")
+        return
+    ip, ic = col_map['product_code'], col_map[cot]
+    start = (var_row_idx + 1) if var_row_idx is not None else 2
+    hang = {}
+    for i in range(start, len(df_raw)):
+        code = str(df_raw.iloc[i][ip]).strip().upper()
+        if code:
+            hang[code] = (i, str(df_raw.iloc[i][ic]).strip() if ic < len(df_raw.columns) else '')
+    try:
+        co, n, sai = lien_ket_san.ma_tren_san(kenh, lien_ket_san.doc_file(path, kenh), list(hang))
+    except ValueError as e:
+        print(f"❌ {e}. Không ghi gì.")
+        return
+    dat, go = lien_ket_san.doi_chieu(co, {c: v for c, (_, v) in hang.items()})
+    print(f"{n} dòng có mã sàn → {len(co)} mã khớp · {len(sai)} SKU không khớp · Sheet đang ghi {sum(1 for _, v in hang.values() if v)} mã")
+    print(f"  Đặt Done {len(dat)}: {', '.join(dat[:10])}{' …' if len(dat) > 10 else ''}")
+    print(f"  Gỡ cờ {len(go)}: {', '.join(go[:10])}{' …' if len(go) > 10 else ''}")
+    if not dat and not go:
+        print("✅ Cờ Sheet đã khớp sàn.")
+        return
+    if input("Gõ y để ghi (Enter = thôi): ").strip().lower() != 'y' or input(f"Ghi {len(dat) + len(go)} ô {cot}? Gõ y lần nữa: ").strip().lower() != 'y':
+        print("ℹ️ Chưa ghi gì.")
+        return
+    cu_path = os.path.join(EXPORT_DIR, f"DAT_LAI_CO_{kenh.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_cu.csv")
+    pd.DataFrame([{'ma': c, 'gia_tri': hang[c][1]} for c in dat + go]).to_csv(cu_path, index=False)
+    stamp = f"Done - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    rows = [hang[c][0] for c in dat] + [hang[c][0] for c in go]
+    ok = loader.update_status('SANPHAM', rows, ic, [stamp] * len(dat) + [''] * len(go))
+    print(f"✅ Đã đặt {len(dat)}, gỡ {len(go)} ô {cot}. Bản cờ cũ (để hoàn tác): {cu_path}" if ok else "❌ Chưa ghi được — xem lỗi phía trên.")
+
+
 def handle_submenu_website(loader):
     """Xử lý điều hướng trong Sub-menu Website Hải Nancy"""
     while True:
@@ -4306,9 +4351,9 @@ def handle_submenu_shopee(loader):
         print_submenu_shopee()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-3][/bold yellow]", default="0")
+            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-4][/bold yellow]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ Shopee [0-3]: ").strip()
+            sub_choice = input("Mời chọn tác vụ Shopee [0-4]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4318,6 +4363,8 @@ def handle_submenu_shopee(loader):
             process_export_task(6, loader)
         elif sub_choice == "3":
             unmark_upload(loader, 'shopee')
+        elif sub_choice == "4":
+            doi_chieu_co_san(loader, 'shopee')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
@@ -4332,9 +4379,9 @@ def handle_submenu_tiktok(loader):
         print_submenu_tiktok()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-3][/bold magenta]", default="0")
+            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-4][/bold magenta]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ TikTok [0-3]: ").strip()
+            sub_choice = input("Mời chọn tác vụ TikTok [0-4]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4344,6 +4391,8 @@ def handle_submenu_tiktok(loader):
             process_export_task(7, loader)
         elif sub_choice == "3":
             unmark_upload(loader, 'tiktok')
+        elif sub_choice == "4":
+            doi_chieu_co_san(loader, 'tiktok')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
