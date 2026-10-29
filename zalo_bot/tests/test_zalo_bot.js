@@ -1349,7 +1349,16 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('tra tồn vẫn chạy', /TH2040D/.test(t('TH2040D 40')) && !/admin\/app/.test(t('TH2040D 40')), true);
   const m = t('menu');
   eq('menu gọn: không có 3 / 6, có link app', [/\n3 /.test(m), /\n6 /.test(m), /admin\/app#kho/.test(m)], [false, false, true]);
-  eq('menu 6 → link #don', /#don/.test(t('6')), true);
+  eq('menu gọn @45: chỉ 1 / 9 / 0 (NV), không 2 / 4 / 5 / 8', [/\n1 Kiểm/.test(m), /\n9 /.test(m), /\n0 /.test(m), /\n[2458] /.test(m)], [true, true, true, false]);
+  t('menu'); eq('menu → 6 (đã bỏ) → menu lại', /MENU HNC/.test(t('6')), true);
+  t('menu'); eq('menu → 2 (NV) → khoá', /chỉ Chủ/.test(t('2')), true);
+  t('menu'); eq('menu → 8 (đã bỏ) → menu lại', /MENU HNC/.test(t('8')), true);
+  t('menu'); eq('menu → 9 → hướng dẫn gọn', /BOT KHO HNC/.test(t('9')) && !/bc hom qua/.test(t('menu') && t('9')), true);
+  { const o = PROPS.OWNER_CHAT_ID; PROPS.OWNER_CHAT_ID = 'chat-chu'; const mo = ctx.handleText_('menu', false, 'chat-chu', 'Chủ');
+    eq('menu gọn Chủ: có 2 Hoá đơn, không 4 / 5', [/\n2 Hoá đơn/.test(mo), /\n[45] /.test(mo)], [true, false]);
+    eq('Chủ 2 → hoá đơn', /hoá đơn|Hoá đơn|HOÁ ĐƠN/.test(ctx.handleText_('2', false, 'chat-chu', 'Chủ')), true);
+    PROPS.OWNER_CHAT_ID = o; }
+  eq('bc → link trang quản lý, không chạy báo cáo', /giayhainancy\.vn\/admin\n/.test(t('bc')), true);
   eq('du phong → menu Mac', /máy Mac/.test(t('du phong')), true);
   PROPS.ZALO_GHI_SO = '1'; delete PROPS.SYNC_HINT_URL; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
