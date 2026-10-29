@@ -11,7 +11,7 @@ const DATA = {
   KHOY3C: kho('Y3C', [['TH2040D', 'Đen', 40, 1, 1, 'B1'], ['TH2040D', 'Đen', 41, 2, 2, 'B1'], ['TH2040N', 'Nâu', 40, 1, 1, ''],
     ['CXED', 'Đen', 40, 1, 1, ''], ['T1D', 'Đen', 39, 1, 1, ''], ['AROMAX60T', 'Trắng', '', 5, 5, '']]),
 };
-const PROPS = {};
+const PROPS = { ZALO_GHI_SO: '1' }; // ca cũ chạy lệnh Zalo ghi sổ; ca gọn bot (cuối file) tắt cờ
 const WRITES = [];
 DATA.SANPHAM = [['Mã hàng hóa cha', '', '', '', '', '', ''], ['parent_product_code', 'product_code', 'shopee_upload', 'tiktok_upload', 'supplier', 'invoice_price', 'CON_NAME'],
   ['TH2040', 'TH2040D', '', '', 'Tuấn Phong', '500000', 'Giày tây TH2040D'], ['TH2040', 'TH2040N', 'Done', '', 'Tuấn Phong', '500.000 đ', 'Giày tây TH2040N'],
@@ -1334,5 +1334,23 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('mã mới: CON_DES = công thức gần nhất (A2), dòng A3 giữ mô tả đã duyệt', [op.row, DATA.SANPHAM[5][3], DATA.SANPHAM[5][4], DATA.SANPHAM[4][3]],
     [6, '=CONCATENATE(R[0]C[-3])', '=R[0]C[-1]', 'Mô tả đã duyệt A3']);
   DATA.SANPHAM = sp0; vm.runInContext('MEMO={};', ctx); }
+{ // Gọn bot 29/10: tắt ghi sổ qua Zalo → lệnh ghi trả link app, không ghi Sheet; tra tồn / báo cáo / menu gọn vẫn chạy
+  delete PROPS.ZALO_GHI_SO; PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint'; vm.runInContext('MEMO={};', ctx);
+  const nBan = DATA.BAN.length, nNhap = DATA.NHAP.length, nXuat = DATA.XUAT.length;
+  const t = s => ctx.handleText_(s, false, 'chat-staff', 'NV');
+  eq('ban → link #ban, không ghi', [/admin\/app#ban/.test(t('ban TH2040D 40 YEN 800k')), DATA.BAN.length], [true, nBan]);
+  eq('nhap tra hang → #kho-tra', /#kho-tra$/m.test(t('nhap TH2040D 40 15E tra hang').split('\n')[0]), true);
+  eq('nhap → #kho-nhap', /#kho-nhap/.test(t('nhap TH2040D 40 15E')), true);
+  eq('xuat → #kho-tra-ncc', /#kho-tra-ncc/.test(t('xuat TH2040D 41 15E')), true);
+  eq('chuyen kho → #kho-chuyen', /#kho-chuyen/.test(t('chuyen kho TH2040D 40 tu YEN den TBH')), true);
+  eq('huy → #don', /#don/.test(t('huy')), true);
+  eq('nhiều dòng ban → link, không ghi', [/admin\/app#ban/.test(t('ban TH2040D 40 YEN 800k\nban TH2040N 41 YEN 800k')), DATA.BAN.length, DATA.NHAP.length, DATA.XUAT.length],
+    [true, nBan, nNhap, nXuat]);
+  eq('tra tồn vẫn chạy', /TH2040D/.test(t('TH2040D 40')) && !/admin\/app/.test(t('TH2040D 40')), true);
+  const m = t('menu');
+  eq('menu gọn: không có 3 / 6, có link app', [/\n3 /.test(m), /\n6 /.test(m), /admin\/app#kho/.test(m)], [false, false, true]);
+  eq('menu 6 → link #don', /#don/.test(t('6')), true);
+  eq('du phong → menu Mac', /máy Mac/.test(t('du phong')), true);
+  PROPS.ZALO_GHI_SO = '1'; delete PROPS.SYNC_HINT_URL; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

@@ -169,6 +169,8 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
       const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const cmdLines = lines.filter(isBatchCommandLine_);
+      const goc = zaloGhiSoLink_(text, cmdLines); // gọn bot 29/10: lệnh ghi sổ → link màn app
+      if (goc) return { reply: goc, syncTabs: [] };
       const isWriteCmd = cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
       if (isWriteCmd && !dryRun) { const blk = choChepBlock_(); if (blk) return { reply: '⏳ ' + blk + '\nNhắn số: 9 Menu', syncTabs: [] }; }
       const STOCK_ZALO = [ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC];
@@ -216,7 +218,7 @@ function runOne_(text, dryRun, chatId) {
   const p = parseMessage_(text, knownCodes_());
   let res;
   switch (p.action) {
-    case ACTIONS.HELP: res = { text: HELP_TEXT + '\n\nNhắn số: 9 Menu' }; break;
+    case ACTIONS.HELP: res = { text: (zaloGhiSo_() ? HELP_TEXT : HELP_GON_TEXT) + '\n\nNhắn số: 9 Menu' }; break;
     case ACTIONS.CHECK: res = !p.code && !p.baseCode ? { text: '🤔 Mình chưa hiểu tin này.\n\n' + navMenu_(chatId) } : doCheck_(p); break;
     case ACTIONS.REPORT: res = doReport_(p); break;
     case ACTIONS.INVOICE: res = navIsOwner_(chatId) ? doInvoice_(p.text, dryRun) : { text: '🔒 Hoá đơn mua hàng chỉ Chủ xem / ghi.' }; break;
@@ -552,6 +554,38 @@ const DU_PHONG_TEXT = [
   'Web chạy lại thì quay về app; đừng ghi 1 đơn ở cả 2 nơi.',
 ].join('\n');
 const NAV_FOOT = '0 Để sau · 9 Menu';
+const DU_PHONG_GON_TEXT = [
+  '🛟 DỰ PHÒNG — web / app lỗi:',
+  '💻 Bán / nhập / xuất / in tem: dùng menu trên máy Mac (run.command).',
+  '🔎 Kiểm tồn kho vẫn hỏi bot: menu → 1 → gõ mã.',
+  'Cần ghi sổ qua Zalo thì báo anh Kha bật lại.',
+].join('\n');
+const HELP_GON_TEXT = [
+  '📖 BOT KHO HNC',
+  '🔎 Kiểm tồn kho: TH2040D 40 (mã + size)  |  TH2040 (mẫu, mọi màu)',
+  '📊 Báo cáo đơn hàng: bc  |  bc hom qua  |  bc 10/10',
+  '🧾 Hoá đơn mua hàng (Chủ): hoadon  |  hoadon <mã phiếu>',
+  '📱 Bán / nhập / xuất / chuyển kho / trả hàng / huỷ: làm trên app ' + 'giayhainancy.vn/admin/app',
+].join('\n');
+
+// Gọn bot (anh Kha 29/10): lệnh chữ ghi sổ (bán / nhập / xuất / chuyển kho / chuyển vị trí / trả hàng / huỷ) không chạy qua Zalo nữa,
+// bot trả link màn app. Dự phòng khi web hỏng = menu Mac (main.py). Bật lại lệnh Zalo không cần deploy: Script Property ZALO_GHI_SO = 1.
+const APP_MAN = { BÁN: 'ban', NHẬP: 'kho-nhap', TRA: 'kho-tra', XUẤT: 'kho-tra-ncc', 'CHUYỂN KHO': 'kho-chuyen', 'CHUYỂN VỊ TRÍ': 'kho-vi-tri', HUỶ: 'don' };
+function zaloGhiSo_() {
+  return String(PropertiesService.getScriptProperties().getProperty('ZALO_GHI_SO') || '').trim() === '1';
+}
+function appLink_(man) {
+  return (webOrigin_() || 'https://giayhainancy.vn') + '/admin/app#' + man;
+}
+/** Tin là lệnh ghi sổ và Zalo đang tắt ghi sổ → câu trả lời 1 dòng có link app; không phải → null. */
+function zaloGhiSoLink_(text, cmdLines) {
+  if (zaloGhiSo_()) return null;
+  const p = parseMessage_(cmdLines.length ? cmdLines[0] : text, knownCodes_());
+  const ghi = [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC, ACTIONS.UNDO];
+  if (!cmdLines.length && ghi.indexOf(p.action) === -1) return null;
+  const man = APP_MAN[p.action === ACTIONS.IN && p.returnGoods ? 'TRA' : p.action] || 'kho';
+  return '📱 Lệnh này nay làm trên app: ' + appLink_(man) + '\nNhắn số: 9 Menu';
+}
 
 function navIsOwner_(chatId) {
   const o = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID') || '';
@@ -617,9 +651,12 @@ function navMenu_(chatId) {
   if (owner) {
     let c = { pn: '?', hd: '?', bs: '?' };
     try { c = navCounts_(); } catch (err) { console.error(err && err.stack ? err.stack : err); }
-    lines.push('3 Phiếu nhập kho chờ chia (' + c.pn + ')', '4 Hoá đơn mua hàng chưa có (' + c.hd + ')', '5 Mã cần bổ sung (' + c.bs + ')');
+    if (zaloGhiSo_()) lines.push('3 Phiếu nhập kho chờ chia (' + c.pn + ')');
+    lines.push('4 Hoá đơn mua hàng chưa có (' + c.hd + ')', '5 Mã cần bổ sung (' + c.bs + ')');
   }
-  lines.push('6 Huỷ lệnh vừa rồi / đơn hàng', '8 Dự phòng (web / app lỗi)', '9 Hướng dẫn lệnh chữ', '0 Để sau', '(Lệnh chữ cũ vẫn dùng được: ban / nhap / xuat / chuyen kho / bc / hoadon…)');
+  if (zaloGhiSo_()) lines.push('6 Huỷ lệnh vừa rồi / đơn hàng');
+  lines.push('8 Dự phòng (web / app lỗi)', '9 Hướng dẫn', '0 Để sau', zaloGhiSo_() ? '(Lệnh chữ cũ vẫn dùng được: ban / nhap / xuat / chuyen kho / bc / hoadon…)'
+    : '(Bán / nhập / xuất / chuyển kho / huỷ làm trên app: ' + appLink_('kho') + ')');
   navSetAsk_(chatId, 'menu', {});
   return lines.join('\n');
 }
@@ -633,7 +670,7 @@ function webOrigin_() {
 function navHandle_(text, chatId, dryRun) {
   const t = String(text || '').trim().toLowerCase();
   if (t === 'menu' || t === 'm') return { text: navMenu_(chatId) };
-  if (/^(du\s*phong|dự\s*phòng)$/.test(t)) return { text: DU_PHONG_TEXT + '\nNhắn số: 9 Menu' };
+  if (/^(du\s*phong|dự\s*phòng)$/.test(t)) return { text: (zaloGhiSo_() ? DU_PHONG_TEXT : DU_PHONG_GON_TEXT) + '\nNhắn số: 9 Menu' };
   if (/^(che\s*do|chế\s*độ)$/.test(t)) return navCheDo_(chatId);
   if (/^(thu\s*web|thử\s*web)$/.test(t)) return navThuWeb_(chatId);
   if (!/^\d$/.test(t)) {
@@ -677,6 +714,10 @@ function navHandle_(text, chatId, dryRun) {
 
 function navMenuPick_(n, chatId, owner) {
   if ([3, 4, 5].indexOf(n) !== -1 && !owner) return { text: '🔒 Mục này chỉ Chủ dùng.\n\n' + navMenu_(chatId) };
+  if (!zaloGhiSo_() && n === 3) { navClearAsk_(chatId); return { text: '📄 Phiếu nhập kho làm trên app: ' + appLink_('phieu') + '\nNhắn số: 9 Menu' }; }
+  if (!zaloGhiSo_() && n === 6) { navClearAsk_(chatId); return { text: '❌ Huỷ đơn / phiếu làm trên app: ' + appLink_('don') + '\nNhắn số: 9 Menu' }; }
+  if (!zaloGhiSo_() && n === 9) { navClearAsk_(chatId); return { text: HELP_GON_TEXT + '\n\nNhắn số: 9 Menu' }; }
+  if (!zaloGhiSo_() && n === 8) { navClearAsk_(chatId); return { text: DU_PHONG_GON_TEXT + '\nNhắn số: 9 Menu' }; }
   switch (n) {
     case 1: navSetAsk_(chatId, 'check', {}); return { text: '🔎 Gõ mã cần kiểm tồn kho (vd TH2040D, hoặc mẫu TH2040 để xem mọi màu). Kèm size nếu cần: TH2040D 40\nNhắn số: ' + NAV_FOOT };
     case 2: navSetAsk_(chatId, 'report', {}); return { text: '📊 Báo cáo đơn hàng:\nNhắn số: 1 Hôm nay · 2 Hôm qua · 3 Tuần này · ' + NAV_FOOT };
