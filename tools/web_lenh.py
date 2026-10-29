@@ -20,7 +20,7 @@ THUOC_TINH = ('Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Giới 
               'Chất liệu đế:', 'Lót trong:', 'Mặt lót đế:', 'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:')
 # Bộ chuẩn SANPHAM 29/10: 15 cột mới (web SP_MOI_COT, beta 6c58bba — bản chính chờ anh "Lên")
 SP_MOI_COT = ('gioi_tinh', 'chat_lieu', 'kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'cao_got_cm', 'tang_cao_cm', 'chat_lieu_de',
-              'lot_trong', 'lot_de', 'be_mat', 'co_giay', 'do_om', 'dip', 'chon_size', 'kieu_giay_tay')  # form → do_om + chon_size, kieu_giay_tay (29/10)
+              'lot_trong', 'lot_de', 'be_mat', 'co_giay', 'do_om', 'dip', 'chon_size', 'kieu_giay_tay', 'mau_phoi')  # form → do_om + chon_size, kieu_giay_tay, mau_phoi (29/10)
 CO_SP_COLS = set(('shopee_upload', 'tiktok_upload', 'misa_upload', 'web_upload', 'web_url', 'get_images', 'content_path', 'content_url',
                   'content_files') + tuple(f'image_{i:02d}' for i in range(1, 11)) + THUOC_TINH + SP_MOI_COT)
 CO_SP_MAX = 200
