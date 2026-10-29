@@ -1,6 +1,6 @@
 """Ô trống ở cột mới (bộ chuẩn SANPHAM) — gom nhóm để anh Kha TỰ CHỌN theo nhóm (anh Kha 29/10: không dùng máy đoán).
 CHẠY THỬ (chỉ đọc Sheet). Chỉ mã giày / dép CÒN HÀNG (current_quantity > 0 ở KHO15E hoặc KHOY3C, theo Sheet), gom theo ngành + NCC + mẫu cha;
-nhóm < 3 mã gộp vào nhóm ngành + NCC. Cột chỉ áp cho 1 loại thì bỏ loại khác (ADP). Gợi ý = giá trị các mã cùng ngành + NCC đã có ở cột đó.
+nhóm < 3 mã gộp vào nhóm ngành + NCC. Ô chỉ tính trống khi cột mới, cột cũ cùng ý (COT_CU) và tên hàng (tools/tu_ten.py) đều không nói ra. Cột chỉ áp cho 1 loại thì bỏ loại khác (ADP). Gợi ý = giá trị các mã cùng ngành + NCC đã có ở cột đó.
 → docs/sanpham_chuan/nhom_trong.csv (cot, nhom, nganh, ncc (nội bộ), so_ma, so_mau_cha, ma_vi_du, goi_y) + bảng đếm theo cột.
 
   venv/bin/python tools/nhom_trong.py [--sheet ID]
@@ -15,6 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from tools.tach_cot_sanpham import _mo  # noqa: E402
 from tools.tu_dien_sanpham import OUT, SHEET_ID  # noqa: E402
+from tools.tu_ten import tu_ten  # noqa: E402
 
 COT = ['kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'cao_got_cm', 'tang_cao_cm', 'chat_lieu', 'chat_lieu_de', 'lot_trong', 'lot_de',
        'be_mat', 'co_giay', 'kieu_giay_tay', 'do_om', 'chon_size']
@@ -26,6 +27,9 @@ ADP = {  # cột → điều kiện áp (ngành, kieu_de)
     'tang_cao_cm': lambda ng, kd: 'tăng chiều cao' in ng.lower(),
 }
 NHO = 3
+# Cột cũ cùng ý (chỉ cột 1 ý; "Đặc điểm" / "Nhấn mạnh" nhiều ý nên không tính): có chữ → ô KHÔNG tính là trống (anh Kha 29/10)
+COT_CU = {'dang_mui': ['Dáng giày mũi:'], 'chat_lieu': ['Chất liệu', 'Chất liệu quai:'], 'chat_lieu_de': ['Chất liệu đế:'],
+          'lot_trong': ['Lót trong:'], 'lot_de': ['Mặt lót đế:']}
 
 
 def ton(ss):
@@ -59,7 +63,8 @@ def main():
             if g(r, c):
                 for v in [x.strip() for x in g(r, c).split(',') if x.strip()]:
                     goi_y[(g(r, 'Tên Ngành Hàng'), g(r, 'supplier'))][v] += 1
-        trong = [r for r in con if not g(r, c) and ADP.get(c, lambda ng, kd: True)(g(r, 'Tên Ngành Hàng'), g(r, 'kieu_de'))]
+        trong = [r for r in con if not g(r, c) and ADP.get(c, lambda ng, kd: True)(g(r, 'Tên Ngành Hàng'), g(r, 'kieu_de'))
+                 and not any(g(r, cu) for cu in COT_CU.get(c, [])) and c not in tu_ten(r, h)]
         to = defaultdict(list)
         for r in trong:
             to[(g(r, 'Tên Ngành Hàng'), g(r, 'supplier'), cha(r))].append(r)
