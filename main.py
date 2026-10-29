@@ -3896,7 +3896,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_usage is not None: row_values[idx_usage] = data.get('usage', 'hằng ngày, dự tiệc...')
             if idx_bonus is not None: row_values[idx_bonus] = ""
             if idx_countif is not None and idx_countif < num_sp_cols: row_values[idx_countif] = f'=countif(${c_code}:${c_code};{c_code}{cur_sp_row})'
-            if idx_con_name is not None: row_values[idx_con_name] = f'=CONCATENATE({c_cat}{cur_sp_row};" ";{c_feat}{cur_sp_row};" ";{c_brand}{cur_sp_row};" ";{c_mat}{cur_sp_row};" ";{c_hl}{cur_sp_row};" ";{c_code}{cur_sp_row})'
+            if idx_con_name is not None: row_values[idx_con_name] = f'=TEXTJOIN(" ";TRUE;{c_cat}{cur_sp_row};{c_feat}{cur_sp_row};{c_brand}{cur_sp_row};{c_mat}{cur_sp_row};{c_hl}{cur_sp_row};{c_code}{cur_sp_row})'  # bỏ ô trống (bộ chuẩn 29/10, khớp web ghepTen)
             if idx_con_des is not None: row_values[idx_con_des] = f'=CONCATENATE({c_con_name}{cur_sp_row};". ";${c_strap}$2;{c_strap}{cur_sp_row};". ";${c_sole}$2;{c_sole}{cur_sp_row};". ";${c_lining}$2;{c_lining}{cur_sp_row};". ";${c_insole}$2;{c_insole}{cur_sp_row};". ";${c_toe}$2;{c_toe}{cur_sp_row};". ";${c_bottom}$2;{c_bottom}{cur_sp_row};". ";${c_outfit}$2;{c_outfit}{cur_sp_row};". ";${c_usage}$2;{c_usage}{cur_sp_row};". ";{c_bonus}{cur_sp_row})'
             if idx_code is not None: row_values[idx_code] = data.get('product_code', '')
             if idx_name is not None: row_values[idx_name] = f'={c_con_name}{cur_sp_row}'

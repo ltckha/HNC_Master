@@ -395,6 +395,7 @@ def cmd_apply(args):
             cj = col_index(head, ten)
             if cj is not None and not (sp[ri - 1][cj].strip() if cj < len(sp[ri - 1]) else ""):
                 updates_moi.append({"range": gspread.utils.rowcol_to_a1(ri, cj + 1), "values": [[v]]})
+                doi[r["product_code"].strip().upper()][ten] = v
     print(f"Sẽ ghi {len(updates)} ô" + (f" (+ {len(updates_moi)} ô cột mới)" if updates_moi else "") + (f"; bỏ qua {dict(skipped)}" if skipped else ""))
     if args.dry_run or not updates:
         return
@@ -408,7 +409,7 @@ def cmd_apply(args):
                 sys.exit(f"❌ {w.get('error')} — chưa ghi gì vào Sheet (web giữ thuộc tính).")
             print(f"✅ Đã gửi {len(updates)} ô ({len(doi)} mã) lên web (co_sp) — web tự chép SANPHAM.")
             return
-    updates += updates_moi  # web Dự phòng / sổ ở Sheet: ghi cả cột mới (đường web: co_sp chưa nhận cột mới — chờ Web)
+    updates += updates_moi  # ghi cả cột mới (đường web: gửi cùng co_sp ở trên)
     for i in range(0, len(updates), 200):
         ws.batch_update(updates[i:i + 200])
         time.sleep(1)
