@@ -7,7 +7,8 @@ Giá trị lấy từ chữ đang có trong SANPHAM / SUB, gộp cách ghi cùng
 Giá trị "ke_hoach" = có trong danh sách kế hoạch 4.2 nhưng Sheet chưa có mã nào — Phân tích soát giữ / bỏ.
 Bảng GOP dùng lại ở GĐ B (tách cột cũ sang cột mới).
 
-  venv/bin/python tools/tu_dien_sanpham.py
+  venv/bin/python tools/tu_dien_sanpham.py          # chỉ soạn file
+  venv/bin/python tools/tu_dien_sanpham.py --ghi    # GHI THẬT (anh Kha xác nhận 29/10)
 """
 import csv
 import json
@@ -178,7 +179,58 @@ def ghi(tu_dien, head, hang1, so_ma):
             w.writerow([L, nhan, ten, kt])
 
 
+def ghi_sheet():
+    """Ghi THẬT theo docs/sanpham_chuan/tu_dien.json (bản đã soát): tab TU_DIEN + tiêu đề cột mới ở cuối SANPHAM + kiểm tra ô.
+    Ô dữ liệu cột mới để trống (GĐ B). Dừng nếu SANPHAM không còn đúng 52 cột / ô đích đã có chữ / tab TU_DIEN đã có dữ liệu."""
+    td = json.load(open(os.path.join(OUT, 'tu_dien.json'), encoding='utf-8'))['cot']
+    if [c['cot'] for c in td] != [c for c, _, _ in COT_MOI]:
+        raise RuntimeError('tu_dien.json khác COT_MOI — chạy lại bản soạn trước')
+    creds = Credentials.from_service_account_file(os.path.join(ROOT, 'credentials.json'), scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    sh = gspread.authorize(creds).open_by_key(SHEET_ID)
+    ws = sh.worksheet('SANPHAM')
+    head = [h.strip() for h in ws.row_values(2)]
+    dau = len(head) + 1  # cột đầu tiên còn trống ở hàng 2
+    if set(head) & {c['cot'] for c in td}:
+        raise RuntimeError('SANPHAM đã có cột mới — DỪNG')
+    print(f'Sheet {SHEET_ID[:6]}…: SANPHAM {len(head)} cột → ghi từ cột {dau}')
+    L0, L1 = rowcol_to_a1(1, dau).rstrip('1'), rowcol_to_a1(1, dau + len(td) - 1).rstrip('1')
+    if ws.col_count < dau + len(td) - 1:
+        ws.add_cols(dau + len(td) - 1 - ws.col_count)
+    if any(x for r in ws.get(f'{L0}1:{L1}{ws.row_count}') for x in r):
+        raise RuntimeError(f'SANPHAM {L0}:{L1} đã có chữ — DỪNG')
+    ds = [c for c in td if c['kieu'] != 'so']
+    if 'TU_DIEN' in [w.title for w in sh.worksheets()]:
+        tdw = sh.worksheet('TU_DIEN')
+        if any(x for r in tdw.get_all_values() for x in r):
+            raise RuntimeError('Tab TU_DIEN đã có dữ liệu — DỪNG')
+    else:
+        tdw = sh.add_worksheet('TU_DIEN', rows=50, cols=len(ds))
+    cao = max(len(c['gia_tri']) for c in ds)
+    luoi = [[c['cot'] for c in ds], [c['nhan'] for c in ds]] + \
+           [[str(c['gia_tri'][i]['gia_tri']) if i < len(c['gia_tri']) else '' for c in ds] for i in range(cao)]
+    tdw.update(range_name='A1', values=luoi, value_input_option='RAW')
+    ws.update(range_name=f'{L0}1:{L1}2', values=[[c['nhan'] for c in td], [c['cot'] for c in td]], value_input_option='RAW')
+    cot_td = {c['cot']: rowcol_to_a1(1, i + 1).rstrip('1') for i, c in enumerate(ds)}
+    reqs = []
+    for i, c in enumerate(td):
+        if c['kieu'] == 'so':
+            lo, hi = c['gioi_han']
+            rule = {'condition': {'type': 'NUMBER_BETWEEN', 'values': [{'userEnteredValue': str(lo)}, {'userEnteredValue': str(hi)}]},
+                    'strict': True, 'inputMessage': f"{c['nhan']}: số {lo}–{hi}"}
+        else:
+            X = cot_td[c['cot']]
+            rule = {'condition': {'type': 'ONE_OF_RANGE', 'values': [{'userEnteredValue': f'=TU_DIEN!${X}$3:${X}'}]},
+                    'showCustomUi': True, 'strict': c['kieu'] != 'nhieu'}  # chọn nhiều: cho gõ "a, b" (chỉ cảnh báo)
+        reqs.append({'setDataValidation': {'range': {'sheetId': ws.id, 'startRowIndex': 2, 'endRowIndex': ws.row_count,
+                                                     'startColumnIndex': dau - 1 + i, 'endColumnIndex': dau + i}, 'rule': rule}})
+    sh.batch_update({'requests': reqs})
+    print(f'✅ Đã ghi: tab TU_DIEN ({len(ds)} cột × {cao} giá trị), SANPHAM {L0}:{L1} hàng 1–2, kiểm tra ô {len(reqs)} cột (hàng 3–{ws.row_count})')
+    return 0
+
+
 def main():
+    if '--ghi' in sys.argv:
+        return ghi_sheet()
     sp, head, hang1 = doc()
     tu_dien, so_ma = soan(sp, head)
     ghi(tu_dien, head, hang1, so_ma)
