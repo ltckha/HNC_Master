@@ -168,6 +168,21 @@ def ma_cho_duyet():
     return [str(x.get('code', '')).strip().upper() for x in out.get('ma', []) if x.get('code')], ''
 
 
+def san_mac():
+    """POST /api/san/mac (khoá Mac, chỉ đọc) → (dict {mo_ta_duyet, anh_nghi, bo_qua: {shopee, tiktok}, luat} | None, lỗi)."""
+    luc = _luc()
+    r, loi = _post('/api/san/mac', {'luc': luc, 'nguon': 'mac'}, luc)
+    if r is None:
+        return None, loi
+    try:
+        out = r.json()
+    except ValueError:
+        out = {}
+    if r.status_code != 200 or not out.get('ok'):
+        return None, f"web trả lỗi {r.status_code}" + (f": {str(out.get('error'))[:200]}" if out.get('error') else '')
+    return out, ''
+
+
 GOI_Y_GIA_MAX = 200
 
 

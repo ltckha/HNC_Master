@@ -1881,6 +1881,7 @@ def process_export_task(choice, loader):
         tren_san = ma_da_len_san('shopee' if choice == 2 else 'tiktok', codes)
         if tren_san is None:
             return
+        tren_san = tren_san | ma_khong_dang_san('shopee' if choice == 2 else 'tiktok')  # mã anh cố ý không đăng = coi như đã có
 
     for rel_idx in range(data_start_row, len(df_raw)):
         row = df_raw.iloc[rel_idx]
@@ -4349,6 +4350,20 @@ def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
     if mo_ta_duyet is not None and code not in mo_ta_duyet:
         ly_do.append("Chưa có mô tả thật")
     return ly_do
+
+
+def ma_khong_dang_san(kenh):
+    """Mã anh cố ý KHÔNG đăng sàn này (web bảng san_bo_qua, POST /api/san/mac → bo_qua) — loại khỏi Đăng mới như web (Bán hàng 30/10, luật 15).
+    Web không trả được → set rỗng + 1 dòng báo (không loại mã nào)."""
+    from tools import web_lenh
+    out, loi = web_lenh.san_mac()
+    if out is None or not isinstance(out.get('bo_qua'), dict):
+        print(f"⚠️ Chưa lấy được danh sách mã không đăng {kenh} từ web ({loi or 'web chưa trả bo_qua'}) → không loại mã nào.")
+        return set()
+    bo = {str(x).strip().upper() for x in out['bo_qua'].get(kenh) or [] if str(x).strip()}
+    if bo:
+        print(f"⏭️ Bỏ {len(bo)} mã anh đánh dấu không đăng {kenh}.")
+    return bo
 
 
 def ma_da_len_san(kenh, codes):
