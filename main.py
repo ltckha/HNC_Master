@@ -4288,6 +4288,7 @@ def unmark_upload(loader, kenh):
 # Giá, tên, ngành hàng sàn: cổng kiểm sẵn có của từng sàn. Ảnh nghi tách nền (D1 tach_nen): Mac chưa đọc được → chưa xét.
 DANG_MOI_TON_TOI_THIEU = 1
 DANG_MOI_ANH_TOI_THIEU = 3
+DANG_MOI_MO_TA_TU_TOI_THIEU = 40  # product_description (không tính phần lặp tên)
 _SIZE_DUOI = re.compile(r'\d{2}(\.5)?$')
 
 
@@ -4303,20 +4304,37 @@ def ton_theo_ma(stock_total):
 
 
 def ma_co_mo_ta_duyet(loader):
-    """Mã có mô tả đã duyệt: web ghi mô tả duyệt vào CON_DES dạng chữ (thay công thức, GĐ4 28/10) → ô CON_DES có chữ, không phải công thức.
-    → set mã, hoặc None khi không đọc được công thức (không xét điều kiện này)."""
+    """Mã có MÔ TẢ THẬT (Bán hàng 30/10): CON_DES là chữ (web ghi mô tả duyệt thay công thức, GĐ4 28/10)
+    HOẶC product_description ≥ DANG_MOI_MO_TA_TU_TOI_THIEU từ sau khi bỏ phần lặp tên hàng.
+    → set mã, hoặc None khi không đọc được Sheet (không xét điều kiện này)."""
     try:
-        v = loader.spreadsheet.worksheet('SANPHAM').get_all_values(value_render_option='FORMULA')
+        ws = loader.spreadsheet.worksheet('SANPHAM')
+        f, v = ws.get_all_values(value_render_option='FORMULA'), ws.get_all_values()
     except Exception as e:
-        print(f"⚠️ Không đọc được CON_DES dạng công thức ({e.__class__.__name__}) → chưa xét điều kiện mô tả đã duyệt.")
+        print(f"⚠️ Không đọc được mô tả SANPHAM ({e.__class__.__name__}) → chưa xét điều kiện mô tả.")
         return None
     head = [str(h).strip() for h in v[1]] if len(v) > 1 else []  # SANPHAM: tên kỹ thuật ở hàng 2 (luật 4)
-    if 'product_code' not in head or 'CON_DES' not in head:
-        print("⚠️ SANPHAM thiếu cột product_code / CON_DES → chưa xét điều kiện mô tả đã duyệt.")
+    if 'product_code' not in head:
+        print("⚠️ SANPHAM thiếu cột product_code → chưa xét điều kiện mô tả.")
         return None
-    ic, id_ = head.index('product_code'), head.index('CON_DES')
-    return {str(r[ic]).strip().upper() for r in v[2:]
-            if len(r) > id_ and str(r[ic]).strip() and str(r[id_]).strip() and not str(r[id_]).strip().startswith('=')}
+    ix = {c: head.index(c) for c in ('product_code', 'CON_DES', 'product_description', 'product_name', 'CON_NAME') if c in head}
+    o = lambda rows, i, c: str(rows[i][ix[c]]).strip() if c in ix and i < len(rows) and ix[c] < len(rows[i]) else ''  # noqa: E731
+    out = set()
+    for i in range(2, len(v)):
+        ma = o(v, i, 'product_code').upper()
+        if not ma:
+            continue
+        cd = o(f, i, 'CON_DES')
+        if cd and not cd.startswith('='):
+            out.add(ma)
+            continue
+        mt = o(v, i, 'product_description').lower()
+        for ten in (o(v, i, 'product_name').lower(), o(v, i, 'CON_NAME').lower()):
+            if ten:
+                mt = mt.replace(ten, ' ')
+        if len(re.findall(r'[\wÀ-ỹ]+', mt)) >= DANG_MOI_MO_TA_TU_TOI_THIEU:
+            out.add(ma)
+    return out
 
 
 def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
@@ -4329,7 +4347,7 @@ def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
     if n < DANG_MOI_ANH_TOI_THIEU:
         ly_do.append(f"Mới {n}/{DANG_MOI_ANH_TOI_THIEU} ảnh")
     if mo_ta_duyet is not None and code not in mo_ta_duyet:
-        ly_do.append("Chưa có mô tả duyệt")
+        ly_do.append("Chưa có mô tả thật")
     return ly_do
 
 
