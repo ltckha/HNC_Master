@@ -1881,7 +1881,8 @@ def process_export_task(choice, loader):
         tren_san = ma_da_len_san('shopee' if choice == 2 else 'tiktok', codes)
         if tren_san is None:
             return
-        tren_san = tren_san | ma_khong_dang_san('shopee' if choice == 2 else 'tiktok')  # mã anh cố ý không đăng = coi như đã có
+        san_web = du_lieu_san_web()  # 1 lần gọi /api/san/mac: bo_qua + mo_ta_duyet + anh_nghi (None = giữ luật Mac cũ)
+        tren_san = tren_san | ma_khong_dang_san('shopee' if choice == 2 else 'tiktok', san_web)  # mã anh cố ý không đăng = coi như đã có
 
     for rel_idx in range(data_start_row, len(df_raw)):
         row = df_raw.iloc[rel_idx]
@@ -1925,6 +1926,11 @@ def process_export_task(choice, loader):
     if choice in (2, 3):  # điều kiện đăng mới (anh Kha 30/10)
         ton_ma = ton_theo_ma(stock_total)
         mo_ta_duyet = ma_co_mo_ta_duyet(loader)
+        anh_nghi = set()
+        if san_web is not None:
+            if mo_ta_duyet is not None:
+                mo_ta_duyet |= {str(x).strip().upper() for x in san_web.get('mo_ta_duyet') or []}
+            anh_nghi = {str(x).strip().upper() for x in san_web.get('anh_nghi') or []}
 
     # ==================== TASK 1: WEBSITE PRODUCT IMPORT ====================
     if choice == 1:
@@ -2010,7 +2016,7 @@ def process_export_task(choice, loader):
                 missing_reasons.append("Thiếu giá")
             if not shopee_cat:
                 missing_reasons.append("Thiếu ngành hàng Shopee")
-            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet)
+            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet, anh_nghi)
 
             if missing_reasons:
                 reason_str = ", ".join(missing_reasons)
@@ -2193,7 +2199,7 @@ def process_export_task(choice, loader):
                 missing_reasons.append("Thiếu giá")
             if not tiktok_cat:
                 missing_reasons.append("Thiếu ngành hàng TikTok")
-            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet)
+            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet, anh_nghi)
 
             if missing_reasons:
                 reason_str = ", ".join(missing_reasons)
@@ -4286,7 +4292,7 @@ def unmark_upload(loader, kenh):
 
 
 # Điều kiện mẫu được đăng mới Shopee / TikTok — cùng luật web Đăng mẫu mới (anh Kha 30/10, luật 15). Ngưỡng chỉ sửa ở đây.
-# Giá, tên, ngành hàng sàn: cổng kiểm sẵn có của từng sàn. Ảnh nghi tách nền (D1 tach_nen): Mac chưa đọc được → chưa xét.
+# Giá, tên, ngành hàng sàn: cổng kiểm sẵn có của từng sàn. Mô tả AI duyệt + ảnh nghi tách nền + mã không đăng: web /api/san/mac.
 DANG_MOI_TON_TOI_THIEU = 1
 DANG_MOI_ANH_TOI_THIEU = 3
 DANG_MOI_MO_TA_TU_TOI_THIEU = 40  # product_description (không tính phần lặp tên)
@@ -4338,8 +4344,8 @@ def ma_co_mo_ta_duyet(loader):
     return out
 
 
-def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
-    """Lý do mẫu CHƯA đủ điều kiện đăng mới (tồn, số ảnh, mô tả đã duyệt) → list chữ, rỗng = đủ."""
+def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet, anh_nghi=()):
+    """Lý do mẫu CHƯA đủ điều kiện đăng mới (tồn, số ảnh, ảnh nghi tách nền, mô tả thật) → list chữ, rỗng = đủ."""
     code = str(code).strip().upper()
     ly_do = []
     if ton_ma.get(code, 0) < DANG_MOI_TON_TOI_THIEU:
@@ -4347,20 +4353,31 @@ def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
     n = sum(1 for p in pics if str(p or '').strip())
     if n < DANG_MOI_ANH_TOI_THIEU:
         ly_do.append(f"Mới {n}/{DANG_MOI_ANH_TOI_THIEU} ảnh")
+    if code in anh_nghi:
+        ly_do.append("Ảnh tách nền đang nghi")
     if mo_ta_duyet is not None and code not in mo_ta_duyet:
         ly_do.append("Chưa có mô tả thật")
     return ly_do
 
 
-def ma_khong_dang_san(kenh):
-    """Mã anh cố ý KHÔNG đăng sàn này (web bảng san_bo_qua, POST /api/san/mac → bo_qua) — loại khỏi Đăng mới như web (Bán hàng 30/10, luật 15).
-    Web không trả được → set rỗng + 1 dòng báo (không loại mã nào)."""
+def du_lieu_san_web():
+    """POST /api/san/mac (khoá Mac, chỉ đọc): {bo_qua, mo_ta_duyet, anh_nghi} để Mac ra cùng danh sách Đăng mới với web (Bán hàng 30/10, luật 15).
+    Lỗi → None + 1 dòng báo; khi đó giữ luật Mac cũ (mô tả theo Sheet, không xét ảnh nghi, không loại mã bỏ qua)."""
     from tools import web_lenh
     out, loi = web_lenh.san_mac()
-    if out is None or not isinstance(out.get('bo_qua'), dict):
-        print(f"⚠️ Chưa lấy được danh sách mã không đăng {kenh} từ web ({loi or 'web chưa trả bo_qua'}) → không loại mã nào.")
+    if out is None:
+        print(f"⚠️ Không lấy được dữ liệu sàn từ web ({loi}) → dùng luật Mac cũ: mô tả theo Sheet, chưa xét ảnh nghi tách nền / mã không đăng.")
+    return out
+
+
+def ma_khong_dang_san(kenh, san_web):
+    """Mã anh cố ý KHÔNG đăng sàn này (web bảng san_bo_qua → bo_qua) — loại khỏi Đăng mới như web. Không có → set rỗng."""
+    if san_web is None:
         return set()
-    bo = {str(x).strip().upper() for x in out['bo_qua'].get(kenh) or [] if str(x).strip()}
+    if not isinstance(san_web.get('bo_qua'), dict):
+        print(f"⚠️ Web chưa trả danh sách mã không đăng {kenh} → không loại mã nào.")
+        return set()
+    bo = {str(x).strip().upper() for x in san_web['bo_qua'].get(kenh) or [] if str(x).strip()}
     if bo:
         print(f"⏭️ Bỏ {len(bo)} mã anh đánh dấu không đăng {kenh}.")
     return bo
