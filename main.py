@@ -1921,6 +1921,9 @@ def process_export_task(choice, loader):
     stock_15e, stock_y3c, stock_total = get_stock_maps(loader)
     sub_dict = get_sub_info(loader)
     exported_filepath = ""
+    if choice in (2, 3):  # điều kiện đăng mới (anh Kha 30/10)
+        ton_ma = ton_theo_ma(stock_total)
+        mo_ta_duyet = ma_co_mo_ta_duyet(loader)
 
     # ==================== TASK 1: WEBSITE PRODUCT IMPORT ====================
     if choice == 1:
@@ -2006,8 +2009,7 @@ def process_export_task(choice, loader):
                 missing_reasons.append("Thiếu giá")
             if not shopee_cat:
                 missing_reasons.append("Thiếu ngành hàng Shopee")
-            if not pic1:
-                missing_reasons.append("Thiếu ảnh")
+            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet)
 
             if missing_reasons:
                 reason_str = ", ".join(missing_reasons)
@@ -2128,7 +2130,7 @@ def process_export_task(choice, loader):
         wb.close()
 
         # Không ghi cờ shopee_upload (anh Kha 30/10): lần sau mã đã đăng tự có trong file sàn mới nhất
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Hợp lệ xuất file: {len(valid_records)}, Thiếu thông tin bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Đủ điều kiện xuất file: {len(valid_records)}, Chưa đủ điều kiện bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
         if HAS_RICH:
             console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT SHOPEE UPLOAD MỚI[/bold green]", border_style="green"))
         else:
@@ -2190,8 +2192,7 @@ def process_export_task(choice, loader):
                 missing_reasons.append("Thiếu giá")
             if not tiktok_cat:
                 missing_reasons.append("Thiếu ngành hàng TikTok")
-            if not pic1:
-                missing_reasons.append("Thiếu ảnh")
+            missing_reasons += dieu_kien_dang_moi(pcode, [pic1, pic2, pic3, pic4, pic5, pic6, pic7, pic8, pic9], ton_ma, mo_ta_duyet)
 
             if missing_reasons:
                 reason_str = ", ".join(missing_reasons)
@@ -2317,7 +2318,7 @@ def process_export_task(choice, loader):
         wb.close()
 
         # Không ghi cờ tiktok_upload (anh Kha 30/10): lần sau mã đã đăng tự có trong file sàn mới nhất
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Hợp lệ xuất file: {len(valid_records)}, Thiếu thông tin bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Đủ điều kiện xuất file: {len(valid_records)}, Chưa đủ điều kiện bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
         if HAS_RICH:
             console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT TIKTOK UPLOAD MỚI[/bold green]", border_style="green"))
         else:
@@ -4281,6 +4282,55 @@ def unmark_upload(loader, kenh):
         return
     ok = loader.update_status('SANPHAM', rows, ic, '')
     print(f"✅ Đã bỏ đánh dấu {len(rows)} ô {cot}." if ok else "❌ Chưa ghi được — xem lỗi phía trên.")
+
+
+# Điều kiện mẫu được đăng mới Shopee / TikTok — cùng luật web Đăng mẫu mới (anh Kha 30/10, luật 15). Ngưỡng chỉ sửa ở đây.
+# Giá, tên, ngành hàng sàn: cổng kiểm sẵn có của từng sàn. Ảnh nghi tách nền (D1 tach_nen): Mac chưa đọc được → chưa xét.
+DANG_MOI_TON_TOI_THIEU = 1
+DANG_MOI_ANH_TOI_THIEU = 3
+_SIZE_DUOI = re.compile(r'\d{2}(\.5)?$')
+
+
+def ton_theo_ma(stock_total):
+    """{mã+size: tồn} (get_stock_maps) → {mã: tổng tồn các size}."""
+    out = {}
+    for sku, q in stock_total.items():
+        sku = str(sku).upper()
+        m = _SIZE_DUOI.search(sku)
+        ma = sku[:m.start()] if m and m.start() > 0 else sku
+        out[ma] = out.get(ma, 0.0) + q
+    return out
+
+
+def ma_co_mo_ta_duyet(loader):
+    """Mã có mô tả đã duyệt: web ghi mô tả duyệt vào CON_DES dạng chữ (thay công thức, GĐ4 28/10) → ô CON_DES có chữ, không phải công thức.
+    → set mã, hoặc None khi không đọc được công thức (không xét điều kiện này)."""
+    try:
+        v = loader.spreadsheet.worksheet('SANPHAM').get_all_values(value_render_option='FORMULA')
+    except Exception as e:
+        print(f"⚠️ Không đọc được CON_DES dạng công thức ({e.__class__.__name__}) → chưa xét điều kiện mô tả đã duyệt.")
+        return None
+    head = [str(h).strip() for h in v[1]] if len(v) > 1 else []  # SANPHAM: tên kỹ thuật ở hàng 2 (luật 4)
+    if 'product_code' not in head or 'CON_DES' not in head:
+        print("⚠️ SANPHAM thiếu cột product_code / CON_DES → chưa xét điều kiện mô tả đã duyệt.")
+        return None
+    ic, id_ = head.index('product_code'), head.index('CON_DES')
+    return {str(r[ic]).strip().upper() for r in v[2:]
+            if len(r) > id_ and str(r[ic]).strip() and str(r[id_]).strip() and not str(r[id_]).strip().startswith('=')}
+
+
+def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet):
+    """Lý do mẫu CHƯA đủ điều kiện đăng mới (tồn, số ảnh, mô tả đã duyệt) → list chữ, rỗng = đủ."""
+    code = str(code).strip().upper()
+    ly_do = []
+    if ton_ma.get(code, 0) < DANG_MOI_TON_TOI_THIEU:
+        ly_do.append("Hết hàng")
+    n = sum(1 for p in pics if str(p or '').strip())
+    if n < DANG_MOI_ANH_TOI_THIEU:
+        ly_do.append(f"Mới {n}/{DANG_MOI_ANH_TOI_THIEU} ảnh")
+    if mo_ta_duyet is not None and code not in mo_ta_duyet:
+        ly_do.append("Chưa có mô tả duyệt")
+    return ly_do
 
 
 def ma_da_len_san(kenh, codes):
