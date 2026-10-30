@@ -3082,18 +3082,38 @@ def video_moi_trong_tai_ve():
     return out
 
 
+VIDEO_MOI_EXTS = ('.mp4', '.mov', '.m4v', '.avi', '.mkv')
+
+
+def so_video(code, ten):
+    """Số thứ tự video của mã theo tên file: <MÃ>.mp4 (cũ) và <MÃ>_1.mp4 = 1, <MÃ>_2.mp4 = 2…; tên khác → None."""
+    b, e = os.path.splitext(ten)
+    if e.lower() not in VIDEO_MOI_EXTS:
+        return None
+    if b.upper() == code.upper():
+        return 1
+    m = re.fullmatch(re.escape(code.upper()) + r'_(\d+)', b.upper())
+    return int(m.group(1)) if m else None
+
+
 def ten_video_khong_trung(dst_folder, code, f):
-    """1 mã nhiều video (anh Kha 30/10: làm tay + Omni, đăng từng cái): <MÃ>.mp4, <MÃ>_2.mp4, <MÃ>_3.mp4…
-    Tên đã có trong <MÃ>/ thì lấy số kế tiếp (_2, _3…), không ghi đè."""
-    if not os.path.exists(os.path.join(dst_folder, f)):
-        return f
+    """1 mã nhiều video (anh Kha 30/10: làm tay + Omni, đăng từng cái): <MÃ>_1.mp4, <MÃ>_2.mp4, <MÃ>_3.mp4…
+    Tải về tên <MÃ>.mp4 hay <MÃ>_1.mp4 đều là video 1; video đầu tiên của thư mục luôn thành <MÃ>_1.
+    Số đã có (file <MÃ>.mp4 cũ tính là 1; chỉ đếm video, không đếm ảnh <MÃ>_1.png…) → số kế tiếp, không ghi đè."""
     e = os.path.splitext(f)[1]
     try:
-        co = [os.path.splitext(x)[0].upper() for x in os.listdir(dst_folder)]
+        co = [x for x in os.listdir(dst_folder) if not x.startswith('.')]
     except OSError:
         co = []
-    so = [1] + [int(m.group(1)) for b in co for m in [re.fullmatch(re.escape(code.upper()) + r'_(\d+)', b)] if m]
-    n = max(so) + 1
+    da = {n for n in (so_video(code, x) for x in co) if n}
+    n = so_video(code, f)
+    if not da and not any(os.path.splitext(x)[1].lower() in VIDEO_MOI_EXTS for x in co):
+        n = n or 1  # thư mục chưa có video: tên lạ cũng thành _1
+    if n and n not in da and not os.path.exists(os.path.join(dst_folder, f"{code}_{n}{e}")):
+        return f"{code}_{n}{e}"
+    if not n and not os.path.exists(os.path.join(dst_folder, f)):
+        return f  # tên lạ (không theo số) mà chưa trùng thì giữ
+    n = max(da | {0}) + 1
     while os.path.exists(os.path.join(dst_folder, f"{code}_{n}{e}")):
         n += 1
     return f"{code}_{n}{e}"
@@ -3103,7 +3123,7 @@ def ten_video_khong_trung(dst_folder, code, f):
 def process_media_management(loader, auto_ingest=True, chi_video=False):
     """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM.
     chi_video (launchd vn.giayhainancy.hnc.gomvideo, anh Kha 30/10): chỉ .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM;
-    chỉ ghi Sheet các mã vừa gom. Mọi chế độ: 1 mã nhiều video (<MÃ>.mp4, <MÃ>_2.mp4…), trùng tên thì số kế tiếp, không ghi đè."""
+    chỉ ghi Sheet các mã vừa gom. Mọi chế độ: 1 mã nhiều video (<MÃ>_1.mp4, <MÃ>_2.mp4…), trùng số thì số kế tiếp, không ghi đè."""
     if chi_video:
         ds_video = video_moi_trong_tai_ve()
         if not ds_video:
