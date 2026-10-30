@@ -3063,7 +3063,6 @@ def process_export_task(choice, loader):
 
 
 VIDEO_EXTS = ('.mp4', '.mov')
-VIDEO_CU = '_cu'  # video cũ của mã — Video-Post bỏ qua thư mục có 2 video (anh Kha 30/10)
 VIDEO_CHO_GHI_XONG = 60  # giây: file sửa gần hơn thế coi như đang tải dở, lượt sau gom
 
 
@@ -3083,28 +3082,28 @@ def video_moi_trong_tai_ve():
     return out
 
 
-def don_video_cu(dst_folder):
-    """Mỗi mã chỉ 1 video: video đang có trong <MÃ>/ chuyển vào <MÃ>/_cu/ (trùng tên thì thêm giờ)."""
+def ten_video_khong_trung(dst_folder, code, f):
+    """1 mã nhiều video (anh Kha 30/10: làm tay + Omni, đăng từng cái): <MÃ>.mp4, <MÃ>_2.mp4, <MÃ>_3.mp4…
+    Tên đã có trong <MÃ>/ thì lấy số kế tiếp (_2, _3…), không ghi đè."""
+    if not os.path.exists(os.path.join(dst_folder, f)):
+        return f
+    e = os.path.splitext(f)[1]
     try:
-        cu = [x for x in os.listdir(dst_folder) if x.lower().endswith(('.mp4', '.mov', '.m4v', '.avi', '.mkv')) and not x.startswith('.')]
+        co = [os.path.splitext(x)[0].upper() for x in os.listdir(dst_folder)]
     except OSError:
-        return 0
-    for x in cu:
-        dich = os.path.join(dst_folder, VIDEO_CU)
-        os.makedirs(dich, exist_ok=True)
-        dst = os.path.join(dich, x)
-        if os.path.exists(dst):
-            b, e = os.path.splitext(x)
-            dst = os.path.join(dich, f"{b}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{e}")
-        shutil.move(os.path.join(dst_folder, x), dst)
-    return len(cu)
+        co = []
+    so = [1] + [int(m.group(1)) for b in co for m in [re.fullmatch(re.escape(code.upper()) + r'_(\d+)', b)] if m]
+    n = max(so) + 1
+    while os.path.exists(os.path.join(dst_folder, f"{code}_{n}{e}")):
+        n += 1
+    return f"{code}_{n}{e}"
 
 
 @sync_hint_after
 def process_media_management(loader, auto_ingest=True, chi_video=False):
     """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM.
     chi_video (launchd vn.giayhainancy.hnc.gomvideo, anh Kha 30/10): chỉ .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM;
-    chỉ ghi Sheet các mã vừa gom. Mọi chế độ: mỗi mã 1 video, video cũ vào <MÃ>/_cu/."""
+    chỉ ghi Sheet các mã vừa gom. Mọi chế độ: 1 mã nhiều video (<MÃ>.mp4, <MÃ>_2.mp4…), trùng tên thì số kế tiếp, không ghi đè."""
     if chi_video:
         ds_video = video_moi_trong_tai_ve()
         if not ds_video:
@@ -3217,9 +3216,7 @@ def process_media_management(loader, auto_ingest=True, chi_video=False):
                         if src_file_path != dst_file_path:
                             try:
                                 if f.lower().endswith(('.mp4', '.mov')):
-                                    n_cu = don_video_cu(dst_folder)
-                                    if n_cu:
-                                        print(f"  🗂️ {matched_code}: {n_cu} video cũ → {VIDEO_CU}/")
+                                    dst_file_path = os.path.join(dst_folder, ten_video_khong_trung(dst_folder, matched_code, f))
                                 shutil.move(src_file_path, dst_file_path)
                                 ingested_count += 1
                                 gom_ma.add(matched_code.upper())
