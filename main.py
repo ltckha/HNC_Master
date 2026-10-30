@@ -1855,7 +1855,7 @@ def process_export_task(choice, loader):
             status_col_idx = col_map[candidate]
             break
 
-    if status_col_idx is None:
+    if status_col_idx is None and choice not in (2, 3):  # Shopee / TikTok đăng mới không dùng cờ (30/10)
         msg = f"❌ Không tìm thấy cột trạng thái {possible_status_cols} trong tab {sheet_name}!"
         if HAS_RICH: console.print(f"[bold red]{msg}[/bold red]")
         else: print(msg)
@@ -1870,6 +1870,18 @@ def process_export_task(choice, loader):
     fsku_idx = col_map.get('FSKU')
     kho_idx = col_map.get('KHO')
 
+    # Shopee / TikTok đăng mới (anh Kha 30/10): "chưa đăng" = mã không có trong file sàn mới nhất, không theo cờ *_upload, không ghi cờ
+    tren_san = None
+    if choice in (2, 3):
+        if pcode_idx is None:
+            print("❌ SANPHAM thiếu cột product_code.")
+            return
+        codes = [str(df_raw.iloc[i][pcode_idx]).strip().upper() for i in range(data_start_row, len(df_raw))
+                 if pd.notna(df_raw.iloc[i][pcode_idx]) and str(df_raw.iloc[i][pcode_idx]).strip()]
+        tren_san = ma_da_len_san('shopee' if choice == 2 else 'tiktok', codes)
+        if tren_san is None:
+            return
+
     for rel_idx in range(data_start_row, len(df_raw)):
         row = df_raw.iloc[rel_idx]
 
@@ -1879,8 +1891,11 @@ def process_export_task(choice, loader):
         if not pcode_val and not fsku_val:
             continue
 
-        status_val = str(row[status_col_idx]).strip() if pd.notna(row[status_col_idx]) else ""
-        if not status_val:
+        if tren_san is not None:
+            chua = bool(pcode_val) and pcode_val.upper() not in tren_san
+        else:
+            chua = not (str(row[status_col_idx]).strip() if pd.notna(row[status_col_idx]) else "")
+        if chua:
             pending_row_indices.append(rel_idx)
             rec = {}
             for var_name, c_idx in col_map.items():
@@ -1897,7 +1912,8 @@ def process_export_task(choice, loader):
         pending_records, pending_row_indices = drop_pending_info(pending_records, pending_row_indices, skip_codes)
 
     if not pending_records and choice != 10:  # in tem: vẫn cho in lại theo phiếu / ngày
-        msg = f"✨ Tất cả các bản ghi trong tab {sheet_name} đều đã hoàn thành (Done) cho tác vụ [{choice}]!"
+        msg = (f"✨ Mọi mã đủ thông tin đều đã có trên sàn theo file sàn mới nhất!" if tren_san is not None
+               else f"✨ Tất cả các bản ghi trong tab {sheet_name} đều đã hoàn thành (Done) cho tác vụ [{choice}]!")
         if HAS_RICH: console.print(f"[bold yellow]{msg}[/bold yellow]")
         else: print(msg)
         return
@@ -2111,10 +2127,8 @@ def process_export_task(choice, loader):
         wb.save(exported_filepath)
         wb.close()
 
-        # Cập nhật trạng thái từng dòng vào cột shopee_upload trên tab SANPHAM
-        loader.update_status(sheet_name, pending_row_indices, status_col_idx, row_status_list)
-
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ xuất file: {len(valid_records)}, Bị gắn cờ cảnh báo: {len(warning_rows)})\n📁 {exported_filepath}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột 'shopee_upload' trên Google Sheet / Excel!\n"
+        # Không ghi cờ shopee_upload (anh Kha 30/10): lần sau mã đã đăng tự có trong file sàn mới nhất
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Hợp lệ xuất file: {len(valid_records)}, Thiếu thông tin bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
         if HAS_RICH:
             console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT SHOPEE UPLOAD MỚI[/bold green]", border_style="green"))
         else:
@@ -2302,10 +2316,8 @@ def process_export_task(choice, loader):
         wb.save(exported_filepath)
         wb.close()
 
-        # Cập nhật trạng thái từng dòng vào cột tiktok_upload trên tab SANPHAM
-        loader.update_status(sheet_name, pending_row_indices, status_col_idx, row_status_list)
-
-        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm (Hợp lệ xuất file: {len(valid_records)}, Bị gắn cờ cảnh báo: {len(warning_rows)})\n📁 {exported_filepath}\n📝 Đã cập nhật trạng thái chi tiết ('Done' hoặc cờ lỗi) vào cột 'tiktok_upload' trên Google Sheet / Excel!\n"
+        # Không ghi cờ tiktok_upload (anh Kha 30/10): lần sau mã đã đăng tự có trong file sàn mới nhất
+        success_msg = f"\n✅ Đã xử lý xong {len(pending_records)} sản phẩm chưa có trên sàn (Hợp lệ xuất file: {len(valid_records)}, Thiếu thông tin bỏ qua: {len(warning_rows)})\n📁 {exported_filepath}\nℹ️ Không ghi cờ Sheet — đăng xong, lần sau tải file sàn mới là mã tự hết \"chưa đăng\".\n"
         if HAS_RICH:
             console.print(Panel(success_msg, title="[bold green]KẾT QUẢ XUẤT TIKTOK UPLOAD MỚI[/bold green]", border_style="green"))
         else:
@@ -4173,11 +4185,11 @@ def print_submenu_shopee():
     menu_text = """-------------------------------------------------------------------
              [bold #FF6E40]🛍️  SUB-MENU: SHOPEE[/bold #FF6E40]
 -------------------------------------------------------------------
-  [1] 🛒 Xuất File Đăng Hàng Hoá Mới (Shopee Mass Upload)
+  [1] 🛒 Xuất File Đăng Hàng Hoá Mới (mã chưa có trong file sàn mới nhất)
   [2] ⚡ Xuất File Cập Nhật Giá Bán / Tồn Kho (Shopee Mass Update)
   [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
-  [4] 🔁 Đối chiếu cờ theo file Liên kết (file Cập nhật hàng loạt tải từ Seller Center)
   -----------------------------------------------------------------
+  [9] 🔁 (cũ) Đối chiếu cờ upload theo file Liên kết — đăng mới nay không dùng cờ
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
     if HAS_RICH:
@@ -4191,11 +4203,11 @@ def print_submenu_tiktok():
     menu_text = """-------------------------------------------------------------------
              [bold #00E5FF]🎵[/bold #00E5FF] [bold #FF1744]SUB-MENU: TIKTOK SHOP[/bold #FF1744]
 -------------------------------------------------------------------
-  [1] 🎵 Xuất File Đăng Hàng Hoá Mới (TikTok Mass Upload - 38 Cột chuẩn)
+  [1] 🎵 Xuất File Đăng Hàng Hoá Mới (mã chưa có trong file sàn mới nhất)
   [2] ⚡ Xuất File Cập Nhật (TikTok Mass Update: Giá Bán, Tồn Kho hoặc Tất cả)
   [3] ↩️  Bỏ đánh dấu đã đăng (lỡ đánh dấu khi chưa lưu file — gõ mã)
-  [4] 🔁 Đối chiếu cờ theo file Liên kết (file Cập nhật hàng loạt tải từ Seller Center)
   -----------------------------------------------------------------
+  [9] 🔁 (cũ) Đối chiếu cờ upload theo file Liên kết — đăng mới nay không dùng cờ
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
     if HAS_RICH:
@@ -4269,6 +4281,29 @@ def unmark_upload(loader, kenh):
         return
     ok = loader.update_status('SANPHAM', rows, ic, '')
     print(f"✅ Đã bỏ đánh dấu {len(rows)} ô {cot}." if ok else "❌ Chưa ghi được — xem lỗi phía trên.")
+
+
+def ma_da_len_san(kenh, codes):
+    """Tập mã đã lên sàn theo file Liên kết mới nhất trong ~/Downloads (Enter = dùng, hoặc kéo file khác) — cùng luật web (anh Kha 30/10).
+    → set mã, hoặc None nếu không có file / file sai (khi đó không xuất)."""
+    from tools import lien_ket_san
+    path = lien_ket_san.file_moi_nhat(kenh)
+    if path:
+        print(f"📄 File sàn {kenh} mới nhất: {os.path.basename(path)} ({datetime.fromtimestamp(os.path.getmtime(path)).strftime('%d/%m %H:%M')})")
+    else:
+        print(f"ℹ️ Không thấy file Liên kết / Cập nhật hàng loạt {kenh} trong Tải về. Tải file từ Seller Center trước.")
+    khac = input("Enter = dùng file này, hoặc kéo file khác vào: ").strip().strip("'\"").replace('\\ ', ' ')
+    path = khac or path
+    if not path or not os.path.isfile(path):
+        print("❌ Không có file sàn — không biết mã nào chưa đăng, không xuất.")
+        return None
+    try:
+        co, n, sai = lien_ket_san.ma_tren_san(kenh, lien_ket_san.doc_file(path, kenh), codes)
+    except ValueError as e:
+        print(f"❌ {e}. Không xuất.")
+        return None
+    print(f"   {n} dòng có mã sàn → {len(co)} mã đã lên sàn · {len(sai)} SKU sàn không khớp mã nào")
+    return co
 
 
 def doi_chieu_co_san(loader, kenh):
@@ -4351,9 +4386,9 @@ def handle_submenu_shopee(loader):
         print_submenu_shopee()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-4][/bold yellow]", default="0")
+            sub_choice = Prompt.ask("[bold yellow]Mời chọn tác vụ Shopee [0-3, 9][/bold yellow]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ Shopee [0-4]: ").strip()
+            sub_choice = input("Mời chọn tác vụ Shopee [0-3, 9]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4363,7 +4398,7 @@ def handle_submenu_shopee(loader):
             process_export_task(6, loader)
         elif sub_choice == "3":
             unmark_upload(loader, 'shopee')
-        elif sub_choice == "4":
+        elif sub_choice == "9":
             doi_chieu_co_san(loader, 'shopee')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
@@ -4379,9 +4414,9 @@ def handle_submenu_tiktok(loader):
         print_submenu_tiktok()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-4][/bold magenta]", default="0")
+            sub_choice = Prompt.ask("[bold magenta]Mời chọn tác vụ TikTok [0-3, 9][/bold magenta]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ TikTok [0-4]: ").strip()
+            sub_choice = input("Mời chọn tác vụ TikTok [0-3, 9]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4391,7 +4426,7 @@ def handle_submenu_tiktok(loader):
             process_export_task(7, loader)
         elif sub_choice == "3":
             unmark_upload(loader, 'tiktok')
-        elif sub_choice == "4":
+        elif sub_choice == "9":
             doi_chieu_co_san(loader, 'tiktok')
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")

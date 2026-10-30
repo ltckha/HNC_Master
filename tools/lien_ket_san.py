@@ -2,10 +2,12 @@
 Cùng luật web public/tools/lien-ket-san.js (build: cột theo tên hàng 1, ghép SKU → mã SP) và bot dat_lai_co_san:
   - set   = mã có trên sàn mà ô cờ chưa "Done…" (trống / cờ lỗi) → "Done - <giờ>"; ô đã Done giữ nguyên
   - unset = ô cờ có chữ mà mã KHÔNG có trên sàn → xoá ô
-Dùng từ main.py (menu Shopee / TikTok [4]); chạy riêng chỉ đọc:
+Từ 30/10 (anh Kha): menu Mac Đăng mẫu mới Shopee / TikTok coi "chưa đăng" = mã không có trong file sàn mới nhất (file_moi_nhat + ma_tren_san), không đọc / ghi cờ.
+Dùng từ main.py (Đăng mẫu mới; menu [9] đối chiếu cờ cũ); chạy riêng chỉ đọc:
   venv/bin/python tools/lien_ket_san.py shopee|tiktok <file.xlsx|.csv>
 """
 import csv
+import os
 import re
 import sys
 
@@ -74,6 +76,25 @@ def ma_tren_san(kenh, rows, codes):
     return co, n, sorted(set(sai))
 
 
+def file_moi_nhat(kenh, thu_muc=os.path.expanduser('~/Downloads'), xem=40):
+    """File Liên kết / Cập nhật hàng loạt mới nhất của sàn trong thư mục (theo giờ sửa, đủ cột REQ) → đường dẫn hoặc None.
+    Anh Kha 30/10: "chưa đăng sàn" = mã KHÔNG có trong file sàn mới nhất anh tải về (không dùng cờ shopee_upload / tiktok_upload)."""
+    try:
+        ds = [os.path.join(thu_muc, f) for f in os.listdir(thu_muc)
+              if f.lower().endswith(('.xlsx', '.csv')) and not f.startswith(('~$', '.'))]
+    except OSError:
+        return None
+    for p in sorted(ds, key=os.path.getmtime, reverse=True)[:xem]:
+        try:
+            rows = doc_file(p, kenh)
+        except Exception:
+            continue
+        head = [str(h or '').strip() for h in (rows[0] if rows else [])]
+        if all(c in head for c in REQ[kenh]):
+            return p
+    return None
+
+
 def doi_chieu(co_tren_san, co_sheet):
     """co_sheet = {mã: giá trị ô cờ} → (set, unset) như bot dat_lai_co_san."""
     dat = sorted(c for c, v in co_sheet.items() if c in co_tren_san and not str(v).strip().lower().startswith('done'))
@@ -82,7 +103,6 @@ def doi_chieu(co_tren_san, co_sheet):
 
 
 if __name__ == '__main__':
-    import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from tools.tach_cot_sanpham import _mo
     from tools.tu_dien_sanpham import SHEET_ID
