@@ -680,7 +680,8 @@ class EngineDataLoader:
             u_idx = batch_records[0].get('url_col_idx')
             f_idx = batch_records[0].get('files_col_idx')
 
-            if p_idx is not None and u_idx is not None and f_idx is not None and (p_idx + 1 == u_idx and u_idx + 1 == f_idx):
+            lien = batch_records[-1]['row_idx'] - batch_records[0]['row_idx'] + 1 == len(batch_records)  # dòng liền nhau mới ghi 1 khối
+            if lien and p_idx is not None and u_idx is not None and f_idx is not None and (p_idx + 1 == u_idx and u_idx + 1 == f_idx):
                 start_row = batch_records[0]['row_idx'] + 1
                 end_row = batch_records[-1]['row_idx'] + 1
                 matrix = []
@@ -3061,9 +3062,56 @@ def process_export_task(choice, loader):
         print(success_msg)
 
 
+VIDEO_EXTS = ('.mp4', '.mov')
+VIDEO_CU = '_cu'  # video cũ của mã — Video-Post bỏ qua thư mục có 2 video (anh Kha 30/10)
+VIDEO_CHO_GHI_XONG = 60  # giây: file sửa gần hơn thế coi như đang tải dở, lượt sau gom
+
+
+def video_moi_trong_tai_ve():
+    """Tên file .mp4 / .mov ở ngay ~/Downloads (không vào thư mục con), đã tải xong."""
+    try:
+        ds = os.listdir(SOURCE_DOWNLOADS)
+    except OSError as e:
+        print(f"⚠️ Không đọc được {SOURCE_DOWNLOADS}: {e}")
+        return []
+    now = time.time()
+    out = []
+    for f in ds:
+        p = os.path.join(SOURCE_DOWNLOADS, f)
+        if not f.startswith('.') and f.lower().endswith(VIDEO_EXTS) and os.path.isfile(p) and now - os.path.getmtime(p) >= VIDEO_CHO_GHI_XONG:
+            out.append(f)
+    return out
+
+
+def don_video_cu(dst_folder):
+    """Mỗi mã chỉ 1 video: video đang có trong <MÃ>/ chuyển vào <MÃ>/_cu/ (trùng tên thì thêm giờ)."""
+    try:
+        cu = [x for x in os.listdir(dst_folder) if x.lower().endswith(('.mp4', '.mov', '.m4v', '.avi', '.mkv')) and not x.startswith('.')]
+    except OSError:
+        return 0
+    for x in cu:
+        dich = os.path.join(dst_folder, VIDEO_CU)
+        os.makedirs(dich, exist_ok=True)
+        dst = os.path.join(dich, x)
+        if os.path.exists(dst):
+            b, e = os.path.splitext(x)
+            dst = os.path.join(dich, f"{b}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{e}")
+        shutil.move(os.path.join(dst_folder, x), dst)
+    return len(cu)
+
+
 @sync_hint_after
-def process_media_management(loader, auto_ingest=True):
-    """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM."""
+def process_media_management(loader, auto_ingest=True, chi_video=False):
+    """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM.
+    chi_video (launchd vn.giayhainancy.hnc.gomvideo, anh Kha 30/10): chỉ .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM;
+    chỉ ghi Sheet các mã vừa gom. Mọi chế độ: mỗi mã 1 video, video cũ vào <MÃ>/_cu/."""
+    if chi_video:
+        ds_video = video_moi_trong_tai_ve()
+        if not ds_video:
+            return
+        if not os.path.exists(MEDIA_DEST_DIR):
+            print(f"{datetime.now():%Y-%m-%d %H:%M} ⏸️ Ổ {MEDIA_DEST_DIR} không cắm — để nguyên {len(ds_video)} video trong Tải về.")
+            return
     if not os.path.exists(MEDIA_DEST_DIR):
         msg = f"❌ Không tìm thấy thư mục đích tại: {MEDIA_DEST_DIR}\nVui lòng kiểm tra lại ổ đĩa / kết nối ổ cứng / Volumes!"
         if HAS_RICH: console.print(Panel(msg, title="[bold red]LỖI THƯ MỤC MEDIA[/bold red]", border_style="red"))
@@ -3097,6 +3145,8 @@ def process_media_management(loader, auto_ingest=True):
             all_pcodes[val.upper()] = val
 
     try:
+        if chi_video:
+            raise LookupError  # chế độ video: chỉ mã có trong SANPHAM
         df_nhap, _ = loader.load_sheet('NHAP')
         _, map_nhap = DynamicHeaderScanner.scan_data_headers(df_nhap)
         p_nhap_idx = map_nhap.get('product_code')
@@ -3124,7 +3174,9 @@ def process_media_management(loader, auto_ingest=True):
                 if rem.startswith(('_', '-', ' ', 'G', 'P', 'V')):
                     return all_pcodes[pcode_up]
 
-        # 2. Bộ lọc Regex thông minh nhận diện mã sản phẩm mới (chưa có trên Sheet)
+        # 2. Bộ lọc Regex thông minh nhận diện mã sản phẩm mới (chưa có trên Sheet) — chế độ video không dùng
+        if chi_video:
+            return None
         m = re.match(r'^([A-Za-z0-9]{3,12})(?:[_\-\s].*|$)', base_clean)
         if m:
             cand = m.group(1).upper()
@@ -3138,11 +3190,12 @@ def process_media_management(loader, auto_ingest=True):
         return None
 
     ingested_count = 0
+    gom_ma = set()  # mã vừa gom (chế độ video chỉ ghi Sheet các mã này)
     if auto_ingest:
         sources = [
             ("Photoroom", SOURCE_PHOTOROOM, ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.mp4', '.mov')),
             ("Downloads", SOURCE_DOWNLOADS, ('.mp4', '.mov', '.jpg', '.jpeg', '.png', '.webp', '.heic'))
-        ]
+        ] if not chi_video else [("Downloads", SOURCE_DOWNLOADS, VIDEO_EXTS)]
         for src_name, src_path, valid_exts in sources:
             if not os.path.exists(src_path):
                 continue
@@ -3151,7 +3204,7 @@ def process_media_management(loader, auto_ingest=True):
             else:
                 print(f"🔎 Đang quét nguồn [{src_name}]: {src_path}...")
 
-            for root, dirs, files in os.walk(src_path):
+            for root, dirs, files in (os.walk(src_path) if not chi_video else [(src_path, [], ds_video)]):
                 for f in files:
                     if f.startswith('.') or not f.lower().endswith(valid_exts):
                         continue
@@ -3163,8 +3216,13 @@ def process_media_management(loader, auto_ingest=True):
                         dst_file_path = os.path.join(dst_folder, f)
                         if src_file_path != dst_file_path:
                             try:
+                                if f.lower().endswith(('.mp4', '.mov')):
+                                    n_cu = don_video_cu(dst_folder)
+                                    if n_cu:
+                                        print(f"  🗂️ {matched_code}: {n_cu} video cũ → {VIDEO_CU}/")
                                 shutil.move(src_file_path, dst_file_path)
                                 ingested_count += 1
+                                gom_ma.add(matched_code.upper())
                                 if HAS_RICH:
                                     console.print(f"  📦 [bold green]Đã gom:[/bold green] [cyan]{f}[/cyan] ➔ Thư mục [bold yellow]{matched_code}[/bold yellow]")
                                 else:
@@ -3181,7 +3239,7 @@ def process_media_management(loader, auto_ingest=True):
 
     for r in range(data_start_row, len(df_sp)):
         pcode = str(df_sp.iloc[r, p_idx]).strip() if pd.notna(df_sp.iloc[r, p_idx]) else ''
-        if not pcode:
+        if not pcode or (chi_video and pcode.upper() not in gom_ma):
             continue
 
         folder_path = os.path.join(MEDIA_DEST_DIR, pcode)
