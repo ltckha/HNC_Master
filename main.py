@@ -2784,6 +2784,7 @@ def process_export_task(choice, loader):
         exported_files = []
 
         # Xử lý xuất file cho từng kho (Chỉ xuất các dòng hợp lệ)
+        MISA_HO = {'15E': 'Hộ Hải Nancy (tiệm 15E)', '3C': 'Hộ Yen Leather (tiệm 3C)'}  # chữ như MISA eShop / web (30/10)
         kho_configs = [
             ('15E', 'tpl_misa_stock_15e.xlsx', '15ETBH', f"MISA_STOCK_15E_{timestamp_file}.xlsx"),
             ('3C', 'tpl_misa_stock_y3c.xlsx', '3CTBH', f"MISA_STOCK_3C_{timestamp_file}.xlsx")
@@ -2855,7 +2856,7 @@ def process_export_task(choice, loader):
             out_filepath = os.path.join(EXPORT_DIR, out_filename)
             wb.save(out_filepath)
             wb.close()
-            exported_files.append(out_filepath)
+            exported_files.append(f"{MISA_HO[kho_code]}: {out_filepath}")
 
         exported_filepath = "\n📁 ".join(exported_files) if exported_files else "(Không có file nào do toàn bộ dữ liệu bị thiếu trường bắt buộc)"
 
@@ -4229,8 +4230,9 @@ def print_submenu_misa():
     menu_text = """-------------------------------------------------------------------
              [bold #29B6F6]📊 SUB-MENU: MISA eSHOP[/bold #29B6F6]
 -------------------------------------------------------------------
-  [1] 📊 Xuất File Danh Mục Hàng Hoá (MISA: Mẫu → Mã hàng)
-  [2] 📥 Xuất File Phiếu Nhập Kho (MISA, tách Kho 15E / Kho Y3C, giá theo hoá đơn mua hàng)
+  [1] 📊 Tải file hàng hoá mới (MISA: Hàng hóa › Thêm hàng hóa ▾ › Nhập khẩu hàng hóa)
+  [2] 📥 Tải file nhập kho (MISA: Nghiệp vụ khác › Nhập kho › Thêm mới ▾ › Nhập khẩu)
+       tách Hộ Hải Nancy (tiệm 15E) / Hộ Yen Leather (tiệm 3C), giá theo hoá đơn mua hàng
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
