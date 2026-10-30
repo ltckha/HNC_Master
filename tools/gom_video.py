@@ -1,6 +1,6 @@
 """Tự gom video sản phẩm (anh Kha "làm" 30/10): .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM → /Volumes/Media/HNC_Master/<MÃ>/,
 mỗi mã 1 video (cũ vào _cu/), ghi content_path / content_files các mã vừa gom. Cùng hàm menu 5 › 1 (main.process_media_management, luật 15).
-Chạy bởi launchd vn.giayhainancy.hnc.gomvideo (WatchPaths ~/Downloads + 15 phút). Không có video / ổ Media không cắm → không làm gì.
+Chạy bởi launchd vn.giayhainancy.hnc.gomvideo (WatchPaths ~/Downloads + dự phòng 13:00 hằng ngày). Không có video / ổ Media không cắm → không làm gì.
 
   venv/bin/python tools/gom_video.py
 """

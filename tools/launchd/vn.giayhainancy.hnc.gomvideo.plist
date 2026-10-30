@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!-- Tự gom video sản phẩm (anh Kha "làm" 30/10): Tải về có video tên = mã → ổ Media/<MÃ>/. Chỉ Mac, không Claude. Luồng hàng mới nên chạy ngay
-     khi Tải về đổi + mỗi 15 phút (ngoài khung 13–16h có lý do, luật 18). Cài: tools/launchd/cai_gom_video.sh -->
+     khi Tải về đổi + dự phòng 13:00 hằng ngày (anh Kha 30/10: "ngày 1 lần thôi"). Cài: tools/launchd/cai_gom_video.sh -->
 <dict>
   <key>Label</key><string>vn.giayhainancy.hnc.gomvideo</string>
   <key>ProgramArguments</key>
@@ -12,7 +12,7 @@
   </array>
   <key>WorkingDirectory</key><string>/Users/khan/Developer/HNC_Master</string>
   <key>WatchPaths</key><array><string>/Users/khan/Downloads</string></array>
-  <key>StartInterval</key><integer>900</integer>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
   <key>ThrottleInterval</key><integer>90</integer>
   <key>StandardOutPath</key><string>/Users/khan/Library/Logs/hnc_gom_video.log</string>
   <key>StandardErrorPath</key><string>/Users/khan/Library/Logs/hnc_gom_video.log</string>
