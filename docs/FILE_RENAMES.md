@@ -69,4 +69,3 @@ File log giữ tên cũ (`~/Library/Logs/hnc_in_tem.log`, `hnc_gom_video.log`, `
 ## Tên cũ còn chuyển tiếp tạm (xoá khi bên gọi đã đổi)
 - `run.command`: chuyển sang `HNC_Menu.command`. Hướng dẫn Hub (`rebuild_after_new_mac.md`) và thói quen bấm của anh còn dùng.
 - `commands/bot_deploy.command`: chuyển sang `commands/Deploy_Bot.command`. Bản đồ hệ thống Hub còn nhắc.
-- `docs/KIEN_TRUC.md`, `docs/DEPLOY_P2_P4.md`: 1 dòng trỏ tới tên mới. CLAUDE.md còn nhắc, chờ anh cho sửa.
