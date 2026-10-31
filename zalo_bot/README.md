@@ -163,7 +163,7 @@ Các thao tác kho từ app đi qua bot, dùng lại đúng hàm của lệnh Za
 | `tra_hang` | như `nhap` | NHAP, Số chứng từ `TRA-<ddMMyy>`, dấu `Tra_hang` (không xuất phiếu nhập MISA) |
 | `xuat` | `lines: [{code, size, qty, warehouse}]` | XUAT |
 | `chuyen_kho` | `from`, `to` + `lines: [{code, size, qty}]` | XUAT ở kho nguồn + NHAP ở kho đích |
-| `chuyen_vi_tri` | `warehouse`, `location` + `lines: [{code, size?}]` | `product_location` tab KHO. Vị trí dạng `K12` / `B2` / `T4` / `S1` / `TH2` (K kệ, B bàn, T tủ, S sọc, TH thùng). Bỏ `size` = mọi size của mã |
+| `chuyen_vi_tri` | `warehouse`, `location` + `lines: [{code, size?}]` | `product_location` tab KHO. Vị trí dạng `K12` / `B2` / `T4` / `S1` / `TH2` / `H3` (K kệ, B bàn, T tủ, S sọc, TH thùng). Bỏ `size` = mọi size của mã |
 | `huy` | `undo_ticket_id` | Huỷ thao tác có `ticket_id` đó, **chỉ của chính `seller`**, trong ≤ 10 phút. Kiểm lại từng dòng như lệnh `huy`; dòng đã bị sửa / NHAP đã đồng bộ kho thì từ chối |
 
 - `warehouse` / `from` / `to`: `15E` / `Y3C` (nhận cả `TBH`, `YEN`, `3C`). `size` bỏ trống với hàng không size. `qty` 1-99, mặc định 1. Tối đa 50 dòng.

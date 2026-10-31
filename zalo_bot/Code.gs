@@ -1940,13 +1940,13 @@ function pruneTickets_(props, prefix) {
 // Body: { action, ticket_id, seller (email người dùng app), dry_run?, lines:[…], from?, to?, warehouse?, location?, undo_ticket_id? }
 //   nhap / tra_hang / xuat : lines [{code, size, qty, warehouse}]
 //   chuyen_kho            : from, to + lines [{code, size, qty}]
-//   chuyen_vi_tri         : warehouse, location (K12 / B2 / T4 / S1 / TH2) + lines [{code, size?}] (bỏ size = mọi size)
+//   chuyen_vi_tri         : warehouse, location (K12 / B2 / T4 / S1 / TH2 / H3) + lines [{code, size?}] (bỏ size = mọi size)
 //   huy                   : undo_ticket_id = ticket_id của thao tác cần huỷ (chỉ của chính seller, ≤ 10 phút)
 // Khoá riêng STOCK_KEY (không dùng chung SALE_KEY): thao tác kho quyền mạnh hơn ghi bán → khoá / đổi độc lập được.
 // =====================================================================
 
 const STOCK_ACTIONS = ['nhap', 'tra_hang', 'xuat', 'chuyen_kho', 'chuyen_vi_tri', 'huy'];
-const LOCATION_RE = /^(TH|K|B|T|S)\d{1,3}[A-Z]?$/; // TH (thùng) phải khớp trước T (tủ)
+const LOCATION_RE = /^(TH|K|B|T|S|H)\d{1,3}[A-Z]?$/; // TH (thùng) phải khớp trước T (tủ)
 
 function handleStockRequest_(e) {
   let out;
@@ -2119,7 +2119,7 @@ function stockLine_(action, body, ln, i, dry) {
   // Dòng khác kho chung → từ chối, không đoán (18/10: app ghi nhầm vị trí HT1121D vào KHO15E)
   const khoChung = KHO_ALIASES[String(body.warehouse || '').trim().toUpperCase()];
   if (ln.warehouse && body.warehouse && khoChung !== kho) return fail('dòng ghi kho ' + kho + ' nhưng phiếu ghi kho ' + (khoChung || body.warehouse) + ' — chọn lại kho rồi gửi lại');
-  if (!LOCATION_RE.test(location)) return fail('vị trí phải dạng K12, B2, T4, S1, TH2 (K kệ, B bàn, T tủ, S sọc, TH thùng)');
+  if (!LOCATION_RE.test(location)) return fail('vị trí phải dạng K12 / B2 / T4 / S1 / TH2 / H3 (K kệ, B bàn, T tủ, S sọc, TH thùng)');
   res.warehouse = kho;
   res.location = location;
   p.kho = kho;
