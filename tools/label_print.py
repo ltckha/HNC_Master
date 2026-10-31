@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import label_render  # noqa: E402
-import truc_ca  # noqa: E402
+import health_log  # noqa: E402
 
 MODEL = 'QL-700'
 KHOS = ('15E', 'Y3C')
@@ -128,15 +128,15 @@ def mark_done(rows, codes):
     if cells:
         # P5b: Sổ kho Web + META p5b_web = 1 → gửi web_label lên web (co_nhap, cùng luật bot nhapFlagsWeb_); Dự phòng → ghi Sheet như cũ
         sys.path.insert(0, ROOT)
-        from tools import web_lenh
+        from tools import web_commands
         w = None
-        if web_lenh.p5b_on(web_lenh.meta(ws.spreadsheet), 'che_do_kho'):
+        if web_commands.p5b_on(web_commands.meta(ws.spreadsheet), 'che_do_kho'):
             im = head.index('ma_dong') if 'ma_dong' in head else None
             dong = []
             for r in marked:
                 vals = got[r]
                 dong.append({'row': r, 'code': vals[ip].strip().upper(), 'ma_dong': (vals[im] if im is not None and im < len(vals) else '').strip(), 'value': stamp})
-            w = web_lenh.co_nhap('web_label', dong)
+            w = web_commands.co_nhap('web_label', dong)
         if w is None:
             ws.update_cells(cells)
         elif not w.get('ok'):
@@ -222,7 +222,7 @@ def poll_once(ws):
             fields['lenh'] = ''
         queue_write(ws, row, col, **fields)
         if not result.get('ok'):
-            truc_ca.ghi('hnc.intem', 'loi', f"in tem {kho}: {result.get('loi', '')}")
+            health_log.ghi('hnc.label_print', 'loi', f"in tem {kho}: {result.get('loi', '')}")
 
 
 THU_MAX = 5
@@ -281,10 +281,10 @@ def main():
         try:
             ws = ws or queue_sheet()
             poll_once(ws)
-            truc_ca.ghi('hnc.intem', 'ok', 'in tem khi bấm: đang chờ lệnh')  # 1 dòng / ngày
+            health_log.ghi('hnc.label_print', 'ok', 'in tem khi bấm: đang chờ lệnh')  # 1 dòng / ngày
         except Exception as e:  # mất mạng / quota Sheet: chờ rồi thử lại, kết nối lại từ đầu
             print(f'{datetime.now():%Y-%m-%d %H:%M:%S} lỗi đọc tab {QUEUE_TAB}: {e}', flush=True)
-            truc_ca.ghi('hnc.intem', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')
+            health_log.ghi('hnc.label_print', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')
             ws = None
             time.sleep(POLL_IDLE_SEC)
         if '--mot-lan' in sys.argv:

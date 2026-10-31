@@ -33,7 +33,7 @@ Dữ liệu gốc: Google Sheet `HNC_Control_Center` (SANPHAM, NHAP, XUAT, BAN, 
 - **Hoá đơn nhà cung cấp**: `hoadon`. Bot tự nhận hoá đơn từ thư mục Drive và nhắc sáng thứ Hai.
 - **Cửa cho web / app**: ghi bán `?sale_key`, báo đơn web `?notify_key`, đánh dấu đã xuất file sàn `?export_key`.
 - **Đồng bộ web**: Sheet đổi thì báo web chép lại (bot qua trigger, `main.py` sau mỗi tác vụ ghi Sheet).
-- Chi tiết: [`zalo_bot/README.md`](zalo_bot/README.md). Cập nhật bot: `commands/bot_deploy.command` (test → clasp push → giữ link `/exec`).
+- Chi tiết: [`zalo_bot/README.md`](zalo_bot/README.md). Cập nhật bot: `commands/Deploy_Bot.command` (test → clasp push → giữ link `/exec`).
 
 ---
 

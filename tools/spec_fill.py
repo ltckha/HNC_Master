@@ -377,7 +377,7 @@ def cmd_apply(args):
             row_of[code] = i
     updates, skipped, doi, updates_moi = [], Counter(), {}, []
     sys.path.insert(0, ROOT)
-    from tools.tach_cot_sanpham import moi_tu_cu
+    from tools.split_product_columns import moi_tu_cu
     for r in rows:
         ci = col_index(head, r["cot"])
         ri = row_of.get(r["product_code"].strip().upper())
@@ -400,10 +400,10 @@ def cmd_apply(args):
     if args.dry_run or not updates:
         return
     if hh_web(ss):
-        # B1 (P5b): web giữ thuộc tính → gửi co_sp (tools/web_lenh.py, cùng gói bot); web Dự phòng → ghi Sheet như cũ
+        # B1 (P5b): web giữ thuộc tính → gửi co_sp (tools/web_commands.py, cùng gói bot); web Dự phòng → ghi Sheet như cũ
         sys.path.insert(0, ROOT)
-        from tools import web_lenh
-        w = web_lenh.co_sp([{"code": k, "doi": v} for k, v in doi.items()])
+        from tools import web_commands
+        w = web_commands.co_sp([{"code": k, "doi": v} for k, v in doi.items()])
         if w is not None:
             if not w.get("ok"):
                 sys.exit(f"❌ {w.get('error')} — chưa ghi gì vào Sheet (web giữ thuộc tính).")

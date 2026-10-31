@@ -548,13 +548,13 @@ class EngineDataLoader:
 
     def _p5b_web(self, sheet_name, cells):
         """P5b (21/10): sổ ở Web + META p5b_web = 1 → gửi cờ lên web (co_nhap / co_sp) thay vì ghi Sheet — cùng luật bot
-        nhapFlagsWeb_ / spFlagsWeb_ (tools/web_lenh.py). cells = {chỉ số dòng 0-based: {chỉ số cột: giá trị}}.
+        nhapFlagsWeb_ / spFlagsWeb_ (tools/web_commands.py). cells = {chỉ số dòng 0-based: {chỉ số cột: giá trị}}.
         Trả None = ghi Sheet như cũ (P5b tắt / web Dự phòng / cột ngoài hợp đồng), True = web đã ghi, False = web lỗi (không ghi)."""
         if not self.is_google_api or not cells or sheet_name not in ('NHAP', 'SANPHAM'):
             return None
-        from tools import web_lenh
-        m = web_lenh.meta(self.spreadsheet)
-        if not web_lenh.p5b_on(m, 'che_do_kho' if sheet_name == 'NHAP' else 'che_do_hh'):
+        from tools import web_commands
+        m = web_commands.meta(self.spreadsheet)
+        if not web_commands.p5b_on(m, 'che_do_kho' if sheet_name == 'NHAP' else 'che_do_hh'):
             return None
         v = self.spreadsheet.worksheet(sheet_name).get_all_values()
         hr = 1 if sheet_name == 'SANPHAM' else 0  # SANPHAM: tên cột kỹ thuật ở hàng 2 (luật 4)
@@ -569,11 +569,11 @@ class EngineDataLoader:
                 for c, val in cols.items():
                     by_col.setdefault(head[c] if c < len(head) else '', []).append(
                         {'row': r + 1, 'code': cell(r, ic).upper(), 'ma_dong': cell(r, im), 'value': val})
-            if any(f not in web_lenh.CO_NHAP_COLS for f in by_col):
+            if any(f not in web_commands.CO_NHAP_COLS for f in by_col):
                 return None
-            res = [web_lenh.co_nhap(f, d) for f, d in by_col.items()]
+            res = [web_commands.co_nhap(f, d) for f, d in by_col.items()]
         else:
-            res = [web_lenh.co_sp([{'code': cell(r, ic).upper(), 'doi': {head[c]: val for c, val in cols.items() if c < len(head)}} for r, cols in cells.items()])]
+            res = [web_commands.co_sp([{'code': cell(r, ic).upper(), 'doi': {head[c]: val for c, val in cols.items() if c < len(head)}} for r, cols in cells.items()])]
         if any(x is None for x in res):
             return None
         bad = [x for x in res if not x.get('ok')]
@@ -3136,7 +3136,7 @@ def ten_video_khong_trung(dst_folder, code, f):
 @sync_hint_after
 def process_media_management(loader, auto_ingest=True, chi_video=False):
     """Gom file tư liệu từ Photoroom & Downloads và cập nhật 3 cột content_path, content_url, content_files lên Google Sheet SANPHAM.
-    chi_video (launchd vn.giayhainancy.hnc.gomvideo, anh Kha 30/10): chỉ .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM;
+    chi_video (launchd vn.giayhainancy.hnc.collect_videos, anh Kha 30/10): chỉ .mp4 / .mov ở ~/Downloads, tên = mã có trong SANPHAM;
     chỉ ghi Sheet các mã vừa gom. Mọi chế độ: 1 mã nhiều video (<MÃ>_1.mp4, <MÃ>_2.mp4…), trùng số thì số kế tiếp, không ghi đè."""
     if chi_video:
         ds_video = video_moi_trong_tai_ve()
@@ -3897,7 +3897,7 @@ NHAP_COT_CAN = ('Ngày chứng từ (*)', 'Số chứng từ (*)', 'product_code
 
 def batch_commit_ingestion(loader, confirmed_products):
     """Ghi hàng loạt sản phẩm mới vào SANPHAM và toàn bộ dòng nhập kho vào NHAP (Quét Header Động)."""
-    from tools.tach_cot_sanpham import tach as tach_cot
+    from tools.split_product_columns import tach as tach_cot
     if not confirmed_products:
         return {'sp_added': 0, 'restock_count': 0, 'nhap_rows': 0}
     for data in confirmed_products:
@@ -3912,8 +3912,8 @@ def batch_commit_ingestion(loader, confirmed_products):
     var_idx_sp, map_sp = DynamicHeaderScanner.scan_data_headers(df_sp)
     num_sp_cols = len(df_sp.columns)
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
-    from tools.tu_dien_sanpham import COT_MOI
-    from tools.mac_dinh_nganh import mac_dinh as mac_dinh_nganh
+    from tools.product_dictionary import COT_MOI
+    from tools.category_defaults import mac_dinh as category_defaults
     COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # chép cả do_om / chon_size (cùng khuôn); mau_phoi không chép (theo màu). Mẫu mới hẳn: để người nhập chọn (29/10)
     mau_cha = {}
     if 'product_code' in head_sp:
@@ -4036,7 +4036,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_purch is not None: row_values[idx_purch] = data.get('purchase_price', 0)
             if idx_inv is not None: row_values[idx_inv] = data.get('invoice_price', 0)
             if idx_sup is not None: row_values[idx_sup] = data.get('supplier', '')
-            # Bộ chuẩn 29/10 (chạy song song): cột mới BA–BO điền từ chữ cột cũ vừa ghi, cùng bảng gộp GĐ B (tools/tach_cot_sanpham.py)
+            # Bộ chuẩn 29/10 (chạy song song): cột mới BA–BO điền từ chữ cột cũ vừa ghi, cùng bảng gộp GĐ B (tools/split_product_columns.py)
             for ten, (moi, _, tt) in tach_cot([str(x) for x in row_values], head_sp).items():
                 if tt == 'dien' and ten in head_sp:
                     row_values[head_sp.index(ten)] = moi
@@ -4049,7 +4049,7 @@ def batch_commit_ingestion(loader, confirmed_products):
                     if ten in head_sp and str(mau[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = str(mau[head_sp.index(ten)]).strip()
             else:  # mẫu mới: mặc định theo ngành (anh Kha 29/10, bảng chung hop_dong_du_lieu.json mac_dinh_theo_nganh) — chỉ ô trống
-                for ten, v in mac_dinh_nganh(data.get('category_name', '')).items():
+                for ten, v in category_defaults(data.get('category_name', '')).items():
                     if ten in head_sp and not str(row_values[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = v
 
@@ -4454,8 +4454,8 @@ def dieu_kien_dang_moi(code, pics, ton_ma, mo_ta_duyet, anh_nghi=()):
 def du_lieu_san_web():
     """POST /api/san/mac (khoá Mac, chỉ đọc): {bo_qua, mo_ta_duyet, anh_nghi} để Mac ra cùng danh sách Đăng mới với web (Bán hàng 30/10, luật 15).
     Lỗi → None + 1 dòng báo; khi đó giữ luật Mac cũ (mô tả theo Sheet, không xét ảnh nghi, không loại mã bỏ qua)."""
-    from tools import web_lenh
-    out, loi = web_lenh.san_mac()
+    from tools import web_commands
+    out, loi = web_commands.san_mac()
     if out is None:
         print(f"⚠️ Không lấy được dữ liệu sàn từ web ({loi}) → dùng luật Mac cũ: mô tả theo Sheet, chưa xét ảnh nghi tách nền / mã không đăng.")
     return out
@@ -4477,8 +4477,8 @@ def ma_khong_dang_san(kenh, san_web):
 def ma_da_len_san(kenh, codes):
     """Tập mã đã lên sàn theo file Liên kết mới nhất trong ~/Downloads (Enter = dùng, hoặc kéo file khác) — cùng luật web (anh Kha 30/10).
     → set mã, hoặc None nếu không có file / file sai (khi đó không xuất)."""
-    from tools import lien_ket_san
-    path = lien_ket_san.file_moi_nhat(kenh)
+    from tools import marketplace_links
+    path = marketplace_links.file_moi_nhat(kenh)
     if path:
         print(f"📄 File sàn {kenh} mới nhất: {os.path.basename(path)} ({datetime.fromtimestamp(os.path.getmtime(path)).strftime('%d/%m %H:%M')})")
     else:
@@ -4489,7 +4489,7 @@ def ma_da_len_san(kenh, codes):
         print("❌ Không có file sàn — không biết mã nào chưa đăng, không xuất.")
         return None
     try:
-        co, n, sai = lien_ket_san.ma_tren_san(kenh, lien_ket_san.doc_file(path, kenh), codes)
+        co, n, sai = marketplace_links.ma_tren_san(kenh, marketplace_links.doc_file(path, kenh), codes)
     except ValueError as e:
         print(f"❌ {e}. Không xuất.")
         return None
@@ -4498,8 +4498,8 @@ def ma_da_len_san(kenh, codes):
 
 
 def doi_chieu_co_san(loader, kenh):
-    """Đặt lại cờ shopee_upload / tiktok_upload theo file Liên kết Seller Center (tools/lien_ket_san.py) — cùng luật web + bot dat_lai_co_san (29/10, luật 15)."""
-    from tools import lien_ket_san
+    """Đặt lại cờ shopee_upload / tiktok_upload theo file Liên kết Seller Center (tools/marketplace_links.py) — cùng luật web + bot dat_lai_co_san (29/10, luật 15)."""
+    from tools import marketplace_links
     cot = f"{kenh}_upload"
     path = input(f"Kéo file Liên kết / Cập nhật hàng loạt {kenh} (.xlsx / .csv) vào đây rồi Enter: ").strip().strip("'\"").replace('\\ ', ' ')
     if not path or not os.path.isfile(path):
@@ -4518,11 +4518,11 @@ def doi_chieu_co_san(loader, kenh):
         if code:
             hang[code] = (i, str(df_raw.iloc[i][ic]).strip() if ic < len(df_raw.columns) else '')
     try:
-        co, n, sai = lien_ket_san.ma_tren_san(kenh, lien_ket_san.doc_file(path, kenh), list(hang))
+        co, n, sai = marketplace_links.ma_tren_san(kenh, marketplace_links.doc_file(path, kenh), list(hang))
     except ValueError as e:
         print(f"❌ {e}. Không ghi gì.")
         return
-    dat, go = lien_ket_san.doi_chieu(co, {c: v for c, (_, v) in hang.items()})
+    dat, go = marketplace_links.doi_chieu(co, {c: v for c, (_, v) in hang.items()})
     print(f"{n} dòng có mã sàn → {len(co)} mã khớp · {len(sai)} SKU không khớp · Sheet đang ghi {sum(1 for _, v in hang.values() if v)} mã")
     print(f"  Đặt Done {len(dat)}: {', '.join(dat[:10])}{' …' if len(dat) > 10 else ''}")
     print(f"  Gỡ cờ {len(go)}: {', '.join(go[:10])}{' …' if len(go) > 10 else ''}")
@@ -4709,8 +4709,8 @@ CHE_DO_SO = [
 
 @sync_hint_after
 def tra_doi_hang(loader):
-    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/tra_doi.py."""
-    from tools.tra_doi import TraDoi
+    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/returns_exchanges.py."""
+    from tools.returns_exchanges import TraDoi
     kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + bán mã khác)  [Enter] thôi: ").strip()
     if kieu not in ('1', '2'):
         return

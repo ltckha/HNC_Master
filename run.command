@@ -1,6 +1,3 @@
 #!/usr/bin/env zsh
-# HNC Control Center - Local Developer Finder Launcher
-DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
-cd "$DIR"
-source "$DIR/venv/bin/activate"
-python3 "$DIR/main.py"
+# Tên cũ, chuyển tiếp tạm (luật 20, 31/10): nút mới là HNC_Menu.command
+exec "$( cd "$( dirname "$0" )" && pwd )/HNC_Menu.command"
