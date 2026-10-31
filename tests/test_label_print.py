@@ -11,6 +11,8 @@ sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import label_render  # noqa: E402
 import label_print  # noqa: E402
 
+label_print.health_log.ghi = lambda *a, **k: None  # test không ghi sổ trực ca thật
+
 fails = []
 
 

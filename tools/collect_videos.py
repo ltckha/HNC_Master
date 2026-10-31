@@ -14,11 +14,11 @@ from tools import health_log  # noqa: E402
 
 if __name__ == '__main__':
     if not main.video_moi_trong_tai_ve():
-        health_log.ghi('hnc.collect_videos', 'ok', 'không có video mới')  # 1 dòng ok / ngày
+        health_log.ghi('hnc.gomvideo', 'ok', 'không có video mới')  # 1 dòng ok / ngày
         sys.exit(0)  # không có video: không mở Sheet
     try:
         main.process_media_management(main.EngineDataLoader(), auto_ingest=True, chi_video=True)
     except Exception as e:
-        health_log.ghi('hnc.collect_videos', 'loi', f'gom video lỗi: {type(e).__name__}: {str(e)[:80]}')
+        health_log.ghi('hnc.gomvideo', 'loi', f'gom video lỗi: {type(e).__name__}: {str(e)[:80]}')
         raise
-    health_log.ghi('hnc.collect_videos', 'ok', 'đã gom video')
+    health_log.ghi('hnc.gomvideo', 'ok', 'đã gom video')

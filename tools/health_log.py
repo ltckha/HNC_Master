@@ -1,5 +1,5 @@
 """Ghi sổ trực ca cho job launchd HNC (Bước 2 · Trực ca, anh Kha "làm" 31/10).
-Gọi ~/Developer/Ecosystem-Hub/commands/log_health.sh <ma> ok|loi "<ghi chú>"; mã theo Ecosystem-Hub/docs/scheduled_jobs.json (hnc.label_print, hnc.collect_videos).
+Gọi ~/Developer/Ecosystem-Hub/commands/log_health.sh <ma> ok|loi "<ghi chú>"; mã theo Ecosystem-Hub/docs/scheduled_jobs.json (tạm giữ hnc.intem, hnc.gomvideo tới khi Điều phối đổi scheduled_jobs.json; mã mới hnc.label_print, hnc.collect_videos).
 Job chạy dày / luôn bật: 'ok' chỉ ghi dòng đầu tiên mỗi ngày; 'loi' cùng ghi chú chỉ ghi 1 lần / giờ (mất mạng không làm đầy sổ).
 Không bao giờ raise, không làm hỏng việc chính. Ghi chú không chứa bí mật.
 """

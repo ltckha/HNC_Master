@@ -222,7 +222,7 @@ def poll_once(ws):
             fields['lenh'] = ''
         queue_write(ws, row, col, **fields)
         if not result.get('ok'):
-            health_log.ghi('hnc.label_print', 'loi', f"in tem {kho}: {result.get('loi', '')}")
+            health_log.ghi('hnc.intem', 'loi', f"in tem {kho}: {result.get('loi', '')}")
 
 
 THU_MAX = 5
@@ -281,10 +281,10 @@ def main():
         try:
             ws = ws or queue_sheet()
             poll_once(ws)
-            health_log.ghi('hnc.label_print', 'ok', 'in tem khi bấm: đang chờ lệnh')  # 1 dòng / ngày
+            health_log.ghi('hnc.intem', 'ok', 'in tem khi bấm: đang chờ lệnh')  # 1 dòng / ngày
         except Exception as e:  # mất mạng / quota Sheet: chờ rồi thử lại, kết nối lại từ đầu
             print(f'{datetime.now():%Y-%m-%d %H:%M:%S} lỗi đọc tab {QUEUE_TAB}: {e}', flush=True)
-            health_log.ghi('hnc.label_print', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')
+            health_log.ghi('hnc.intem', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')
             ws = None
             time.sleep(POLL_IDLE_SEC)
         if '--mot-lan' in sys.argv:
