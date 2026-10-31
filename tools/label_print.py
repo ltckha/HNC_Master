@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import label_render  # noqa: E402
+import truc_ca  # noqa: E402
 
 MODEL = 'QL-700'
 KHOS = ('15E', 'Y3C')
@@ -220,6 +221,8 @@ def poll_once(ws):
         if not keep and cur.get(kho, (0, ''))[1] == lenh:
             fields['lenh'] = ''
         queue_write(ws, row, col, **fields)
+        if not result.get('ok'):
+            truc_ca.ghi('hnc.intem', 'loi', f"in tem {kho}: {result.get('loi', '')}")
 
 
 THU_MAX = 5
@@ -278,8 +281,10 @@ def main():
         try:
             ws = ws or queue_sheet()
             poll_once(ws)
+            truc_ca.ghi('hnc.intem', 'ok', 'đang chạy')  # 1 dòng / ngày
         except Exception as e:  # mất mạng / quota Sheet: chờ rồi thử lại, kết nối lại từ đầu
             print(f'{datetime.now():%Y-%m-%d %H:%M:%S} lỗi đọc tab {QUEUE_TAB}: {e}', flush=True)
+            truc_ca.ghi('hnc.intem', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')
             ws = None
             time.sleep(POLL_IDLE_SEC)
         if '--mot-lan' in sys.argv:

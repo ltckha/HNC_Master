@@ -10,7 +10,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import main  # noqa: E402
 
+from tools import truc_ca  # noqa: E402
+
 if __name__ == '__main__':
     if not main.video_moi_trong_tai_ve():
+        truc_ca.ghi('hnc.gomvideo', 'ok', 'không có video mới')  # 1 dòng ok / ngày
         sys.exit(0)  # không có video: không mở Sheet
-    main.process_media_management(main.EngineDataLoader(), auto_ingest=True, chi_video=True)
+    try:
+        main.process_media_management(main.EngineDataLoader(), auto_ingest=True, chi_video=True)
+    except Exception as e:
+        truc_ca.ghi('hnc.gomvideo', 'loi', f'gom video lỗi: {type(e).__name__}: {str(e)[:80]}')
+        raise
+    truc_ca.ghi('hnc.gomvideo', 'ok', 'đã gom video')
