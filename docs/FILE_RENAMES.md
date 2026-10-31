@@ -5,8 +5,8 @@
 ## Việc tự chạy (launchd) và mã sổ trực ca
 | Cũ | Mới |
 |---|---|
-| nhãn `vn.giayhainancy.hnc.intem` · mã sổ `hnc.intem` | `vn.giayhainancy.hnc.label_print` · mã sổ đề xuất `hnc.label_print` (code TẠM giữ `hnc.intem`) (script giữ `tools/label_print.py`) |
-| nhãn `vn.giayhainancy.hnc.gomvideo` · mã sổ `hnc.gomvideo` | `vn.giayhainancy.hnc.collect_videos` · mã sổ đề xuất `hnc.collect_videos` (code TẠM giữ `hnc.gomvideo`) |
+| nhãn `vn.giayhainancy.hnc.intem` · mã sổ `hnc.intem` | `vn.giayhainancy.hnc.label_print` · `hnc.label_print` (đổi 31/10 sau khi Điều phối sửa scheduled_jobs.json) (script giữ `tools/label_print.py`) |
+| nhãn `vn.giayhainancy.hnc.gomvideo` · mã sổ `hnc.gomvideo` | `vn.giayhainancy.hnc.collect_videos` · `hnc.collect_videos` (đổi 31/10) |
 | nhãn `vn.giayhainancy.hnc.goiygia` (không cài từ 28/10) | `vn.giayhainancy.hnc.price_suggest` |
 
 File log giữ tên cũ (`~/Library/Logs/hnc_in_tem.log`, `hnc_gom_video.log`, `hnc_goi_y_gia.log`) để không mất lịch sử.
