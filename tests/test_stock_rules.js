@@ -1,13 +1,13 @@
-// Ca mẫu luật kho (P0, 20/10): chạy shared/ca_mau_luat_kho.json trên shared/luat_kho.js (mới) và trên hàm cũ của zalo_bot/Code.gs
+// Ca mẫu luật kho (P0, 20/10): chạy shared/stock_rules_cases.json trên shared/stock_rules.js (mới) và trên hàm cũ của zalo_bot/Code.gs
 // (qua vm, thay phần đọc / ghi Sheet bằng dữ liệu của ca). Mới, cũ và "ra" của ca phải y hệt.
-// Chạy: node tests/test_luat_kho.js
+// Chạy: node tests/test_stock_rules.js
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const L = require(path.join(ROOT, 'shared', 'luat_kho.js'));
-const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, 'shared', 'ca_mau_luat_kho.json'), 'utf8')).ca;
+const L = require(path.join(ROOT, 'shared', 'stock_rules.js'));
+const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, 'shared', 'stock_rules_cases.json'), 'utf8')).ca;
 
 // ---- Nạp Code.gs cũ (chỉ cần hàm, không chạy doPost) ----
 const ctx = { console, Date, JSON, Math, Number, String, Object, Array, RegExp, isNaN, parseInt, parseFloat, Set };
@@ -30,7 +30,7 @@ function adjCapture() {
   return doi;
 }
 
-// Bộ chuyển: gọi hàm cũ với dữ liệu của ca, trả kết quả theo dạng của luat_kho.js
+// Bộ chuyển: gọi hàm cũ với dữ liệu của ca, trả kết quả theo dạng của stock_rules.js
 const OLD = {
   tachMaSize(tok, ma, goc) {
     ctx.__memo();
@@ -184,5 +184,5 @@ CASES.forEach(c => {
     console.log('❌ ' + c.ten + '\n   ra:  ' + JSON.stringify(c.ra) + '\n   mới: ' + JSON.stringify(moi) + '\n   cũ:  ' + JSON.stringify(cu));
   }
 });
-console.log((fail ? '❌ ' : '✅ ') + (CASES.length - fail) + '/' + CASES.length + ' ca mẫu: luat_kho.js = code cũ');
+console.log((fail ? '❌ ' : '✅ ') + (CASES.length - fail) + '/' + CASES.length + ' ca mẫu: stock_rules.js = code cũ');
 process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-"""Mặc định thuộc tính theo ngành (anh Kha 29/10) — bảng chung shared/hop_dong_du_lieu.json khoá mac_dinh_theo_nganh (Mac + web, luật 15).
+"""Mặc định thuộc tính theo ngành (anh Kha 29/10) — bảng chung shared/data_contract.json khoá mac_dinh_theo_nganh (Mac + web, luật 15).
 Chỉ điền ô TRỐNG. Chạy thử: đếm ô theo ngành + liệt kê mã đang có giá trị KHÁC luật (để anh xem, không sửa) → docs/product_standard/category_defaults.csv.
 
   venv/bin/python tools/category_defaults.py [--ghi] [--sheet ID]
@@ -12,7 +12,7 @@ from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-BANG = json.load(open(os.path.join(ROOT, 'shared', 'hop_dong_du_lieu.json'), encoding='utf-8'))['mac_dinh_theo_nganh']
+BANG = json.load(open(os.path.join(ROOT, 'shared', 'data_contract.json'), encoding='utf-8'))['mac_dinh_theo_nganh']
 
 
 def _n(s):

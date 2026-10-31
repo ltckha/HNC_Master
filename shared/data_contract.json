@@ -5,7 +5,7 @@
   "Luật 4: đọc / ghi theo TÊN cột ở hang_tieu_de (SANPHAM = hàng 2, hàng 1 là tên nhóm); thiếu cột bắt buộc → báo lỗi, không ghi cột khác.",
   "ghi: ai được ghi cột đó (bot = Apps Script, main.py = menu Mac, web = qua cửa bot, tay = người gõ trên Sheet). cong_thuc: ô là công thức, không ghi giá trị. Riêng NHAP.FSKU: cong_thuc nhưng PHẢI ghi công thức từng dòng (ghi_cong_thuc: true).",
   "chi_chu: chỉ Chủ được xem (giá nhập / giá HĐ / thông tin NCC / SĐT khách). Web giữ trong bảng riêng, chỉ vai Chủ; không ra trang khách, feed, AI hay nhân viên (luật web 20/10, repo web 1d7d80a). SĐT khách web đã có từ đơn / phiếu bán, vẫn che với AI.",
-  "Luật nghiệp vụ dùng chung: shared/luat_kho.js (ca mẫu shared/ca_mau_luat_kho.json).",
+  "Luật nghiệp vụ dùng chung: shared/stock_rules.js (ca mẫu shared/stock_rules_cases.json).",
   "du_kien: cột / khoá chưa có trên Sheet thật (20/10 đã thêm ma_dong / nguon và META che_do… trên Sheet thật, chế độ master; còn khoa_mac chưa dùng)."
  ],
  "tab": {
@@ -1348,7 +1348,7 @@
  },
  "luat_dong_kho": "Mã + size chưa có dòng ở tab KHO của kho: (1) ghi dòng làm tồn TĂNG (nhập lẻ / phiếu NCC / khách trả / phần nhập của chuyển kho) → TẠO dòng KHO có công thức (cong_thuc_mau) TRƯỚC rồi mới ghi NHAP; (2) cần ghi ô ký gửi cua_… ở kho chưa có dòng → tạo dòng như (1); (3) xuất / bán từ kho chưa có dòng → KHÔNG tạo, chỉ cảnh báo \"tồn không trừ\"; (4) tao_ma → dòng 2 kho × dãy size. Bot từ 20/10 (appendKhoRow_), web làm giống.",
  "mac_dinh_theo_nganh": {
-  "ghi_chu": "Luật mặc định thuộc tính theo ngành (anh Kha 29/10). Mac (tools/mac_dinh_nganh.py, main.py nhập mã mới không có mẫu cha) + web dùng chung (luật 15). Chỉ điền ô TRỐNG, không đè. So ngành: bỏ khoảng trắng thừa, không phân biệt hoa thường. Mỗi cột lấy luật ĐẦU TIÊN khớp. nganh = đúng tên ngành SUB; nganh_chua = ngành giày dép có chứa 1 chữ; giay_dep = mọi ngành giày dép (khớp regex giay_dep).",
+  "ghi_chu": "Luật mặc định thuộc tính theo ngành (anh Kha 29/10). Mac (tools/category_defaults.py, main.py nhập mã mới không có mẫu cha) + web dùng chung (luật 15). Chỉ điền ô TRỐNG, không đè. So ngành: bỏ khoảng trắng thừa, không phân biệt hoa thường. Mỗi cột lấy luật ĐẦU TIÊN khớp. nganh = đúng tên ngành SUB; nganh_chua = ngành giày dép có chứa 1 chữ; giay_dep = mọi ngành giày dép (khớp regex giay_dep).",
   "giay_dep": "^(giày|dép|sandal|sapo|guốc)",
   "luat": [
    {

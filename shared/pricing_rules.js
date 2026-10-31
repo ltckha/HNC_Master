@@ -1,6 +1,6 @@
 /**
  * LUẬT GỢI Ý GIÁ BÁN — bản chung (Agent đăng SP GĐ3b, anh Kha "LÀM" 28/10/2026).
- * JS thuần như luat_kho.js: KHÔNG đọc / ghi Sheet, không gọi mạng — chạy được trong Apps Script, Node (Mac gọi qua node) và Worker.
+ * JS thuần như stock_rules.js: KHÔNG đọc / ghi Sheet, không gọi mạng — chạy được trong Apps Script, Node (Mac gọi qua node) và Worker.
  *
  * Giá nhập 1 mã: giá lô mới nhất (don_gia_hd → don_gia_phieu), không có thì giá theo mã purchase_price (giá mua trên phiếu) → invoice_price
  *   (anh Kha 28/10: giá mua trước — khớp giá phiếu của mã mới; thử 2240 mã: 76% trong ±10% so với 62% khi invoice trước).

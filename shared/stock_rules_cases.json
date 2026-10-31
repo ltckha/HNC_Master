@@ -1,6 +1,6 @@
 {
  "phien_ban": "2026-10-20",
- "ghi_chu": "Ca mẫu luật kho HNC — chạy: node tests/test_luat_kho.js (so code cũ zalo_bot/Code.gs và shared/luat_kho.js). Size nửa số (\"38,5\") chưa có ca: bot cũ đọc dấu phẩy thành danh sách size → cần anh chốt trước khi thêm.",
+ "ghi_chu": "Ca mẫu luật kho HNC — chạy: node tests/test_stock_rules.js (so code cũ zalo_bot/Code.gs và shared/stock_rules.js). Size nửa số (\"38,5\") chưa có ca: bot cũ đọc dấu phẩy thành danh sách size → cần anh chốt trước khi thêm.",
  "ca": [
   {
    "ten": "tách mã + size: AP048N40",

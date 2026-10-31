@@ -49,6 +49,8 @@ File log giữ tên cũ (`~/Library/Logs/hnc_in_tem.log`, `hnc_gom_video.log`, `
 | `tools/doi_ten_video_1.py` | `tools/rename_first_videos.py` | đổi tên 1 lần <MÃ>.mp4 → <MÃ>_1.mp4 (đã chạy 30/10) |
 | `tools/launchd/cai_in_tem.sh` · `cai_gom_video.sh` · `cai_goi_y_gia.sh` | `install_label_print.sh` · `install_collect_videos.sh` · `install_price_suggest.sh` | cài job launchd |
 | `shared/luat_gia.js` | `shared/pricing_rules.js` | luật gợi ý giá |
+| `shared/luat_kho.js` · `shared/ca_mau_luat_kho.json` · `shared/hop_dong_du_lieu.json` | `shared/stock_rules.js` · `shared/stock_rules_cases.json` · `shared/data_contract.json` | luật kho chung, ca mẫu, hợp đồng dữ liệu (đổi 31/10 cùng lúc với web, web chép bằng luat:sync) |
+| `tests/test_luat_kho.js` | `tests/test_stock_rules.js` | test luật kho |
 | `tests/test_luat_gia.js` · `tests/test_p5b_mac.py` | `tests/test_pricing_rules.js` · `tests/test_web_commands.py` | test |
 
 ## Tài liệu, thư mục
@@ -61,7 +63,6 @@ File log giữ tên cũ (`~/Library/Logs/hnc_in_tem.log`, `hnc_gom_video.log`, `
 | `docs/sanpham_chuan/` | `docs/product_standard/` (file dữ liệu sinh ra bên trong giữ tên) |
 
 ## Giữ tên, có lý do
-- `shared/luat_kho.js`, `shared/ca_mau_luat_kho.json`, `shared/hop_dong_du_lieu.json`: web chép theo đúng tên và kiểm mã băm (`npm run luat:sync`, `scripts/kiem_shared.mjs`). Đổi cùng lúc với gói đổi tên web. Nội dung cũng không sửa, nên ghi chú trong `hop_dong_du_lieu.json` còn nhắc `tools/mac_dinh_nganh.py`.
 - `zalo_bot/` (Apps Script): đổi tên đi kèm deploy bot, để gói sau.
 - `main.py`, `hnc_paths.py`, `tools/label_print.py`, `tools/label_render.py`, `tools/spec_fill.py`, test `test_label*.py`, `test_pending_info.py`, `test_sale_images.py`, `test_sync_hint.py`, `requirements.txt`, README / CLAUDE.
 

@@ -1,11 +1,11 @@
-"""Gọi luật kho chung shared/luat_kho.js từ Python (main.py, công cụ Mac) qua node — luật 15: Mac ra cùng kết quả với bot / web.
+"""Gọi luật kho chung shared/stock_rules.js từ Python (main.py, công cụ Mac) qua node — luật 15: Mac ra cùng kết quả với bot / web.
 Dùng: from tools.stock_rules_node import goi; goi('banTachChuHang', '15E', 2, 1) → {'phan': [...], 'doi_cot': [...]}"""
 import json
 import os
 import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LUAT = os.path.join(ROOT, 'shared', 'luat_kho.js')
+LUAT = os.path.join(ROOT, 'shared', 'stock_rules.js')
 
 
 LUAT_GIA = os.path.join(ROOT, 'shared', 'pricing_rules.js')

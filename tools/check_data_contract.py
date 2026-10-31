@@ -1,4 +1,4 @@
-"""Kiểm shared/hop_dong_du_lieu.json khớp tiêu đề Sheet HNC thật (CHỈ ĐỌC). Chạy: venv/bin/python tools/check_data_contract.py
+"""Kiểm shared/data_contract.json khớp tiêu đề Sheet HNC thật (CHỈ ĐỌC). Chạy: venv/bin/python tools/check_data_contract.py
 Báo: cột hợp đồng thiếu trên Sheet (trừ cột du_kien), cột Sheet chưa có trong hợp đồng."""
 import json
 import os
@@ -11,7 +11,7 @@ SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
 
 
 def main():
-    hd = json.load(open(os.path.join(ROOT, 'shared', 'hop_dong_du_lieu.json'), encoding='utf-8'))
+    hd = json.load(open(os.path.join(ROOT, 'shared', 'data_contract.json'), encoding='utf-8'))
     sh = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json')).open_by_key(SHEET_ID)
     lech = 0
     for ws in sh.worksheets():

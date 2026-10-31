@@ -4048,7 +4048,7 @@ def batch_commit_ingestion(loader, confirmed_products):
                 for ten in COT_MOI_MAU:
                     if ten in head_sp and str(mau[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = str(mau[head_sp.index(ten)]).strip()
-            else:  # mẫu mới: mặc định theo ngành (anh Kha 29/10, bảng chung hop_dong_du_lieu.json mac_dinh_theo_nganh) — chỉ ô trống
+            else:  # mẫu mới: mặc định theo ngành (anh Kha 29/10, bảng chung data_contract.json mac_dinh_theo_nganh) — chỉ ô trống
                 for ten, v in category_defaults(data.get('category_name', '')).items():
                     if ten in head_sp and not str(row_values[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = v

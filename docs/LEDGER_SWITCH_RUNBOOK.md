@@ -14,7 +14,7 @@ Bot thật đang @37 (deploy 20/10 13:4x, commit ee87f54). Bản mới = HEAD c�
 - Đo thời gian trigger / ngày (`do_trigger`), xac_nhan `web_ghi`, `tao_ma`, `kq_in_tem`, `in_bu`, hoá đơn `trang_thai` / `tin`.
 
 ## Trước khi deploy (Thực thi – HNC_Master)
-1. Kiểm: `node zalo_bot/tests/test_zalo_bot.js` (≥ 342 đạt) · `node tests/test_luat_kho.js` (74/74) · `venv/bin/python tools/check_data_contract.py` (khớp) · các test Python trong `tests/`.
+1. Kiểm: `node zalo_bot/tests/test_zalo_bot.js` (≥ 342 đạt) · `node tests/test_stock_rules.js` (74/74) · `venv/bin/python tools/check_data_contract.py` (khớp) · các test Python trong `tests/`.
 2. Đọc META Sheet thật: che_do / che_do_kho / che_do_ton / che_do_hh đều master hoặc chưa có; `cho_chep` = 0.
 3. Khởi tạo META thật (anh duyệt cùng lần deploy): `nk_cuoi_15E`, `nk_cuoi_Y3C` = số NK lớn nhất hiện có của từng kho (20/10: 15E NK000027, Y3C NK000041 — đọc lại lúc làm).
 4. Web bản chính kiểm chữ ký `/api/bot-lenh` bằng **WEB_NOTIFY_KEY** (bot thật chưa có BOT_CALLBACK_KEY) — Thực thi Website xác nhận.

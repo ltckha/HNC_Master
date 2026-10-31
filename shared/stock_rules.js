@@ -3,7 +3,7 @@
  * JS thuần, KHÔNG đọc / ghi Sheet, không gọi mạng: chạy được trong Apps Script (bot), Node (main.py gọi qua node, test)
  * và Cloudflare Worker (web). Hàm nhận dữ liệu đã đọc sẵn, trả kết quả / thay đổi cần ghi; phía gọi tự ghi.
  *
- * Nguồn luật: zalo_bot/Code.gs (bản @35). Ca mẫu: shared/ca_mau_luat_kho.json — chạy: node tests/test_luat_kho.js
+ * Nguồn luật: zalo_bot/Code.gs (bản @35). Ca mẫu: shared/stock_rules_cases.json — chạy: node tests/test_stock_rules.js
  * (so cả code cũ trong Code.gs lẫn file này, kết quả phải y hệt).
  * Chưa nối vào bot / main.py / web đang chạy: đổi thật sau 26/10, anh xác nhận tại phiên Thực thi – HNC_Master.
  *
