@@ -108,7 +108,7 @@ function doPost(e) {
     const key = props.getProperty('WEBHOOK_KEY');
     if (!key || !e || !e.parameter || e.parameter.key !== key) return ok_();
 
-    const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+    const body = docBody_(e);
     const msg = body.message;
     if (!msg || !msg.chat) return ok_();
     if (!msg.text) {
@@ -266,6 +266,16 @@ function runBatch_(lines, dryRun) {
 // PHÂN TÍCH TIN NHẮN (không dùng AI)
 // =====================================================================
 
+/** Bỏ ký tự ẩn \x00–\x1F (vd backspace dính "\bG2004D"); tab → dấu cách, giữ xuống dòng. Khớp web 5b2c155 + main.sach_an (31/10, luật 15). */
+function sachAn_(s) {
+  return typeof s === 'string' ? s.replace(/\t/g, ' ').replace(/[\x00-\x08\x0b-\x1f]/g, '') : s;
+}
+
+/** JSON đầu vào (Zalo / web): mọi chuỗi đi qua sachAn_. */
+function docBody_(e) {
+  return JSON.parse((e.postData && e.postData.contents) || '{}', (k, v) => sachAn_(v));
+}
+
 /** Chữ thường, bỏ dấu tiếng Việt (đ → d). */
 function norm_(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
@@ -285,7 +295,7 @@ const STOP_WORDS = ['ban', 'nhap', 'xuat', 'chuyen', 'kho', 'tri', 'den', 'toi',
  * (giải quyết mã không có số như CXED, mã ngắn như T1D, mã giống giá như 119K); không có thì đoán theo mẫu.
  */
 function parseMessage_(textRaw, known) {
-  const text = String(textRaw || '').normalize('NFC').trim();
+  const text = sachAn_(String(textRaw || '')).normalize('NFC').trim();
   const lower = text.toLowerCase();
   const n = norm_(text);
   // Token gốc (có dấu) để nhận lệnh, tránh nhầm "bạn" với "bán"; token bỏ dấu để đọc mã/size/giá
@@ -1436,7 +1446,7 @@ function handleSaleRequest_(e) {
     } else if (e.parameter.sale_key !== saleKey) {
       out = { ok: false, error: 'unauthorized' };
     } else {
-      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const body = docBody_(e);
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = body.action === 'huy_ban' ? saleUndo_(body, dryRun) : handleSale_(body, dryRun);
       if (body.action === 'huy_ban') {
@@ -1960,7 +1970,7 @@ function handleStockRequest_(e) {
     } else if (e.parameter.stock_key !== key) {
       out = { ok: false, error: 'unauthorized' };
     } else {
-      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const body = docBody_(e);
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = handleStock_(body, dryRun);
       syncTabs = out._sync || [];
@@ -4022,7 +4032,7 @@ function handleExportRequest_(e) {
     } else if (e.parameter.export_key !== key) {
       out = { ok: false, error: 'unauthorized' };
     } else {
-      const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+      const body = docBody_(e);
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
       out = handleExport_(body, dryRun);
       if (!dryRun && out.ok && !out.duplicate && out.written) {

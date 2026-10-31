@@ -64,6 +64,20 @@ try:
 except ImportError:
     HAS_GENAI = False
 
+# Ký tự ẩn \x00–\x1F (vd backspace dính trong "\bG2004D") — bỏ ở mọi chữ gõ vào và chữ đọc từ Sheet; tab → dấu cách, giữ xuống dòng.
+# Khớp web 5b2c155 + bot sachAn_ (anh Kha 31/10, luật 15).
+_KY_TU_AN = re.compile(r'[\x00-\x08\x0b-\x1f]')
+
+
+def sach_an(s):
+    return _KY_TU_AN.sub('', s.replace('\t', ' ')) if isinstance(s, str) else s
+
+
+def input(prompt=''):  # noqa: A001 — mọi input() trong main.py (mã, tên, màu…) đi qua sach_an
+    import builtins
+    return sach_an(builtins.input(prompt))
+
+
 # Paths Configuration
 LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -525,7 +539,7 @@ class EngineDataLoader:
         if self.is_google_api:
             try:
                 ws = self.spreadsheet.worksheet(sheet_name)
-                data = ws.get_all_values()
+                data = [[sach_an(v) for v in r] for r in ws.get_all_values()]
                 return pd.DataFrame(data), ws
             except Exception as e:
                 raise ConnectionError(f"Không thể đọc sheet '{sheet_name}' từ Google Sheets: {e}")

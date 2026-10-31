@@ -117,6 +117,8 @@ const parse = t => { const p = ctx.parseMessage_(t, ctx.knownCodes_()); return [
 // ---- Phân tích tin nhắn ----
 eq('kiểm hàng', parse('TH2040D 40'), ['KIỂM TRA HÀNG', 'TH2040D', '', '', '40x1']);
 eq('mã không màu', parse('TH2040'), ['KIỂM TRA HÀNG', 'TH2040', '', '', '']);
+eq('ký tự ẩn \\b trong mã (31/10)', parse('\bTH2040D\t40'), ['KIỂM TRA HÀNG', 'TH2040D', '', '', '40x1']);
+eq('docBody_ bỏ ký tự ẩn, giữ xuống dòng', ctx.docBody_({ postData: { contents: JSON.stringify({ lines: [{ code: 'KX0082\bN', ten: 'a\nb' }] }) } }).lines[0], { code: 'KX0082N', ten: 'a\nb' });
 // Mã dính size (tem quét AP048N-40, 19/10): tách mã + size
 ['ban TH2040D40 YEN', 'ban TH2040D-40 YEN', 'ban th2040d_40 yen', 'ban TH2040D/40 YEN', 'ban TH2040D.40 YEN'].forEach(t =>
   eq('mã dính size: ' + t, parse(t), ['BÁN', 'TH2040D', 'Y3C', '', '40x1']));

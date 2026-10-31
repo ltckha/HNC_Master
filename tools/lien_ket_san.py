@@ -13,6 +13,7 @@ import sys
 
 REQ = {'shopee': ['et_title_product_id', 'et_title_variation_sku'], 'tiktok': ['product_id', 'seller_sku']}
 SIZE_DUOI = re.compile(r'^\d{2}(\.5)?$')
+KY_TU_AN = re.compile(r'[\x00-\x1f]')  # ô SKU dính ký tự ẩn (\b…) — bỏ như main.sach_an (31/10)
 
 
 def doc_file(path, kenh):
@@ -41,8 +42,9 @@ def ma_tren_san(kenh, rows, codes):
     def g(r, *ns):
         for n in ns:
             i = ix.get(n)
-            if i is not None and i < len(r) and str(r[i] or '').strip():
-                return str(r[i]).strip()
+            v = KY_TU_AN.sub('', str(r[i] or '')).strip() if i is not None and i < len(r) else ''
+            if v:
+                return v
         return ''
 
     def to_code(sku, vn):
