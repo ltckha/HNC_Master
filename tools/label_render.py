@@ -1,4 +1,4 @@
-"""Dựng tem mã hàng 62×29 mm (giấy DK-11209) giống mẫu P-touch Minicode.lbx — dùng chung cho in tự động (tools/label_print.py)
+"""Dựng tem mã hàng 62×29 mm (giấy DK-11209) giống mẫu P-touch Minicode.lbx — dùng chung cho in tem khi bấm (tools/label_print.py)
 và menu Mac (main.py task 10), luật 15. Chỉ dùng Pillow + font Helvetica của macOS, không cần thư viện mã vạch.
 
 Bố cục lấy từ Minicode.lbx (khung 175.7 × 81.8 pt):

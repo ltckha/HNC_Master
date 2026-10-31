@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cài / cài lại dịch vụ in tem tự động QL-700 (V34 mục 6). Chạy lại được nhiều lần.
+# Cài / cài lại dịch vụ in tem khi bấm QL-700 (V34 mục 6). Chạy lại được nhiều lần.
 # Từ 18/10 lệnh in đi qua tab ẩn in_tem_lenh (gspread), không đọc Drive nên launchd chạy thẳng python được.
 set -e
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"

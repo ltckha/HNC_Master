@@ -1,4 +1,4 @@
-"""In tem tự động qua Brother QL-700 (V34 mục 6, anh Kha "làm" 18/10). Chạy trên Mac mini (máy in cắm USB).
+"""In tem khi bấm qua Brother QL-700 (chỉ in khi có người bấm In tem trên web / bot) (V34 mục 6, anh Kha "làm" 18/10). Chạy trên Mac mini (máy in cắm USB).
 
 Luồng (anh Kha 18/10: bỏ chờ Drive, tem ra trong ~10–15 giây):
 bot (cửa in_tem / in_bu) ghi lệnh vào tab ẩn `in_tem_lenh` (1 dòng / kho: kho | lenh | ket_qua | cap_nhat)
@@ -281,7 +281,7 @@ def main():
         try:
             ws = ws or queue_sheet()
             poll_once(ws)
-            truc_ca.ghi('hnc.intem', 'ok', 'đang chạy')  # 1 dòng / ngày
+            truc_ca.ghi('hnc.intem', 'ok', 'in tem khi bấm: đang chờ lệnh')  # 1 dòng / ngày
         except Exception as e:  # mất mạng / quota Sheet: chờ rồi thử lại, kết nối lại từ đầu
             print(f'{datetime.now():%Y-%m-%d %H:%M:%S} lỗi đọc tab {QUEUE_TAB}: {e}', flush=True)
             truc_ca.ghi('hnc.intem', 'loi', f'lỗi đọc tab {QUEUE_TAB}: {type(e).__name__}')

@@ -4725,7 +4725,7 @@ function labelSend_(out, records, body, kho, dongs) {
     const lenh = JSON.stringify({ kho, luc: out.luc, nguoi: String(body.seller || ''), so_chung_tu: String(body.so_chung_tu || ''),
       ngay: String(body.ngay || ''), dong: dongs, in_bu: !!out.in_bu, so_tem: records.reduce((t, r) => t + r.F6, 0),
       cot: LABEL_COLUMNS, tem: records.map(r => LABEL_COLUMNS.map(k => r[k] === undefined ? '' : r[k])) });
-    if (lenh.length > 45000) { out.ok = false; out.error = 'đợt quá nhiều tem cho 1 lệnh in tự động — chia nhỏ theo phiếu / chọn bớt dòng'; return out; }
+    if (lenh.length > 45000) { out.ok = false; out.error = 'đợt quá nhiều tem cho 1 lệnh in tem — chia nhỏ theo phiếu / chọn bớt dòng'; return out; }
     labelQueueSet_(kho, { lenh });
     out.tu_in = true;
   }
@@ -4786,7 +4786,7 @@ function labelExtraPrint_(body, dryRun) {
   return out;
 }
 
-/** Kết quả lần in tự động gần nhất của kho (IN_<kho>.ket_qua.json do Mac mini ghi). */
+/** Kết quả lần in tem khi bấm gần nhất của kho (IN_<kho>.ket_qua.json do Mac mini ghi). */
 function labelResult_(body) {
   const kho = KHO_ALIASES[String(body.kho || '').trim().toUpperCase()];
   if (!kho) return { ok: false, action: 'kq_in_tem', error: 'kho phải là 15E hoặc Y3C' };

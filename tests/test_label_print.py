@@ -1,4 +1,4 @@
-"""Test: in tem tự động QL-700 (tools/label_print.py + label_render.py). Không gọi máy in, không ghi Sheet.
+"""Test: in tem khi bấm QL-700 (tools/label_print.py + label_render.py). Không gọi máy in, không ghi Sheet.
 Chạy: venv/bin/python tests/test_label_print.py"""
 import json
 import os

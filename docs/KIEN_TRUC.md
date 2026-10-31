@@ -66,14 +66,14 @@ Menu main.py: 1 Tem & kho (in tem `IN.csv`, đồng bộ SKU NHAP → 2 kho), 2 
 
 **Drive** (`hnc_paths.py` khai 1 chỗ):
 - `My Drive/HNC/He_thong/` (cũ: `Spark/HNC_Master`): `HNC_Templates` (tpl_*), `HNC_Exported_Files` (file xuất, `channel_links.csv`, SPEC_FILL_AI_*), `Outputs`. Không thấy thì main.py dừng, không dùng thư mục local.
-- `My Drive/IN Mini Code/`: `IN.csv` / `IN_<kho>.csv` (P-touch dự phòng), `IN_BU_nhat_ky.csv`. In tự động QL-700: bot ghi lệnh vào tab ẩn `in_tem_lenh` → Mac mini (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, chạy liên tục, đọc mỗi 4 giây lúc 7:00–22:00, ngoài giờ 30 giây; cài bằng `tools/launchd/cai_in_tem.sh`) in qua USB, dựng tem `tools/label_render.py` (dùng chung với main.py task 10), tự ghi `web_label` + ô `ket_qua`. Cần: QL-700 đèn nguồn sáng, cắm USB, đèn Editor Lite tắt. In liền cả đợt, cắt 1 lần cuối (`CAT`).
+- `My Drive/IN Mini Code/`: `IN.csv` / `IN_<kho>.csv` (P-touch dự phòng), `IN_BU_nhat_ky.csv`. In tem khi bấm QL-700 (chỉ in khi có người bấm In tem, không tự in): bot ghi lệnh vào tab ẩn `in_tem_lenh` → Mac mini (launchd `vn.giayhainancy.hnc.intem` → `tools/label_print.py`, chạy liên tục, đọc mỗi 4 giây lúc 7:00–22:00, ngoài giờ 30 giây; cài bằng `tools/launchd/cai_in_tem.sh`) in qua USB, dựng tem `tools/label_render.py` (dùng chung với main.py task 10), tự ghi `web_label` + ô `ket_qua`. Cần: QL-700 đèn nguồn sáng, cắm USB, đèn Editor Lite tắt. In liền cả đợt, cắt 1 lần cuối (`CAT`).
 - `My Drive/HNC/Thue/2026/`: `Hoá đơn 2026` (bot đọc theo ID `INVOICE_FOLDER_ID`), `Phiếu mua hàng` (bot ghi theo ID `PN_FOLDER_ID`: `Chưa chia/<NCC>/`, rồi `<hộ>/<NCC>/`).
 
 ## Lịch chạy nền trên Mac mini (launchd, kiểm 31/10)
 Plist + bộ cài ở `tools/launchd/`. Xem đang cài: `launchctl list | grep giayhainancy.hnc`.
 | Nhãn | Cài? | Chạy khi | Việc | Log (`~/Library/Logs/`) |
 |---|---|---|---|---|
-| `vn.giayhainancy.hnc.intem` | ✅ đang chạy | liên tục (4 giây lúc 7:00–22:00, ngoài giờ 30 giây) | `tools/label_print.py`: in tem QL-700 theo tab `in_tem_lenh` | `hnc_in_tem.log` |
+| `vn.giayhainancy.hnc.intem` | ✅ đang chạy | liên tục (4 giây lúc 7:00–22:00, ngoài giờ 30 giây) | `tools/label_print.py`: in tem khi bấm — chờ lệnh ở tab `in_tem_lenh`, chỉ in khi có người bấm In tem | `hnc_in_tem.log` |
 | `vn.giayhainancy.hnc.gomvideo` | ✅ (30/10) | khi `~/Downloads` đổi + dự phòng 13:00 hằng ngày | `tools/gom_video.py`: video tên `<MÃ>.mp4` / `<MÃ>_N.mp4` → `/Volumes/Media/HNC_Master/<MÃ>/` đặt `<MÃ>_1`, `_2`… không ghi đè; ghi `content_*` các mã vừa gom (cùng hàm menu tư liệu) | `hnc_gom_video.log` |
 | `vn.giayhainancy.hnc.goiygia` | ❌ gỡ 28/10 (anh chọn "Tắt", nhân viên tự gõ giá) | (13:30 nếu cài lại bằng `cai_goi_y_gia.sh`) | `tools/goi_y_gia.py`: gợi ý giá tem cho mã chờ duyệt → web; chạy tay được | `hnc_goi_y_gia.log` (chỉ 1 lượt chạy thử 28/10) |
 

@@ -2972,7 +2972,7 @@ def process_export_task(choice, loader):
         except Exception as e:
             print(f"[!] Không thể ghi đè file IN.csv: {e}")
         print(f"\n🏷️ {len(sel_recs)} dòng · {int(out_df['F6'].sum())} tem\n📁 {exported_filepath}")
-        # V34 mục 6: in thẳng trên QL-700 bằng cùng hàm dựng tem với dịch vụ in tự động (tools/label_print.py) — mỗi kho 1 đợt
+        # V34 mục 6: in thẳng trên QL-700 bằng cùng hàm dựng tem với dịch vụ in tem khi bấm (tools/label_print.py) — mỗi kho 1 đợt
         if kho_want and input(f"In thẳng {int(out_df['F6'].sum())} tem kho {kho_want} trên máy QL-700 ngay? (y/Enter = không): ").strip().lower() == 'y':
             sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools'))
             import label_print

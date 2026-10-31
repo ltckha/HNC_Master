@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<!-- V34 mục 6: in tem tự động QL-700. tools/label_print.py chạy liên tục, đọc tab ẩn in_tem_lenh (không qua Drive). Cài: tools/launchd/cai_in_tem.sh -->
+<!-- V34 mục 6: in tem khi bấm QL-700 (chỉ in khi có người bấm). tools/label_print.py chạy liên tục, đọc tab ẩn in_tem_lenh (không qua Drive). Cài: tools/launchd/cai_in_tem.sh -->
 <dict>
   <key>Label</key><string>vn.giayhainancy.hnc.intem</string>
   <key>ProgramArguments</key>
