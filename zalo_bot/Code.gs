@@ -3196,7 +3196,7 @@ function misaSummaryMessages_(day, skipRows) {
   for (let r = 1; r < ban.length; r++) {
     if (dateKey_(ban[r][c['Ngày']]) !== dayKey) continue;
     const code = String(ban[r][c.product_code] || '').trim().toUpperCase();
-    if (!code) continue;
+    if (!code || code === 'BU_DOI_HANG') continue; // tiền chênh đổi hàng (01/11): không lên đơn MISA, anh tự xử lý
     if (skipRows.indexOf(r + 1) !== -1) { skipped++; continue; }
     const kho = KHO_ALIASES[String(ban[r][c.KHO] || '').trim().toUpperCase()] || String(ban[r][c.KHO] || '');
     const owner = (c.chu_hang !== undefined && KHO_ALIASES[String(ban[r][c.chu_hang] || '').trim().toUpperCase()]) || kho;
