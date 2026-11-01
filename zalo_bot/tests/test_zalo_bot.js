@@ -205,7 +205,7 @@ eq('khách trả', rp('nhap TH2040D 40 15e khach tra'), ['NHẬP', 'TH2040D', '1
 eq('nhập thường không phải trả', rp('nhap TH2040D 40 15E'), ['NHẬP', 'TH2040D', '15E', false, '40']);
 eq('"tra hang" với lệnh bán → bỏ qua cờ', rp('ban TH2040D 40 15E tra hang')[3], false);
 txt = ctx.handleText_('nhap TH2040D 40 15E tra hang', true, '');
-eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /BÁN âm theo giá phiếu gốc/.test(txt)], [true, true]);
+eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /không xuất phiếu nhập kho MISA/.test(txt)], [true, true]);
 txt = ctx.handleText_('Khách đổi ý\nnhap TH2040D 40 15E tra hang\nban TH2040D 41 YEN 800k', true, '');
 eq('trả hàng trong tin nhiều dòng', [/2 lệnh — 2 ghi được/.test(txt), /1\) ↩️ TRẢ HÀNG/.test(txt)], [true, true]);
 const realAppend = ctx.appendByHeader_;
@@ -342,15 +342,12 @@ sr = stk({ action: 'huy', ticket_id: 'U1', undo_ticket_id: 'S8' });
 eq('huỷ của chính mình → xoá ô đã ghi', [sr.ok, DATA.XUAT[1][1]], [true, '']);
 sr = stk({ action: 'huy', ticket_id: 'U2', undo_ticket_id: 'S8' });
 eq('huỷ lần 2 → không còn gì', [sr.ok, /không có thao tác/.test(sr.error)], [false, true]);
-// Trả hàng (01/11, giống MISA + web ban_am): 1 dòng BÁN âm theo giá phiếu gốc, không ghi NHAP TRA-
-DATA.BAN = DATA.BAN || [['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'FSKU', 'channel', 'seller']];
-if (DATA.BAN[0].indexOf('chu_hang') === -1) DATA.BAN[0].push('chu_hang');
-const nhapLen = DATA.NHAP.length, banLen0 = DATA.BAN.length;
-sr = stk({ action: 'tra_hang', ticket_id: 'S9', ban_am: { ma: 'DT-T1', gia: 480000 }, lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] });
+// Trả hàng ghi NHAP TRA-
+const nhapLen = DATA.NHAP.length;
+sr = stk({ action: 'tra_hang', ticket_id: 'S9', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] });
 if (!sr.ok) console.log(JSON.stringify(sr));
-const bh = DATA.BAN[0], newRow = DATA.BAN[banLen0] || [];
-eq('trả hàng ghi BÁN âm, không NHAP', [sr.ok, DATA.NHAP.length - nhapLen, newRow[bh.indexOf('product_code')], newRow[bh.indexOf('item_quantity')], newRow[bh.indexOf('Giá')], newRow[bh.indexOf('KHO')], newRow[bh.indexOf('chu_hang')]],
-  [true, 0, 'TH2040D', -1, 480000, '15E', '15E']);
+const newRow = DATA.NHAP[nhapLen] || [];
+eq('trả hàng ghi NHAP TRA-', [sr.ok, /^TRA-\d{6}$/.test(newRow[1]), newRow[2], newRow[4]], [true, true, 'TH2040D', '15E']);
 
 // ---- Nhập từ phiếu NCC ----
 PROPS.GEMINI_API_KEY = 'g';
@@ -560,6 +557,13 @@ kr = tf('K3', 'Y3C', '15E', 40, 2);
 eq('ghi: KYGUI 15E ở Y3C = 0, Y3C ở 15E = 1', [kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [0, 1]);
 kr = kyStk({ action: 'huy', ticket_id: 'K4', undo_ticket_id: 'K3' });
 eq('huỷ chuyển kho → ký gửi trả lại như trước', [kr.ok, kyRow('15E', 'Y3C', 40)[4], kyRow('Y3C', '15E', 40)[4]], [true, 1, 0]);
+// Đổi hàng (01/11, web xuat + doi_tra): món khách lấy = XUAT, ký gửi hộ kia đang ở kho trừ trước như bán
+kr = kyStk({ action: 'xuat', ticket_id: 'KX1', doi_tra: 'DT-0111-1', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: 'Y3C' }] });
+eq('xuất món đổi: trừ ký gửi 15E ở Y3C', [kr.ok, kr.results[0].ky_gui, kyRow('15E', 'Y3C', 40)[4]], [true, [{ size: '40', chu_hang: '15E', qty: 1, loai: 'ban_hang_ky_gui' }], 0]);
+kr = kyStk({ action: 'xuat', ticket_id: 'KX2', lines: [{ code: 'TH2040D', size: 41, qty: 1, warehouse: 'Y3C' }] });
+eq('xuất thường không đụng ký gửi', [kr.ok, kr.results[0].ky_gui], [true, undefined]);
+kr = kyStk({ action: 'huy', ticket_id: 'KX3', undo_ticket_id: 'KX1' }); kyStk({ action: 'huy', ticket_id: 'KX4', undo_ticket_id: 'KX2' });
+eq('huỷ xuất món đổi → ký gửi trả lại', [kr.ok, kyRow('15E', 'Y3C', 40)[4]], [true, 1]);
 // Chuyển hàng ký gửi về kho của hộ chủ: tồn kho nguồn còn đúng bằng số ký gửi → không báo đỏ (19/10, ca 2032D 39)
 { const y40 = DATA.KHOY3C.find(x => x[1] === 'TH2040D' && String(x[3]) === '40'), qi = DATA.KHOY3C[0].indexOf('current_quantity'), q0 = y40[qi];
   y40[qi] = 1;

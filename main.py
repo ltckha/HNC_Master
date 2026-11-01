@@ -4709,12 +4709,13 @@ CHE_DO_SO = [
 
 @sync_hint_after
 def tra_doi_hang(loader):
-    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả (từ 01/11 món trả = dòng BÁN âm theo giá phiếu gốc, không NHAP TRA-) — tools/returns_exchanges.py."""
+    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/returns_exchanges.py.
+    Từ 01/11: món trả NHAP TRA-, món đổi XUAT (không BÁN), tiền chênh 1 dòng BÁN BU_DOI_HANG."""
     from tools.returns_exchanges import TraDoi
-    kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + bán mã khác)  [Enter] thôi: ").strip()
+    kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + xuất mã khác)  [Enter] thôi: ").strip()
     if kieu not in ('1', '2'):
         return
-    if loader.che_do() == 'web' or loader.che_do_kho() == 'web':  # trả = dòng BÁN âm (01/11) + ô ký gửi ở KHO
+    if loader.che_do_kho() == 'web' or (kieu == '2' and loader.che_do() == 'web'):
         print("⛔ Sổ kho / sổ bán đang ở Web — đổi trả trên app (nút Đổi / Trả). Web hỏng: đổi sổ về Dự phòng ở [7] rồi làm lại.")
         return
     kho = {'1': '15E', '2': 'Y3C'}.get(input("Kho [1] 15E  [2] Y3C: ").strip(), '')
@@ -4727,26 +4728,28 @@ def tra_doi_hang(loader):
         size = input("Size: ").strip()
         qty = int(input("Số lượng [1]: ").strip() or 1)
         chu = input("Hàng của hộ nào? [Enter] = tự tìm theo lần bán gần nhất, hoặc gõ 15E / Y3C: ").strip().upper()
-        # Giá phiếu gốc món trả: dòng BÁN âm ghi đúng giá này (giống MISA, web 01/11)
-        goc = int(''.join(ch for ch in input(f"Giá phiếu gốc món trả [Enter] = giá SANPHAM {t.sp(code)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code)['gia'])
-        t.tra(code, size, kho, qty, chu, goc)
+        t.tra(code, size, kho, qty, chu)
         if kieu == '2':
+            # Đổi (01/11, web 67e6cd0 "làm Xuất nhập khi đổi trả"): món mới = 1 dòng XUAT, không ghi BÁN; tiền chênh = giá món mới
+            # (SANPHAM) − giá phiếu gốc món trả. Khách bù / Chủ hoàn → 1 dòng BÁN BU_DOI_HANG = tiền chênh; ngang / giữ phần thừa → không ghi.
             code2 = input("Mã hàng KHÁCH LẤY (vd TH2040D): ").strip().upper()
             size2 = input("Size: ").strip()
-            gia = int(''.join(ch for ch in input("Giá bán [Enter] = giá SANPHAM: ") if ch.isdigit()) or 0)
-            tt = {'1': 'Tiền mặt', '2': 'Chuyển khoản', '3': 'Thẻ'}.get(input("Thanh toán [1] Tiền mặt  [2] Chuyển khoản  [3] Thẻ: ").strip(), 'Tiền mặt')
-            t.ban(code2, size2, kho, qty, gia, tt)
-            # Tiền chênh (web bb3d576, 27/10): = tổng giá món mới − giá phiếu gốc. Món mới rẻ hơn → mặc định KHÔNG hoàn;
-            # chỉ Chủ được chọn hoàn. Hoàn hay không chỉ ghi ở phiếu đổi trả trên web (xu_ly), Sheet không thêm dòng nào.
-            moi = (gia or t.sp(code2)['gia']) * qty
-            chenh = moi - goc * qty
+            t.xuat_doi(code2, size2, kho, qty)
+            goc = int(''.join(ch for ch in input(f"Giá phiếu gốc món trả [Enter] = giá SANPHAM {t.sp(code)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code)['gia'])
+            gia = int(''.join(ch for ch in input(f"Giá món mới [Enter] = giá SANPHAM {t.sp(code2)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code2)['gia'])
+            chenh = (gia - goc) * qty
+            bu = 0
             if chenh > 0:
-                print(f"💰 Khách trả thêm {chenh:,}đ".replace(',', '.'))
+                print(f"💰 Khách bù {chenh:,}đ".replace(',', '.'))
+                bu = chenh
             elif chenh < 0:
-                hoan = input(f"Món mới rẻ hơn {-chenh:,}đ. Hoàn tiền phần thừa? (chỉ Chủ) [y/Enter = không hoàn]: ".replace(',', '.')).strip().lower() == 'y'
-                t.ghi_chu.append(("💸 HOÀN " if hoan else "Không hoàn ") + f"{-chenh:,}đ phần thừa".replace(',', '.') +
-                                 " — Sheet không ghi dòng nào cho khoản này; web lên lại thì Chủ ghi vào phiếu Đổi / Trả trên app (xu_ly = "
-                                 + ("hoan_tien" if hoan else "khong_hoan") + ").")
+                if input(f"Món mới rẻ hơn {-chenh:,}đ. Hoàn tiền phần thừa? (chỉ Chủ) [y/Enter = không hoàn]: ".replace(',', '.')).strip().lower() == 'y':
+                    bu = chenh
+                else:
+                    t.ghi_chu.append(f"Không hoàn {-chenh:,}đ phần thừa — tiệm giữ, Sheet không ghi dòng nào.".replace(',', '.'))
+            if bu:
+                tt = {'1': 'Tiền mặt', '2': 'Chuyển khoản'}.get(input("Tiền chênh trả bằng [1] Tiền mặt  [2] Chuyển khoản: ").strip(), 'Tiền mặt')
+                t.bu(bu, kho, tt)
     except (RuntimeError, ValueError) as e:
         print(f"⛔ {e}")
         return

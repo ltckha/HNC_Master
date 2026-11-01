@@ -23,7 +23,7 @@ const KHO_SHEETS = { 'Y3C': 'KHOY3C', '15E': 'KHO15E' };
 // để tác vụ đồng bộ kho của HNC tự thêm SKU mới vào KHO15E / KHOY3C.
 const NHAP_ZALO_MARK = 'Zalo_Update';
 const NHAP_MARK_COLUMNS = ['web_stock', 'web_label', 'misa_stock'];
-// Dòng NHAP trả hàng cũ (trước 01/11): Số chứng từ = TRA-<ddMMyy>, 3 cột trên = Tra_hang. Từ 01/11 trả hàng ghi dòng BÁN âm (doMovement_)
+// Dòng NHAP trả hàng / huỷ đơn đã bán: Số chứng từ = TRA-<ddMMyy>, 3 cột trên = Tra_hang (không xuất phiếu nhập MISA)
 const NHAP_RETURN_MARK = 'Tra_hang';
 
 const UNDO_SECONDS = 600; // Cho huỷ thao tác gần nhất trong 10 phút
@@ -1135,8 +1135,13 @@ function doMovement_(p, action, kho, dryRun) {
       const sr = kyguiSale_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller, dryRun, p.payment || 'Tiền mặt', p.phone || '');
       sr.ops.forEach(o => ops.push(o));
       sr.phan.filter(x => x.chu_hang !== kho).forEach(x => kygui.push({ size: s.size, chu_hang: x.chu_hang, qty: x.qty, loai: 'ban_hang_ky_gui' }));
-    } else if (!dryRun && action === ACTIONS.OUT) {
-      ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
+    } else if (action === ACTIONS.OUT) {
+      if (!dryRun) ops.push(appendXuat_(p.code, color, s.size, s.qty, kho));
+      // Món khách lấy khi Đổi / Trả (01/11, web xuat + doi_tra): ký gửi hộ kia đang ở kho này trừ trước, như bán (LuatKho.banTachChuHang)
+      if (p.doiTra && kyguiOn_()) {
+        const other = kho === 'Y3C' ? '15E' : 'Y3C', cons = Math.min(s.qty, kyguiQty_(other, kho, p.code, s.size));
+        if (cons > 0) { const op = kyguiAdjust_(other, kho, p.code, s.size, -cons, dryRun); if (op) ops.push(op); kygui.push({ size: s.size, chu_hang: other, qty: cons, loai: 'ban_hang_ky_gui' }); }
+      }
     } else if (action === ACTIONS.IN) {
       if (!p.returnGoods && (p.nhapDoc || p.nhapMisa) && !CTX.nhapDoc) {
         CTX.nhapDoc = p.nhapDoc || receiptNkPlan_([kho], (productSuppliers_()[p.code] || ''))[kho]; // "misa" không số → NK tiếp theo của kho
@@ -1146,9 +1151,7 @@ function doMovement_(p, action, kho, dryRun) {
         if (!dryRun) { ops.push(appendKhoRow_({ kho, code: p.code, size: s.size, color })); delete MEMO[KHO_SHEETS[kho]]; }
         else warnings.push('ℹ️ ' + KHO_SHEETS[kho] + ' chưa có ' + p.code + (s.size ? ' size ' + s.size : '') + ' → sẽ thêm dòng kho');
       }
-      // Trả hàng / huỷ đơn (01/11, giống MISA + web ban_am): 1 dòng BÁN âm theo giá phiếu gốc, chủ hàng = kho nhận; không ghi NHAP TRA-
-      if (!dryRun) ops.push(p.returnGoods ? appendBan_(p.code, color, p.giaGoc || p.price || '', s.size, -s.qty, kho, '', CTX.seller, kho, '', '', '')
-        : appendNhap_(p.code, color, s.size, s.qty, kho, false));
+      if (!dryRun) ops.push(appendNhap_(p.code, color, s.size, s.qty, kho, p.returnGoods));
       if (p.returnGoods) {
         const rr = kyguiReturn_(p.code, s.size, s.qty, kho, p.owner, dryRun);
         rr.ops.forEach(o => ops.push(o));
@@ -1170,7 +1173,7 @@ function doMovement_(p, action, kho, dryRun) {
   const kyText = kygui.map(x => '  ↳ ' + (x.size ? 'size ' + x.size + ': ' : '') + x.qty + ' là hàng của hộ ' + x.chu_hang +
     (x.loai === 'tra_ve_ky_gui' ? ' (trả về sổ ký gửi)' : ' (ký gửi, tiền / hoá đơn thuộc ' + x.chu_hang + ')'));
 
-  const tab = action === ACTIONS.SELL || (action === ACTIONS.IN && p.returnGoods) ? 'BAN' : action === ACTIONS.OUT ? 'XUAT' : 'NHAP';
+  const tab = action === ACTIONS.SELL ? 'BAN' : action === ACTIONS.OUT ? 'XUAT' : 'NHAP';
   const label = action + ' ' + p.code + ' (' + written.join(', ') + ') kho ' + kho;
   return {
     ok: true, ops, label, warnings, kygui,
@@ -1179,7 +1182,7 @@ function doMovement_(p, action, kho, dryRun) {
       (color ? ' màu ' + color : '') + ' kho ' + kho +
       (action === ACTIONS.SELL && p.price ? ' giá ' + money_(p.price) : '') +
       '\n  ' + written.join('\n  ') + (kyText.length ? '\n' + kyText.join('\n') : '') + '\n→ ' + ({ BAN: 'sổ bán hàng', XUAT: 'phiếu xuất kho', NHAP: 'phiếu nhập kho' })[tab] +
-      (action === ACTIONS.IN && p.returnGoods ? '\n(Dòng BÁN âm theo giá phiếu gốc, giống MISA)' : '') +
+      (action === ACTIONS.IN && p.returnGoods ? '\n(Phiếu trả hàng TRA-…, không xuất phiếu nhập kho MISA)' : '') +
       (action === ACTIONS.IN && nhapDoc ? '\n🧾 Số chứng từ ' + nhapDoc + ': vào tem + file nhập kho MISA như phiếu thường' : '') +
       (action === ACTIONS.SELL ? '\n💳 ' + (p.payment || 'Tiền mặt') + (p.phone ? ' · khách ' + p.phone : '') : '') +
       (warnings.length ? '\n' + warnings.join('\n') : ''),
@@ -2094,7 +2097,7 @@ function stockLine_(action, body, ln, i, dry) {
   if (action !== 'chuyen_vi_tri' && (!Number.isInteger(qty) || qty < 1 || qty > 99)) return fail('qty phải là số nguyên 1-99');
   const p = { code, sizes: size ? [{ size, qty }] : [], qty: size ? 0 : qty, color: '', price: '', sizeErrors: [],
     returnGoods: action === 'tra_hang', kho: '', location: '', owner: ln.chu_hang || '',
-    giaGoc: Math.max(0, Math.round(Number(ln.gia_goc || (body.ban_am && body.ban_am.gia)) || 0)) || '', // giá phiếu gốc → dòng BÁN âm (01/11)
+    doiTra: action === 'xuat' && /^DT-[\w-]+$/.test(String(body.doi_tra || '')) ? String(body.doi_tra) : '', // món đổi (01/11): trừ ký gửi đúng chủ
     nhapDoc: /^NK\d{1,6}$/i.test(String(ln.so_chung_tu || body.so_chung_tu || '')) ? 'NK' + String(ln.so_chung_tu || body.so_chung_tu).replace(/\D/g, '').padStart(6, '0') : '',
     nhapMisa: ln.misa === true || body.misa === true };
   const done = r => (r.ok
