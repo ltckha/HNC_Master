@@ -205,7 +205,7 @@ eq('khách trả', rp('nhap TH2040D 40 15e khach tra'), ['NHẬP', 'TH2040D', '1
 eq('nhập thường không phải trả', rp('nhap TH2040D 40 15E'), ['NHẬP', 'TH2040D', '15E', false, '40']);
 eq('"tra hang" với lệnh bán → bỏ qua cờ', rp('ban TH2040D 40 15E tra hang')[3], false);
 txt = ctx.handleText_('nhap TH2040D 40 15E tra hang', true, '');
-eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /không xuất phiếu nhập kho MISA/.test(txt)], [true, true]);
+eq('trả lời trả hàng', [/↩️ TRẢ HÀNG: nhập lại TH2040D/.test(txt), /BÁN âm theo giá phiếu gốc/.test(txt)], [true, true]);
 txt = ctx.handleText_('Khách đổi ý\nnhap TH2040D 40 15E tra hang\nban TH2040D 41 YEN 800k', true, '');
 eq('trả hàng trong tin nhiều dòng', [/2 lệnh — 2 ghi được/.test(txt), /1\) ↩️ TRẢ HÀNG/.test(txt)], [true, true]);
 const realAppend = ctx.appendByHeader_;
@@ -342,12 +342,15 @@ sr = stk({ action: 'huy', ticket_id: 'U1', undo_ticket_id: 'S8' });
 eq('huỷ của chính mình → xoá ô đã ghi', [sr.ok, DATA.XUAT[1][1]], [true, '']);
 sr = stk({ action: 'huy', ticket_id: 'U2', undo_ticket_id: 'S8' });
 eq('huỷ lần 2 → không còn gì', [sr.ok, /không có thao tác/.test(sr.error)], [false, true]);
-// Trả hàng ghi NHAP TRA-
-const nhapLen = DATA.NHAP.length;
-sr = stk({ action: 'tra_hang', ticket_id: 'S9', lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] });
+// Trả hàng (01/11, giống MISA + web ban_am): 1 dòng BÁN âm theo giá phiếu gốc, không ghi NHAP TRA-
+DATA.BAN = DATA.BAN || [['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'FSKU', 'channel', 'seller']];
+if (DATA.BAN[0].indexOf('chu_hang') === -1) DATA.BAN[0].push('chu_hang');
+const nhapLen = DATA.NHAP.length, banLen0 = DATA.BAN.length;
+sr = stk({ action: 'tra_hang', ticket_id: 'S9', ban_am: { ma: 'DT-T1', gia: 480000 }, lines: [{ code: 'TH2040D', size: 40, qty: 1, warehouse: '15E' }] });
 if (!sr.ok) console.log(JSON.stringify(sr));
-const newRow = DATA.NHAP[nhapLen] || [];
-eq('trả hàng ghi NHAP TRA-', [sr.ok, /^TRA-\d{6}$/.test(newRow[1]), newRow[2], newRow[4]], [true, true, 'TH2040D', '15E']);
+const bh = DATA.BAN[0], newRow = DATA.BAN[banLen0] || [];
+eq('trả hàng ghi BÁN âm, không NHAP', [sr.ok, DATA.NHAP.length - nhapLen, newRow[bh.indexOf('product_code')], newRow[bh.indexOf('item_quantity')], newRow[bh.indexOf('Giá')], newRow[bh.indexOf('KHO')], newRow[bh.indexOf('chu_hang')]],
+  [true, 0, 'TH2040D', -1, 480000, '15E', '15E']);
 
 // ---- Nhập từ phiếu NCC ----
 PROPS.GEMINI_API_KEY = 'g';
