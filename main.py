@@ -4709,12 +4709,12 @@ CHE_DO_SO = [
 
 @sync_hint_after
 def tra_doi_hang(loader):
-    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/returns_exchanges.py."""
+    """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả (từ 01/11 món trả = dòng BÁN âm theo giá phiếu gốc, không NHAP TRA-) — tools/returns_exchanges.py."""
     from tools.returns_exchanges import TraDoi
     kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + bán mã khác)  [Enter] thôi: ").strip()
     if kieu not in ('1', '2'):
         return
-    if loader.che_do_kho() == 'web' or (kieu == '2' and loader.che_do() == 'web'):
+    if loader.che_do() == 'web' or loader.che_do_kho() == 'web':  # trả = dòng BÁN âm (01/11) + ô ký gửi ở KHO
         print("⛔ Sổ kho / sổ bán đang ở Web — đổi trả trên app (nút Đổi / Trả). Web hỏng: đổi sổ về Dự phòng ở [7] rồi làm lại.")
         return
     kho = {'1': '15E', '2': 'Y3C'}.get(input("Kho [1] 15E  [2] Y3C: ").strip(), '')
@@ -4727,7 +4727,9 @@ def tra_doi_hang(loader):
         size = input("Size: ").strip()
         qty = int(input("Số lượng [1]: ").strip() or 1)
         chu = input("Hàng của hộ nào? [Enter] = tự tìm theo lần bán gần nhất, hoặc gõ 15E / Y3C: ").strip().upper()
-        t.tra(code, size, kho, qty, chu)
+        # Giá phiếu gốc món trả: dòng BÁN âm ghi đúng giá này (giống MISA, web 01/11)
+        goc = int(''.join(ch for ch in input(f"Giá phiếu gốc món trả [Enter] = giá SANPHAM {t.sp(code)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code)['gia'])
+        t.tra(code, size, kho, qty, chu, goc)
         if kieu == '2':
             code2 = input("Mã hàng KHÁCH LẤY (vd TH2040D): ").strip().upper()
             size2 = input("Size: ").strip()
@@ -4736,7 +4738,6 @@ def tra_doi_hang(loader):
             t.ban(code2, size2, kho, qty, gia, tt)
             # Tiền chênh (web bb3d576, 27/10): = tổng giá món mới − giá phiếu gốc. Món mới rẻ hơn → mặc định KHÔNG hoàn;
             # chỉ Chủ được chọn hoàn. Hoàn hay không chỉ ghi ở phiếu đổi trả trên web (xu_ly), Sheet không thêm dòng nào.
-            goc = int(''.join(ch for ch in input(f"Giá phiếu gốc món trả [Enter] = giá SANPHAM {t.sp(code)['gia']:,}đ: ".replace(',', '.')) if ch.isdigit()) or t.sp(code)['gia'])
             moi = (gia or t.sp(code2)['gia']) * qty
             chenh = moi - goc * qty
             if chenh > 0:

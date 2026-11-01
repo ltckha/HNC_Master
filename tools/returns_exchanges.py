@@ -1,10 +1,10 @@
-"""Trả hàng / Đổi hàng dự phòng trên Mac (luật 15, anh Kha "làm" đổi / trả 26/10) — ra CÙNG dòng như bot / web:
-- Trả: 1 dòng NHAP, Số chứng từ TRA-<ddMMyy> (LuatKho.soTraHang), web_stock / web_label / misa_stock = Tra_hang
-  (như bot appendNhap_(isReturn)); chủ hàng theo LuatKho.traHangChuHang (chủ gửi kèm, không có thì dòng BAN gần nhất
-  cùng mã / size / kho); chủ là hộ kia → cộng lại ô ký gửi cua_<hộ> (như bot kyguiReturn_). KHO chưa có dòng mã + size → thêm dòng có công thức.
+"""Trả hàng / Đổi hàng dự phòng trên Mac (luật 15, anh Kha "làm" đổi / trả 26/10) — ra CÙNG dòng như web nút Đổi / Trả:
+- Trả (từ 01/11, giống MISA, web stock.ts tra_hang + ban_am): 1 dòng BÁN âm — item_quantity −SL, Giá = giá phiếu gốc,
+  chu_hang = kho nhận, nguon "doi_tra DT-…". KHÔNG ghi NHAP TRA- nữa (tab KHO tự cộng lại theo BÁN, ghi thêm là cộng 2 lần).
+  Ký gửi theo LuatKho.traHangChuHang (chủ gửi kèm, không có thì dòng BAN gần nhất cùng mã / size / kho); chủ là hộ kia
+  → cộng lại ô cua_<hộ> (như bot kyguiReturn_). KHO chưa có dòng mã + size → thêm dòng có công thức.
 - Đổi: trả như trên + 1 dòng BAN bán mới (ký gửi hộ kia bán trước, LuatKho.banTachChuHang; như bot kyguiSale_).
-  Sheet BAN chưa có cột liên kết phiếu gốc → chưa ghi liên kết (đã báo Phân tích · Bán hàng).
-ma_dong = MAC-<lần chạy>#n, nguon = mac. Chỉ ghi khi sổ tương ứng đang Dự phòng (loader._write_ok chặn như mọi lệnh Mac).
+ma_dong = MAC-<lần chạy>#n. Chỉ ghi khi sổ tương ứng đang Dự phòng (loader._write_ok chặn như mọi lệnh Mac).
 """
 from datetime import datetime
 
@@ -14,8 +14,6 @@ from tools.stock_rules_node import goi
 
 KHO_TAB = {'15E': 'KHO15E', 'Y3C': 'KHOY3C'}
 KY_COL = {'15E': 'cua_Y3C', 'Y3C': 'cua_15E'}  # cột hàng của hộ kia đang ở kho này
-NHAP_MARK = ('web_stock', 'web_label', 'misa_stock')
-TRA_MARK = 'Tra_hang'
 
 
 def _money(v):
@@ -100,7 +98,7 @@ class TraDoi:
                 f" - SUMIF(BAN!{c(hb, 'FSKU')}:{c(hb, 'FSKU')}; {L(kho)}{r}; BAN!{c(hb, 'item_quantity')}:{c(hb, 'item_quantity')})")},
             label=f'thêm dòng kho {code} size {size}')
 
-    def tra(self, code, size, kho, qty, chu_gui=''):
+    def tra(self, code, size, kho, qty, chu_gui='', gia_goc=0):
         code, size = code.strip().upper(), goi('chuanSize', size)
         info = self.sp(code)
         r, v, h = self.kho_row(kho, code, size)
@@ -111,12 +109,12 @@ class TraDoi:
         dongs = [{'code': x[hb.index('product_code')], 'size': x[hb.index('item_size')], 'kho': x[hb.index('KHO')],
                   'chu_hang': x[hb.index('chu_hang')] if 'chu_hang' in hb else ''} for x in ban[1:] if x[hb.index('product_code')].strip()]
         kq = goi('traHangChuHang', kho, code, size, qty, chu_gui, dongs)
-        vals = {'Ngày chứng từ (*)': datetime.now().strftime('%d/%m/%Y'), 'Số chứng từ (*)': goi('soTraHang', datetime.now().strftime('%Y-%m-%d')),
-                'product_code': code, 'product_color': info['color'], 'KHO': kho, 'item_size': int(size) if size.isdigit() else size,
-                'Số lượng (*)': qty, 'ma_dong': self.ma_dong(), 'nguon': 'mac'}
-        vals.update({m: TRA_MARK for m in NHAP_MARK})
-        self._append('NHAP', vals, {'FSKU': lambda L, row: f"=CONCATENATE({L('KHO')}{row}; {L('product_code')}{row}; {L('item_size')}{row})"},
-                     label=f"TRẢ {code} size {size} × {qty} về {kho} ({vals['Số chứng từ (*)']}, chủ {kq['chu_hang']})")
+        phieu = f"DT-MAC-{self.run}"
+        self._append('BAN', {'Ngày': datetime.now().strftime('%d/%m/%Y'), 'product_code': code, 'product_color': info['color'],
+                             'Giá': gia_goc or '', 'item_size': size, 'item_quantity': -qty, 'KHO': kho, 'seller': 'mac',
+                             'ma_dong': self.ma_dong(), 'nguon': f'doi_tra {phieu}', 'chu_hang': kho, 'ky_gui_tru': ''},
+                     label=f"TRẢ {code} size {size} × {qty} về {kho}: BÁN âm −{qty}, giá phiếu gốc "
+                           + f"{gia_goc:,}đ".replace(',', '.') + f" ({phieu}, hàng của {kq['chu_hang']})")
         for d in kq['doi_cot']:
             if r is None:
                 self.ghi_chu.append(f"⚠ Hàng hộ {kq['chu_hang']}: dòng kho mới chưa có — cộng tay {d['delta']} vào {d['cot']} sau khi ghi.")
