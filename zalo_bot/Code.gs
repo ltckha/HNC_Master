@@ -2307,6 +2307,15 @@ function datNccPick_(n, chatId, d, dryRun) {
   return datNccSend_(chatId, lo, lo.items, n === 1 ? 'moi' : 'them');
 }
 
+/** Kiểu ảnh theo byte đầu file (Zalo có thể trả content-type lạ như image/jpg, octet-stream): jpeg / png / webp, khác → ''. */
+function datNccMime_(bytes) {
+  const u = i => ((bytes[i] || 0) + 256) % 256;
+  if (u(0) === 0xFF && u(1) === 0xD8) return 'image/jpeg';
+  if (u(0) === 0x89 && u(1) === 0x50 && u(2) === 0x4E && u(3) === 0x47) return 'image/png';
+  if (String.fromCharCode(u(0), u(1), u(2), u(3)) === 'RIFF' && String.fromCharCode(u(8), u(9), u(10), u(11)) === 'WEBP') return 'image/webp';
+  return '';
+}
+
 /** Gửi web: tải ảnh từ Zalo → base64; web trả { ok, phieu_id, tom_tat (không giá), link }. Trả câu trả lời cho Chủ. */
 function datNccSend_(chatId, lo, items, che) {
   const props = PropertiesService.getScriptProperties();
@@ -2316,11 +2325,14 @@ function datNccSend_(chatId, lo, items, che) {
     try {
       const res = UrlFetchApp.fetch(it.url, { muteHttpExceptions: true });
       if (res.getResponseCode() !== 200) throw new Error('Zalo trả ' + res.getResponseCode());
-      const b = res.getBlob();
-      anh.push({ mime: b.getContentType() || 'image/jpeg', b64: Utilities.base64Encode(b.getBytes()), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '' });
+      const b = res.getBlob(), bytes = b.getBytes();
+      const mime = datNccMime_(bytes);
+      if (!mime) throw new Error('Zalo trả không phải ảnh (' + (b.getContentType() || '?') + ', ' + bytes.length + ' byte)');
+      anh.push({ mime, b64: Utilities.base64Encode(bytes), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '' });
     } catch (err) { loi.push(err && err.message ? err.message : String(err)); }
   });
-  if (!anh.length && !tin.length) return '⚠️ Không tải được ảnh từ Zalo (' + loi[0] + ') — gửi lại ảnh.\nNhắn số: 9 Menu';
+  if (!anh.length && !tin.length) { console.error('Đặt NCC: ' + loi.join(' | ')); return '⚠️ Không tải được ảnh từ Zalo (' + loi[0] + ') — gửi lại ảnh.\nNhắn số: 9 Menu'; }
+  if (loi.length) console.error('Đặt NCC: ' + loi.join(' | '));
   const phieu = lo.phieu || props.getProperty('datncc_phieu_' + chatId) || '';
   const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo: món gửi thêm có mã riêng
   const out = webForward_({ che, phieu_id: che === 'them' ? phieu : '', ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin },

@@ -1419,7 +1419,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   ctx.UrlFetchApp.fetch = (url, opt) => {
     if (/dat-ncc/.test(url)) { const b = JSON.parse(opt.payload); web.push({ b, sig: opt.headers['x-bot-sig'] });
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, phieu_id: 'DN7', tom_tat: 'Phiếu DN7 · NCC Tuấn Phong · ' + b.anh.length + ' ảnh', link: 'https://beta.x/admin/dat-ncc/DN7' }) }; }
-    if (/zalo-img/.test(url)) return { getResponseCode: () => 200, getBlob: () => ({ getContentType: () => 'image/jpeg', getBytes: () => [1, 2, 3] }) };
+    if (/zalo-img/.test(url)) return { getResponseCode: () => 200, getBlob: () => ({ getContentType: () => 'application/octet-stream', getBytes: () => (/html/.test(url) ? [60, 104, 116] : [-1, -40, 1]) }) };
     if (/sendMessage/.test(url)) { zalo.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; }
     return f0(url, opt); };
   const img = (chat, id) => ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.image.received', message: { chat: { id: chat }, message_id: id, photo_url: 'https://zalo-img/' + id + '.jpg' } }) } });
@@ -1428,7 +1428,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   img('chu1', 'a1'); img('chu1', 'a2'); img('chu1', 'a2'); img('chu1', 'a3');
   eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
   const r1 = ctx.handleText_('1', false, 'chu1', 'Chủ');
-  eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].b64, !!web[0].sig], [1, 'moi', 3, 'AQID', true]);
+  eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].mime, !!web[0].sig], [1, 'moi', 3, 'image/jpeg', true]);
   eq('Đặt NCC: trả tóm tắt + link + Nhắn số', [/Phiếu DN7/.test(r1), /admin\/dat-ncc\/DN7/.test(r1), /Nhắn số: 9 Menu$/.test(r1)], [true, true, true]);
   img('chu1', 'a4');
   eq('Đặt NCC: ảnh gửi thêm có ma_lo riêng (web chống trùng theo ma_lo)', [web[1].b.ma_lo !== web[0].b.ma_lo, web[1].b.ma_lo.indexOf(web[0].b.ma_lo) === 0], [true, true]);
@@ -1439,6 +1439,8 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('Đặt NCC: tin thứ 2 khi chưa chọn → gom im', ctx.handleText_('mẫu 2 màu đen', false, 'chu1', 'Chủ'), '');
   ctx.handleText_('2', false, 'chu1', 'Chủ');
   eq('Đặt NCC: chọn 2 → them, gợi ý phiếu DN7, 2 tin', [web[2].b.che, web[2].b.phieu_id, web[2].b.tin.length, web[2].b.anh.length], ['them', 'DN7', 2, 0]);
+  { delete PROPS.datncc_chu1; const w0 = web.length; img('chu1', 'html1'); const r = ctx.handleText_('1', false, 'chu1', 'Chủ');
+    eq('Đặt NCC: Zalo trả trang không phải ảnh → báo rõ, không gửi web', [/không phải ảnh/.test(r), web.length - w0], [true, 0]); }
   delete PROPS.datncc_chu1; img('chu1', 'b1');
   eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);
   img('chu1', 'b2');
