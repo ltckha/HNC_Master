@@ -239,7 +239,7 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
 ## Nhập hàng qua Zalo (thử, anh Kha "làm thử" 02/11; trước tên "Đặt NCC")
 Chủ bấm **Chia sẻ** ảnh / tin từ chat nhà cung cấp sang bot → bot chuyển lên web, web lưu phiếu "Đặt NCC" (AI đọc ảnh, màn admin do web làm).
 - **Chỉ Chủ** (`OWNER_CHAT_ID`), **chỉ khi có `DAT_NCC_URL`** (đang trỏ web beta). Trống = tắt, ảnh vẫn bị bỏ qua như cũ. Nhân viên không đổi gì.
-- **Bật / tắt ngay trên Zalo (Chủ):** nhắn `nhap hang thu` (hoặc `dat ncc thu`) → đặt `DAT_NCC_URL` = `https://beta.giayhainancy.vn/api/bot/dat-ncc`; `nhap hang tat` → xoá. Web: 4 bước Đặt hàng → Chờ hàng về → Nhận hàng → Xong; tóm tắt ghi `NH-<số>`, link `/admin/nhap-hang/<số>` (bot dùng nguyên `link` web trả). Web beta dùng khoá `BOT_CALLBACK_KEY`, để trống `DAT_NCC_KEY`.
+- **Bật / tắt ngay trên Zalo (Chủ):** `nhap hang bat` → web chính `https://giayhainancy.vn/api/bot/dat-ncc` (khoá ký = khoá bot-lenh bot đang dùng với web chính); nhắn `nhap hang thu` (hoặc `dat ncc thu`) → đặt `DAT_NCC_URL` = `https://beta.giayhainancy.vn/api/bot/dat-ncc`; `nhap hang tat` → xoá. Web: 4 bước Đặt hàng → Chờ hàng về → Nhận hàng → Xong; tóm tắt ghi `NH-<số>`, link `/admin/nhap-hang/<số>` (bot dùng nguyên `link` web trả). Web beta dùng khoá `BOT_CALLBACK_KEY`, để trống `DAT_NCC_KEY`.
 - Ảnh, hoặc tin chữ không phải lệnh (chữ không hiểu) → bot hỏi 1 lần: `1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ · 9 Menu`.
 - Ảnh / tin gửi liền nhau, cách nhau ≤ 2 phút → gom 1 lô, không hỏi lại. Đã chọn 1 / 2 thì ảnh gửi tiếp trong 2 phút tự thêm vào phiếu đó.
 - 3 = trả link app (Kho → Nhập từ phiếu), vì ảnh phiếu nhập vẫn tải trên app. 0 = bỏ lô.

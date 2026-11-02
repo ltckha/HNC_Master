@@ -1449,6 +1449,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('Đặt NCC: nhân viên không bật được', /chỉ Chủ/.test(ctx.handleText_('dat ncc thu', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: Chủ "dat ncc tat" → tắt', [/Tắt Nhập hàng/.test(ctx.handleText_('dat ncc tat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, undefined]);
   eq('Đặt NCC: Chủ "đặt ncc thử" → bật beta', [/Bật Nhập hàng/.test(ctx.handleText_('nhập hàng thử', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, 'https://beta.giayhainancy.vn/api/bot/dat-ncc']);
+  eq('Nhập hàng: Chủ "nhap hang bat" → web chính', [/web chính/.test(ctx.handleText_('nhap hang bat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, 'https://giayhainancy.vn/api/bot/dat-ncc']);
   delete PROPS.DAT_NCC_URL; const zn = zalo.length; img('chu1', 'c1');
   eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
   ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }
