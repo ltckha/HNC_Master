@@ -1431,6 +1431,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].b64, !!web[0].sig], [1, 'moi', 3, 'AQID', true]);
   eq('Đặt NCC: trả tóm tắt + link + Nhắn số', [/Phiếu DN7/.test(r1), /admin\/dat-ncc\/DN7/.test(r1), /Nhắn số: 9 Menu$/.test(r1)], [true, true, true]);
   img('chu1', 'a4');
+  eq('Đặt NCC: ảnh gửi thêm có ma_lo riêng (web chống trùng theo ma_lo)', [web[1].b.ma_lo !== web[0].b.ma_lo, web[1].b.ma_lo.indexOf(web[0].b.ma_lo) === 0], [true, true]);
   eq('Đặt NCC: ảnh tiếp trong 2 phút → tự thêm vào DN7, không hỏi lại', [web.length, web[1].b.che, web[1].b.phieu_id, /Nhắn số/.test(zalo[zalo.length - 1].text), /Đặt NCC mới/.test(zalo[zalo.length - 1].text)], [2, 'them', 'DN7', true, false]);
   const lo = JSON.parse(PROPS.datncc_chu1); lo.t -= 3 * 60000; PROPS.datncc_chu1 = JSON.stringify(lo);
   const q = ctx.handleText_('Anh ơi mẫu này còn size 40 không, giao thứ 5 nhé', false, 'chu1', 'Chủ');
@@ -1443,6 +1444,9 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   img('chu1', 'b2');
   eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 3]);
   eq('Đặt NCC: chữ lạ của nhân viên → menu như cũ', /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'nv9', 'NV')), true);
+  eq('Đặt NCC: nhân viên không bật được', /chỉ Chủ/.test(ctx.handleText_('dat ncc thu', false, 'nv9', 'NV')), true);
+  eq('Đặt NCC: Chủ "dat ncc tat" → tắt', [/Tắt Đặt NCC/.test(ctx.handleText_('dat ncc tat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, undefined]);
+  eq('Đặt NCC: Chủ "đặt ncc thử" → bật beta', [/Bật Đặt NCC/.test(ctx.handleText_('đặt ncc thử', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, 'https://beta.giayhainancy.vn/api/bot/dat-ncc']);
   delete PROPS.DAT_NCC_URL; const zn = zalo.length; img('chu1', 'c1');
   eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
   ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }

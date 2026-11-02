@@ -239,10 +239,11 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
 ## Đặt NCC qua Zalo (thử, anh Kha "làm thử" 02/11)
 Chủ bấm **Chia sẻ** ảnh / tin từ chat nhà cung cấp sang bot → bot chuyển lên web, web lưu phiếu "Đặt NCC" (AI đọc ảnh, màn admin do web làm).
 - **Chỉ Chủ** (`OWNER_CHAT_ID`), **chỉ khi có `DAT_NCC_URL`** (đang trỏ web beta). Trống = tắt, ảnh vẫn bị bỏ qua như cũ. Nhân viên không đổi gì.
+- **Bật / tắt ngay trên Zalo (Chủ):** nhắn `dat ncc thu` → đặt `DAT_NCC_URL` = `https://beta.giayhainancy.vn/api/bot/dat-ncc`; `dat ncc tat` → xoá. Web beta dùng khoá `BOT_CALLBACK_KEY`, để trống `DAT_NCC_KEY`.
 - Ảnh, hoặc tin chữ không phải lệnh (chữ không hiểu) → bot hỏi 1 lần: `1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ · 9 Menu`.
 - Ảnh / tin gửi liền nhau, cách nhau ≤ 2 phút → gom 1 lô, không hỏi lại. Đã chọn 1 / 2 thì ảnh gửi tiếp trong 2 phút tự thêm vào phiếu đó.
 - 3 = trả link app (Kho → Nhập từ phiếu), vì ảnh phiếu nhập vẫn tải trên app. 0 = bỏ lô.
-- **Cửa web:** `POST DAT_NCC_URL`, ký như `/api/bot-lenh` (`x-bot-time`, `x-bot-sig` = HMAC-SHA256 hex của `time + "." + body`, khoá `DAT_NCC_KEY`, trống thì `BOT_CALLBACK_KEY`). Body: `{ luc, che: "moi"|"them", phieu_id (gợi ý phiếu khi them), ma_lo, chat_id, nguoi, anh: [{ mime, b64, msg_id, ghi_chu }], tin: [{ text, msg_id }] }`. Web trả `{ ok, phieu_id, tom_tat (không có giá), link }` hoặc `{ ok: false, error }`.
+- **Cửa web:** `POST DAT_NCC_URL`, ký như `/api/bot-lenh` (`x-bot-time`, `x-bot-sig` = HMAC-SHA256 hex của `time + "." + body`, khoá `DAT_NCC_KEY`, trống thì `BOT_CALLBACK_KEY`). Body: `{ luc, che: "moi"|"them", phieu_id (gợi ý phiếu khi them), ma_lo (web chống trùng theo mã này; món gửi thêm sau khi chọn có mã `<lô>-<msg_id>`), chat_id, nguoi, anh: [{ mime, b64, msg_id, ghi_chu }], tin: [{ text, msg_id }] }`. Web trả `{ ok, phieu_id, tom_tat (không có giá), link }` hoặc `{ ok: false, error }`.
 - Lô lưu tạm ở Script Property `datncc_<chat>` (≤ 20 món), phiếu gần nhất ở `datncc_phieu_<chat>`.
 - Mac: không có lệnh tương ứng (việc mới, luật 15).
 

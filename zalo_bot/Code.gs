@@ -172,6 +172,8 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
   try {
     let res, isWrite;
     try {
+      const sw = datNccSwitch_(text, chatId);
+      if (sw) return { reply: sw, syncTabs: [] };
       const nav = navHandle_(text, chatId, dryRun); // menu / tin số (điều khiển bằng số, anh Kha 17/10)
       if (nav) return { reply: nav.text, syncTabs: nav.touched || [] };
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
@@ -2228,7 +2230,19 @@ function handleReceipt_(action, body, dryRun) {
 // =====================================================================
 const DAT_NCC_GOM_MS = 2 * 60000;
 const DAT_NCC_MAX = 20; // ảnh / tin tối đa mỗi lô (ô Script Property ≤ 9KB)
+const DAT_NCC_BETA = 'https://beta.giayhainancy.vn/api/bot/dat-ncc';
 const DAT_NCC_HOI = 'Nhắn số: 1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ';
+
+/** Chủ nhắn "dat ncc thu" → bật (trỏ web beta), "dat ncc tat" → tắt. Không phải lệnh này → null. */
+function datNccSwitch_(text, chatId) {
+  const m = String(text || '').trim().toLowerCase().normalize('NFC').match(/^(?:dat|đặt)\s*ncc\s+(thu|thử|tat|tắt)$/);
+  if (!m) return null;
+  if (!navIsOwner_(chatId)) return '🔒 Lệnh này chỉ Chủ dùng.\nNhắn số: 9 Menu';
+  const props = PropertiesService.getScriptProperties();
+  if (/^th/.test(m[1])) { props.setProperty('DAT_NCC_URL', DAT_NCC_BETA); return '✅ Bật Đặt NCC (web thử). Chia sẻ ảnh / tin từ chat nhà cung cấp sang bot.\nTắt: nhắn "dat ncc tat"\nNhắn số: 9 Menu'; }
+  props.deleteProperty('DAT_NCC_URL'); datNccClear_(chatId);
+  return '⏹ Tắt Đặt NCC — ảnh gửi bot lại bị bỏ qua như cũ.\nNhắn số: 9 Menu';
+}
 
 function datNccOn_() { return !!PropertiesService.getScriptProperties().getProperty('DAT_NCC_URL'); }
 function datNccLoad_(chatId) {
@@ -2308,7 +2322,8 @@ function datNccSend_(chatId, lo, items, che) {
   });
   if (!anh.length && !tin.length) return '⚠️ Không tải được ảnh từ Zalo (' + loi[0] + ') — gửi lại ảnh.\nNhắn số: 9 Menu';
   const phieu = lo.phieu || props.getProperty('datncc_phieu_' + chatId) || '';
-  const out = webForward_({ che, phieu_id: che === 'them' ? phieu : '', ma_lo: lo.id, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin },
+  const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo: món gửi thêm có mã riêng
+  const out = webForward_({ che, phieu_id: che === 'them' ? phieu : '', ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin },
     props.getProperty('DAT_NCC_URL'), props.getProperty('DAT_NCC_KEY') || '');
   if (!out.ok) return '⚠️ Web chưa nhận: ' + (out.error || 'lỗi') + ' — ảnh vẫn ở chat Zalo, thử lại sau.\nNhắn số: 9 Menu';
   if (out.phieu_id) {
