@@ -3619,13 +3619,8 @@ Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đ�
     except ImportError:
         ctx = ssl.create_default_context()
 
-    preferred_models = [
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-2.5-flash"
-    ]
+    from tools import gemini_models  # thứ tự chung shared/gemini_models.json, khớp bot (luật 15)
+    preferred_models = gemini_models.models()
     raw_text = None
     used_model = None
 
@@ -3646,11 +3641,13 @@ Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đ�
                         break
             except urllib.error.HTTPError as http_err:
                 err_msg = http_err.read().decode("utf-8", errors="ignore")
-                if http_err.code in [503, 429] and attempt == 0:
+                gemini_models.log_error("ai_nhap_sp", model_name, http_err.code)
+                if http_err.code in gemini_models.RETRY_CODES and attempt == 0:
                     time.sleep(2)
                     continue
                 break
-            except Exception:
+            except Exception as e:
+                gemini_models.log_error("ai_nhap_sp", model_name, type(e).__name__)
                 break
         if raw_text:
             break

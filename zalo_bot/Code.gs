@@ -2190,7 +2190,8 @@ const OWNER_EMAILS_DEFAULT = ['ltckha@gmail.com', 'giayhainancy@gmail.com'];
 const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_lai: 'Hàng lỗi trả lại', khac: 'Khác' };
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
 const GEMINI_SHARED_HASH = '8412f316'; // khoá Gemini chung cũ của các repo (checkConfig cảnh báo nếu bot còn dùng)
-const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
+// Thứ tự mô hình Gemini chung (02/11): PHẢI khớp shared/gemini_models.json (main.py, spec_fill.py đọc file đó; test bot kiểm khớp)
+const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash'];
 // Mã "cần bổ sung" (anh Kha 16/10): SANPHAM trống Tên Ngành Hàng hoặc giá bán → xuất sàn / MISA / mark_exported bỏ qua, web ẩn.
 const PN_NEED_INFO_COLS = ['Tên Ngành Hàng', 'product_price'];
 // Cột thông tin mẫu: chép từ mẫu cùng mã cha khi tạo mã mới; form "Bổ sung thông tin" (bo_sung_sp) chỉ được ghi các cột này + product_price
@@ -2371,17 +2372,29 @@ function receiptPrompt_(suppliers) {
   ].join('\n');
 }
 
+/** 1 dòng nhật ký mỗi lỗi Gemini (Executions / Logs): ngày, luồng, mô hình, mã lỗi — như ~/Library/Logs/hnc_gemini.log trên Mac. */
+function geminiLogError_(luong, model, code) {
+  console.error('Gemini lỗi\t' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + '\t' + luong + '\t' + model + '\t' + code);
+}
+
 function receiptGemini_(bytes, mime) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('chưa cấu hình GEMINI_API_KEY trong Script Properties');
   const payload = { contents: [{ parts: [{ inline_data: { mime_type: mime, data: Utilities.base64Encode(bytes) } },
     { text: receiptPrompt_(Object.keys(supplierInfo_())) }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } };
-  // Khoá miễn phí: 2.5 Flash nhiều lượt nhất → thử trước; lỗi / hết lượt thì lùi sang bản mới hơn (anh Kha 16/10)
+  // Khoá miễn phí: 2.5 Flash nhiều lượt nhất → thử trước; lỗi / hết lượt thì lùi mô hình kế (thứ tự chung 02/11). 503 / 504: chờ 2 giây thử lại 1 lần.
   let last = '';
   let quota = 0;
   for (const model of RECEIPT_MODELS) {
-    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
-      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    let res;
+    for (let lan = 0; lan < 2; lan++) {
+      res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
+        { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+      if (res.getResponseCode() === 200) break;
+      geminiLogError_('doc_phieu', model, res.getResponseCode());
+      if ([503, 504].indexOf(res.getResponseCode()) === -1 || lan) break;
+      Utilities.sleep(2000);
+    }
     if (res.getResponseCode() === 429) { quota++; last = model + ' hết lượt'; continue; }
     if (res.getResponseCode() !== 200) { last = model + ' HTTP ' + res.getResponseCode(); continue; }
     try {

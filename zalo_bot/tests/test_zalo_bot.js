@@ -1452,5 +1452,6 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   delete PROPS.DAT_NCC_URL; const zn = zalo.length; img('chu1', 'c1');
   eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
   ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }
+eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 15)', JSON.stringify(vm.runInContext('RECEIPT_MODELS', ctx)), JSON.stringify(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'gemini_models.json'), 'utf8')).models));
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

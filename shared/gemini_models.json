@@ -1,0 +1,4 @@
+{
+  "_ghi_chu": "Thứ tự mô hình Gemini chung (anh Kha làm 02/11, theo Ecosystem-Hub/docs/research/2026-11-02_gemini_model_stability.md). main.py + tools/spec_fill.py đọc file này; bot zalo_bot/Code.gs RECEIPT_MODELS phải khớp (test_zalo_bot.js kiểm). 3.8 và 3.6 hay 503 nhất nên không đứng đầu.",
+  "models": ["gemini-2.5-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash"]
+}

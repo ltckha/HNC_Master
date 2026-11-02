@@ -36,9 +36,10 @@ SANPHAM_HEADER_ROW = 2  # luật 4: SANPHAM để tên cột kỹ thuật ở h�
 MEDIA_DIR = "/Volumes/Media/HNC_Master"
 sys.path.insert(0, ROOT)
 from hnc_paths import find_system_dir  # noqa: E402  (đường dẫn Drive khai 1 chỗ)
+from tools import gemini_models  # noqa: E402  (thứ tự mô hình chung)
 EXPORT_DIR = os.path.join(find_system_dir(), "HNC_Exported_Files")
 # 2 mô hình (16/10): mỗi lần lỗi thử ít mô hình để khỏi tốn hạn mức miễn phí của nhiều mô hình
-GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"]
+GEMINI_MODELS = gemini_models.models()  # thứ tự chung shared/gemini_models.json (02/11)
 
 # (cột SANPHAM hàng 2, cột mặc định ở SUB hàng 1) — so khớp sau khi bỏ khoảng trắng 2 đầu
 SPEC_COLUMNS = [
@@ -246,7 +247,9 @@ def gemini_call(api_key, images, prompt):
         for attempt in range(2):
             try:
                 resp = requests.post(url, params={"key": api_key}, json=payload, timeout=60)
-                if resp.status_code in (429, 503) and attempt == 0:
+                if not resp.ok:
+                    gemini_models.log_error("spec_fill", model, resp.status_code)
+                if resp.status_code in gemini_models.RETRY_CODES and attempt == 0:
                     time.sleep(3)
                     continue
                 if not resp.ok:
@@ -262,6 +265,7 @@ def gemini_call(api_key, images, prompt):
                 GEMINI_MODELS = [model] + [m for m in GEMINI_MODELS if m != model]  # lần sau gọi thẳng mô hình chạy được
                 return model, ans
             except Exception as e:  # thử mô hình kế tiếp
+                gemini_models.log_error("spec_fill", model, type(e).__name__)
                 last_err = f"{model}: {e}"
                 break
     raise RuntimeError(f"Gemini không trả lời ({last_err})")
