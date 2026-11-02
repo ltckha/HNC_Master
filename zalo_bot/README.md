@@ -234,7 +234,17 @@ Luồng: chụp / tải ảnh phiếu trên web /admin hoặc app → Gemini đ�
 - **Hoá đơn NCC:** dòng NHAP có `Số chứng từ` NK… của một phiếu NCC thì phiếu × kho lấy NCC theo phiếu, và câu nhắn ghi "theo phiếu xuất <số phiếu NCC>".
 - **`bo_sung_sp` (form "Bổ sung thông tin mã mới" trên web):** chỉ ghi các cột thông tin mẫu ở trên (theo tên cột hàng 2, khoảng trắng / dấu ":" cuối tên không quan trọng) + `product_price`. Cột khác → lỗi, không ghi gì. `Tên Ngành Hàng` phải có trong SUB, không được trống. Không đụng `product_name` / công thức; có ngành thì chép lại công thức `Giới tính`, `product_category_id` từ dòng gần nhất phía trên. `can_bo_sung` = mã còn trống ngành / giá bán không. Ghi xong gửi sync-hint `SANPHAM`.
 - **Gemini:** thử `gemini-2.5-flash` trước (khoá miễn phí nhiều lượt nhất), lỗi thì 3.6 → 3.8 Flash; mọi model báo 429 thì trả lỗi "hết lượt miễn phí". Model đã dùng lưu trong phiếu (`model`).
-- **Zalo chỉ báo tin:** đọc phiếu xong bot nhắn `OWNER_CHAT_ID` "📄 Có phiếu chờ chia: <NCC> <số> · n dòng · m đôi → <web>/admin/app#phieu-<mã>". Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Bot **không** nhận ảnh phiếu qua Zalo (ảnh gửi vào bot bị bỏ qua, ghi Nhật ký).
+- **Zalo chỉ báo tin:** đọc phiếu xong bot nhắn `OWNER_CHAT_ID` "📄 Có phiếu chờ chia: <NCC> <số> · n dòng · m đôi → <web>/admin/app#phieu-<mã>". Link lấy từ `APP_URL`, mặc định gốc của `SYNC_HINT_URL` + `/admin/app`. Bot **không** nhận ảnh phiếu qua Zalo (ảnh gửi vào bot bị bỏ qua, ghi Nhật ký; riêng ảnh của Chủ khi bật Đặt NCC, xem mục dưới).
+
+## Đặt NCC qua Zalo (thử, anh Kha "làm thử" 02/11)
+Chủ bấm **Chia sẻ** ảnh / tin từ chat nhà cung cấp sang bot → bot chuyển lên web, web lưu phiếu "Đặt NCC" (AI đọc ảnh, màn admin do web làm).
+- **Chỉ Chủ** (`OWNER_CHAT_ID`), **chỉ khi có `DAT_NCC_URL`** (đang trỏ web beta). Trống = tắt, ảnh vẫn bị bỏ qua như cũ. Nhân viên không đổi gì.
+- Ảnh, hoặc tin chữ không phải lệnh (chữ không hiểu) → bot hỏi 1 lần: `1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ · 9 Menu`.
+- Ảnh / tin gửi liền nhau, cách nhau ≤ 2 phút → gom 1 lô, không hỏi lại. Đã chọn 1 / 2 thì ảnh gửi tiếp trong 2 phút tự thêm vào phiếu đó.
+- 3 = trả link app (Kho → Nhập từ phiếu), vì ảnh phiếu nhập vẫn tải trên app. 0 = bỏ lô.
+- **Cửa web:** `POST DAT_NCC_URL`, ký như `/api/bot-lenh` (`x-bot-time`, `x-bot-sig` = HMAC-SHA256 hex của `time + "." + body`, khoá `DAT_NCC_KEY`, trống thì `BOT_CALLBACK_KEY`). Body: `{ luc, che: "moi"|"them", phieu_id (gợi ý phiếu khi them), ma_lo, chat_id, nguoi, anh: [{ mime, b64, msg_id, ghi_chu }], tin: [{ text, msg_id }] }`. Web trả `{ ok, phieu_id, tom_tat (không có giá), link }` hoặc `{ ok: false, error }`.
+- Lô lưu tạm ở Script Property `datncc_<chat>` (≤ 20 món), phiếu gần nhất ở `datncc_phieu_<chat>`.
+- Mac: không có lệnh tương ứng (việc mới, luật 15).
 
 ## Cửa "báo đơn web" (API)
 

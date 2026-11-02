@@ -1412,5 +1412,39 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('bc → link trang quản lý, không chạy báo cáo', /giayhainancy\.vn\/admin\n/.test(t('bc')), true);
   eq('du phong → menu Mac', /máy Mac/.test(t('du phong')), true);
   PROPS.ZALO_GHI_SO = '1'; delete PROPS.SYNC_HINT_URL; vm.runInContext('MEMO={};', ctx); }
+// ---- Đặt NCC qua Zalo (thử 02/11): chỉ Chủ, gom ảnh 2 phút, hỏi 1 lần, gửi web ----
+{ const o = PROPS.OWNER_CHAT_ID; PROPS.OWNER_CHAT_ID = 'chu1'; PROPS.DAT_NCC_URL = 'https://beta.x/api/bot/dat-ncc'; PROPS.DAT_NCC_KEY = 'datncckey_1234567890';
+  PROPS.ALLOWED_CHAT_IDS = (PROPS.ALLOWED_CHAT_IDS ? PROPS.ALLOWED_CHAT_IDS + ',' : '') + 'chu1,nv9';
+  const f0 = ctx.UrlFetchApp.fetch; const web = []; const zalo = [];
+  ctx.UrlFetchApp.fetch = (url, opt) => {
+    if (/dat-ncc/.test(url)) { const b = JSON.parse(opt.payload); web.push({ b, sig: opt.headers['x-bot-sig'] });
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, phieu_id: 'DN7', tom_tat: 'Phiếu DN7 · NCC Tuấn Phong · ' + b.anh.length + ' ảnh', link: 'https://beta.x/admin/dat-ncc/DN7' }) }; }
+    if (/zalo-img/.test(url)) return { getResponseCode: () => 200, getBlob: () => ({ getContentType: () => 'image/jpeg', getBytes: () => [1, 2, 3] }) };
+    if (/sendMessage/.test(url)) { zalo.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; }
+    return f0(url, opt); };
+  const img = (chat, id) => ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.image.received', message: { chat: { id: chat }, message_id: id, photo_url: 'https://zalo-img/' + id + '.jpg' } }) } });
+  img('nv9', 'n1');
+  eq('Đặt NCC: ảnh của nhân viên → bỏ qua như cũ', [zalo.length, web.length], [0, 0]);
+  img('chu1', 'a1'); img('chu1', 'a2'); img('chu1', 'a2'); img('chu1', 'a3');
+  eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
+  const r1 = ctx.handleText_('1', false, 'chu1', 'Chủ');
+  eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].b64, !!web[0].sig], [1, 'moi', 3, 'AQID', true]);
+  eq('Đặt NCC: trả tóm tắt + link + Nhắn số', [/Phiếu DN7/.test(r1), /admin\/dat-ncc\/DN7/.test(r1), /Nhắn số: 9 Menu$/.test(r1)], [true, true, true]);
+  img('chu1', 'a4');
+  eq('Đặt NCC: ảnh tiếp trong 2 phút → tự thêm vào DN7, không hỏi lại', [web.length, web[1].b.che, web[1].b.phieu_id, /Nhắn số/.test(zalo[zalo.length - 1].text), /Đặt NCC mới/.test(zalo[zalo.length - 1].text)], [2, 'them', 'DN7', true, false]);
+  const lo = JSON.parse(PROPS.datncc_chu1); lo.t -= 3 * 60000; PROPS.datncc_chu1 = JSON.stringify(lo);
+  const q = ctx.handleText_('Anh ơi mẫu này còn size 40 không, giao thứ 5 nhé', false, 'chu1', 'Chủ');
+  eq('Đặt NCC: tin chia sẻ sau 2 phút → lô mới, hỏi lại', [/Nhận tin/.test(q), /Đặt NCC mới/.test(q)], [true, true]);
+  eq('Đặt NCC: tin thứ 2 khi chưa chọn → gom im', ctx.handleText_('mẫu 2 màu đen', false, 'chu1', 'Chủ'), '');
+  ctx.handleText_('2', false, 'chu1', 'Chủ');
+  eq('Đặt NCC: chọn 2 → them, gợi ý phiếu DN7, 2 tin', [web[2].b.che, web[2].b.phieu_id, web[2].b.tin.length, web[2].b.anh.length], ['them', 'DN7', 2, 0]);
+  delete PROPS.datncc_chu1; img('chu1', 'b1');
+  eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);
+  img('chu1', 'b2');
+  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 3]);
+  eq('Đặt NCC: chữ lạ của nhân viên → menu như cũ', /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'nv9', 'NV')), true);
+  delete PROPS.DAT_NCC_URL; const zn = zalo.length; img('chu1', 'c1');
+  eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
+  ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
