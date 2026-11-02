@@ -937,6 +937,25 @@
    }
   },
   {
+   "ten": "giá MISA: hàng tặng — giá HĐ ghi \"0\" (khác ô trống)",
+   "ham": "giaMisa",
+   "vao": [
+    {
+     "don_gia_hd": "0",
+     "don_gia_phieu": 410000,
+     "invoice_price": 400000,
+     "purchase_price": 390000,
+     "so_hd": "00056"
+    }
+   ],
+   "ra": {
+    "gia": 0,
+    "nguon": "hd",
+    "gia_tam": false,
+    "gia_cu": false
+   }
+  },
+  {
    "ten": "đơn giá phiếu: có giá trên phiếu",
    "ham": "donGiaPhieuMoi",
    "vao": [

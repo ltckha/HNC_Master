@@ -2689,14 +2689,19 @@ def process_export_task(choice, loader):
             unit = sp_info.get('unit', '')
             # Giá theo lô (anh Kha 17/10, giống bot): don_gia_hd → don_gia_phieu → giá theo mã (invoice_price, rồi purchase_price) = "giá cũ"
             so_hd = str(rec.get('so_hd', '') or '').strip()
-            lot_price = parse_number(rec.get('don_gia_hd')) or parse_number(rec.get('don_gia_phieu'))
+            # Hàng tặng (02/11, như shared/stock_rules.js giaMisa): don_gia_hd ghi "0" (khác ô trống) = giá HĐ 0
+            hd_raw = rec.get('don_gia_hd')
+            hd_zero = hd_raw is not None and str(hd_raw).strip() != '' and parse_number(hd_raw) == 0
+            lot_price = parse_number(hd_raw) or parse_number(rec.get('don_gia_phieu'))
             raw_inv = sp_info.get('invoice_price', '')
             inv_num = parse_number(raw_inv)
             if inv_num <= 0 and parse_number(sp_info.get('purchase_price')) > 0:
                 # invoice_price trống → lấy giá nhập (purchase_price, vd mã tạo từ phiếu NCC) — anh Kha chốt 17/10
                 inv_num = parse_number(sp_info.get('purchase_price'))
                 raw_inv = str(inv_num)
-            if lot_price > 0:
+            if hd_zero:
+                inv_num, raw_inv = 0, '0'
+            elif lot_price > 0:
                 inv_num = lot_price
                 raw_inv = str(lot_price)
             qty = parse_number(rec.get('Số lượng (*)') or rec.get('item_quantity', 0))
@@ -2721,7 +2726,7 @@ def process_export_task(choice, loader):
                 row_status_list.append("")
                 waiting_hd.add(f"{doc_no} {doc_date}")
                 continue
-            price_tags = [t for t in ('' if so_hd else 'giá tạm', '' if lot_price > 0 else 'giá cũ theo mã') if t]
+            price_tags = [t for t in ('' if so_hd else 'giá tạm', '' if lot_price > 0 or hd_zero else 'giá cũ theo mã') if t]
 
             # DANH SÁCH KIỂM TRA LỖI THIẾU DỮ LIỆU
             missing_reasons = []
@@ -2743,7 +2748,7 @@ def process_export_task(choice, loader):
                 missing_reasons.append("Thiếu số lượng")
 
             # 5. Kiểm tra Đơn giá hóa đơn
-            if not raw_inv or inv_num <= 0:
+            if not hd_zero and (not raw_inv or inv_num <= 0):  # hàng tặng giá HĐ 0 không tính là thiếu giá
                 missing_reasons.append("Thiếu đơn giá")
 
             # 6. Kiểm tra Nhà cung cấp

@@ -162,9 +162,11 @@ var LuatKho = (function () {
    */
   function giaMisa(d) {
     var hd = soTien(d.don_gia_hd), ph = soTien(d.don_gia_phieu), inv = soTien(d.invoice_price), pur = soTien(d.purchase_price);
-    var gia = hd || ph || (inv > 0 ? inv : pur);
-    var nguon = hd ? 'hd' : ph ? 'phieu' : inv > 0 ? 'invoice' : pur ? 'purchase' : '';
-    return { gia: gia, nguon: nguon, gia_tam: !String(d.so_hd || '').trim(), gia_cu: !(hd || ph) };
+    // Hàng tặng (02/11): don_gia_hd ghi "0" (khác ô trống) = giá HĐ 0, không lùi về giá phiếu / giá theo mã
+    var hd0 = !hd && d.don_gia_hd != null && String(d.don_gia_hd).trim() !== '';
+    var gia = hd0 ? 0 : hd || ph || (inv > 0 ? inv : pur);
+    var nguon = hd || hd0 ? 'hd' : ph ? 'phieu' : inv > 0 ? 'invoice' : pur ? 'purchase' : '';
+    return { gia: gia, nguon: nguon, gia_tam: !String(d.so_hd || '').trim(), gia_cu: !(hd || hd0 || ph) };
   }
 
   /** Đơn giá phiếu ghi vào dòng NHAP mới (19/10): giá trên phiếu NCC, không có thì giá nhập SANPHAM; 0 = để trống. */

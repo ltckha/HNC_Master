@@ -18,7 +18,7 @@ ctx.LockService = { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, 
 ctx.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheetByName: () => null }) };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'zalo_bot', 'Code.gs'), 'utf8') + `
-;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, rowSrcStart_, rowSrcFields_, receiptUndoGuard_, parsePercent_, normSize_, moneyValue_, dateKey_, KHO_ALIASES, KYGUI_COL };
+;this.__old = { parseMessage_, kyguiSale_, kyguiTransfer_, kyguiReturn_, kyguiCheck_, receiptNkPlan_, saleDupRows_, rowSrcStart_, rowSrcFields_, receiptUndoGuard_, parsePercent_, normSize_, moneyValue_, giaHdZero_, dateKey_, KHO_ALIASES, KYGUI_COL };
 this.__set = (name, fn) => { eval(name + ' = fn'); };
 this.__memo = () => { MEMO = {}; CTX = { pending: {} }; };`, ctx);
 const O = ctx.__old;
@@ -93,9 +93,10 @@ const OLD = {
   giaMisa(d) {
     // Cũ (misaStockExport_ / main.py task 8): giaHd || giaPhieu || (inv > 0 ? inv : pur); tags 'giá tạm' / 'giá cũ theo mã'
     const giaHd = O.moneyValue_(d.don_gia_hd), giaPhieu = O.moneyValue_(d.don_gia_phieu), inv = O.moneyValue_(d.invoice_price), pur = O.moneyValue_(d.purchase_price);
+    const hd0 = O.giaHdZero_(d.don_gia_hd); // hàng tặng (02/11)
     const lot = giaHd || giaPhieu;
-    const gia = lot || (inv > 0 ? inv : pur);
-    return { gia, nguon: giaHd ? 'hd' : giaPhieu ? 'phieu' : inv > 0 ? 'invoice' : pur ? 'purchase' : '', gia_tam: !String(d.so_hd || '').trim(), gia_cu: !lot };
+    const gia = hd0 ? 0 : lot || (inv > 0 ? inv : pur);
+    return { gia, nguon: giaHd || hd0 ? 'hd' : giaPhieu ? 'phieu' : inv > 0 ? 'invoice' : pur ? 'purchase' : '', gia_tam: !String(d.so_hd || '').trim(), gia_cu: !(lot || hd0) };
   },
   donGiaPhieuMoi(gia, pur) {
     // Cũ (appendNhap_): (CTX.receiptId && CTX.donGiaPhieu) || spPurchasePrice_(code); 0 → không ghi ô

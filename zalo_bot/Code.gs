@@ -3976,8 +3976,9 @@ function misaStockExport_(kho, dry, flags) {
     // Giá theo lô (anh Kha 17/10): don_gia_hd → don_gia_phieu → giá theo mã (invoice_price, rồi purchase_price) = "giá cũ"
     const soHd = String(v(row, 'so_hd') || '').trim();
     const giaHd = moneyValue_(v(row, 'don_gia_hd')), giaPhieu = moneyValue_(v(row, 'don_gia_phieu'));
+    const hd0 = giaHdZero_(v(row, 'don_gia_hd')); // hàng tặng: giá HĐ ghi "0" (02/11, như LuatKho.giaMisa)
     const lotPrice = giaHd || giaPhieu;
-    const price = lotPrice || (p ? (p.inv > 0 ? p.inv : p.pur) : 0);
+    const price = hd0 ? 0 : lotPrice || (p ? (p.inv > 0 ? p.inv : p.pur) : 0);
     // Chờ hoá đơn: chưa có số HĐ thì đợi; quá MISA_WAIT_DAYS ngày mới xuất "giá tạm"
     const dk = dateKey_(d);
     const age = dk ? Math.round((Date.parse(todayKey) - Date.parse(dk)) / 86400000) : 99;
@@ -3986,7 +3987,7 @@ function misaStockExport_(kho, dry, flags) {
       choHd[k] = (choHd[k] || 0) + 1;
       continue;
     }
-    const tags = [soHd ? '' : 'giá tạm', lotPrice ? '' : 'giá cũ theo mã'].filter(Boolean);
+    const tags = [soHd ? '' : 'giá tạm', lotPrice || hd0 ? '' : 'giá cũ theo mã'].filter(Boolean);
     const sup = p && p.supplier ? sups[p.supplier.toLowerCase()] : null;
     const reasons = [];
     if (!docNo) reasons.push('Thiếu số chứng từ');
@@ -4408,7 +4409,8 @@ function invoiceTickets_() {
     const t = tickets[key] || (tickets[key] = { date, supplier, kho, qty: 0, amount: 0, lines: {}, ncc_docs: [] });
     if (pn && pn.so && t.ncc_docs.indexOf(pn.so) === -1) t.ncc_docs.push(pn.so);
     // Giá theo lô: don_gia_hd → don_gia_phieu → giá theo mã
-    const rowPrice = (col.don_gia_hd !== undefined && moneyValue_(nh[r][col.don_gia_hd])) || (col.don_gia_phieu !== undefined && moneyValue_(nh[r][col.don_gia_phieu])) || p.price;
+    const rowPrice = col.don_gia_hd !== undefined && giaHdZero_(nh[r][col.don_gia_hd]) ? 0 // hàng tặng giá HĐ 0 (02/11)
+      : (col.don_gia_hd !== undefined && moneyValue_(nh[r][col.don_gia_hd])) || (col.don_gia_phieu !== undefined && moneyValue_(nh[r][col.don_gia_phieu])) || p.price;
     const line = t.lines[code] || (t.lines[code] = { code, parent: p.parent || code, name: p.name, price: rowPrice, qty: 0 });
     line.qty += qty;
     t.qty += qty;
@@ -5454,6 +5456,11 @@ function sizeValue_(size) {
 
 function uniq_(arr) {
   return arr.filter((v, i) => arr.indexOf(v) === i);
+}
+
+/** Ô don_gia_hd ghi "0" (có ghi, khác ô trống) = hàng tặng giá HĐ 0 (02/11). */
+function giaHdZero_(x) {
+  return x !== null && x !== undefined && String(x).trim() !== '' && !moneyValue_(x);
 }
 
 /** Số tiền từ ô Sheet: 800000 hoặc "800.000 đ" → 800000. */
