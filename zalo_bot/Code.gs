@@ -2232,17 +2232,17 @@ function handleReceipt_(action, body, dryRun) {
 const DAT_NCC_GOM_MS = 2 * 60000;
 const DAT_NCC_MAX = 20; // ảnh / tin tối đa mỗi lô (ô Script Property ≤ 9KB)
 const DAT_NCC_BETA = 'https://beta.giayhainancy.vn/api/bot/dat-ncc';
-const DAT_NCC_HOI = 'Nhắn số: 1 Đặt NCC mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ';
+const DAT_NCC_HOI = 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ';
 
-/** Chủ nhắn "dat ncc thu" → bật (trỏ web beta), "dat ncc tat" → tắt. Không phải lệnh này → null. */
+/** Chủ nhắn "nhap hang thu" / "dat ncc thu" → bật (trỏ web beta), "… tat" → tắt. Không phải lệnh này → null. (Quy trình đổi tên "Nhập hàng" 02/11) */
 function datNccSwitch_(text, chatId) {
-  const m = String(text || '').trim().toLowerCase().normalize('NFC').match(/^(?:dat|đặt)\s*ncc\s+(thu|thử|tat|tắt)$/);
+  const m = String(text || '').trim().toLowerCase().normalize('NFC').match(/^(?:(?:dat|đặt)\s*ncc|(?:nhap|nhập)\s*(?:hang|hàng))\s+(thu|thử|tat|tắt)$/);
   if (!m) return null;
   if (!navIsOwner_(chatId)) return '🔒 Lệnh này chỉ Chủ dùng.\nNhắn số: 9 Menu';
   const props = PropertiesService.getScriptProperties();
-  if (/^th/.test(m[1])) { props.setProperty('DAT_NCC_URL', DAT_NCC_BETA); return '✅ Bật Đặt NCC (web thử). Chia sẻ ảnh / tin từ chat nhà cung cấp sang bot.\nTắt: nhắn "dat ncc tat"\nNhắn số: 9 Menu'; }
+  if (/^th/.test(m[1])) { props.setProperty('DAT_NCC_URL', DAT_NCC_BETA); return '✅ Bật Nhập hàng (web thử). Chia sẻ ảnh / tin từ chat nhà cung cấp sang bot.\nTắt: nhắn "nhap hang tat"\nNhắn số: 9 Menu'; }
   props.deleteProperty('DAT_NCC_URL'); datNccClear_(chatId);
-  return '⏹ Tắt Đặt NCC — ảnh gửi bot lại bị bỏ qua như cũ.\nNhắn số: 9 Menu';
+  return '⏹ Tắt Nhập hàng qua Zalo — ảnh gửi bot lại bị bỏ qua như cũ.\nNhắn số: 9 Menu';
 }
 
 function datNccOn_() { return !!PropertiesService.getScriptProperties().getProperty('DAT_NCC_URL'); }
@@ -2302,7 +2302,7 @@ function datNccPick_(n, chatId, d, dryRun) {
   }
   if (n !== 1 && n !== 2) return '🤔 Chọn 1 trong các số dưới.\n' + DAT_NCC_HOI + ' · 9 Menu';
   navClearAsk_(chatId);
-  if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' món (' + (n === 1 ? 'Đặt NCC mới' : 'thêm vào phiếu đang mở') + ')\nNhắn số: 9 Menu';
+  if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' món (' + (n === 1 ? 'Nhập hàng mới' : 'thêm vào phiếu đang mở') + ')\nNhắn số: 9 Menu';
   lo.chon = n; lo.t = Date.now();
   datNccSave_(chatId, lo);
   return datNccSend_(chatId, lo, lo.items, n === 1 ? 'moi' : 'them');
@@ -2344,7 +2344,7 @@ function datNccSend_(chatId, lo, items, che) {
     datNccSave_(chatId, lo);
     props.setProperty('datncc_phieu_' + chatId, lo.phieu);
   }
-  return '📦 ' + (out.tom_tat || ('Đã lưu phiếu Đặt NCC ' + (out.phieu_id || ''))) +
+  return '📦 ' + (out.tom_tat || ('Đã lưu phiếu Nhập hàng ' + (out.phieu_id || ''))) +
     (loi.length ? '\n⚠️ ' + loi.length + ' ảnh không tải được từ Zalo — gửi lại ảnh đó.' : '') +
     (out.link ? '\n🔗 ' + out.link : '') + '\nGửi thêm ảnh trong 2 phút sẽ tự thêm vào phiếu này.\nNhắn số: 9 Menu';
 }
