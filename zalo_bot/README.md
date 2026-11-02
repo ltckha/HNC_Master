@@ -243,7 +243,7 @@ Chủ bấm **Chia sẻ** ảnh / tin từ chat nhà cung cấp sang bot → bot
 - Ảnh, hoặc tin chữ không phải lệnh (chữ không hiểu) → bot hỏi 1 lần: `1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ · 9 Menu`.
 - Ảnh / tin gửi liền nhau, cách nhau ≤ 2 phút → gom 1 lô, không hỏi lại. Đã chọn 1 / 2 thì ảnh gửi tiếp trong 2 phút tự thêm vào phiếu đó.
 - 3 = trả link app (Kho → Nhập từ phiếu), vì ảnh phiếu nhập vẫn tải trên app. 0 = bỏ lô.
-- **Cửa web:** `POST DAT_NCC_URL`, ký như `/api/bot-lenh` (`x-bot-time`, `x-bot-sig` = HMAC-SHA256 hex của `time + "." + body`, khoá `DAT_NCC_KEY`, trống thì `BOT_CALLBACK_KEY`). Body: `{ luc, che: "moi"|"them", phieu_id (gợi ý phiếu khi them), ma_lo (web chống trùng theo mã này; món gửi thêm sau khi chọn có mã `<lô>-<msg_id>`), chat_id, nguoi, anh: [{ mime, b64, msg_id, ghi_chu }], tin: [{ text, msg_id }] }`. Web trả `{ ok, phieu_id, tom_tat (không có giá), link }` hoặc `{ ok: false, error }`.
+- **Cửa web:** `POST DAT_NCC_URL`, ký như `/api/bot-lenh` (`x-bot-time`, `x-bot-sig` = HMAC-SHA256 hex của `time + "." + body`, khoá `DAT_NCC_KEY`, trống thì `BOT_CALLBACK_KEY`). Body: `{ luc, che: "moi"|"them", phieu_id (gợi ý phiếu khi them), ma_lo (web chống trùng theo mã này; món gửi thêm sau khi chọn có mã `<lô>-<msg_id>`), chat_id, nguoi, anh: [{ mime, b64, msg_id, ghi_chu, luc }], tin: [{ text, msg_id, luc }] }` (luc = giờ tin Zalo, ISO; ảnh kiểm đủ byte — Content-Length, đuôi JPEG FFD9 / PNG IEND / cỡ WEBP — thiếu thì tải lại 1 lần, vẫn thiếu báo "Ảnh N gửi lỗi"). Web trả `{ ok, phieu_id, tom_tat (không có giá), link }` hoặc `{ ok: false, error }`.
 - Lô lưu tạm ở Script Property `datncc_<chat>` (≤ 20 món), phiếu gần nhất ở `datncc_phieu_<chat>`.
 - Mac: không có lệnh tương ứng (việc mới, luật 15).
 

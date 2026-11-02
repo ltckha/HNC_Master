@@ -71,6 +71,7 @@ let CTX = {};
 // phiếu NCC → <phieu_id>#n · lệnh app / web → <ticket_id>#n · Zalo → Z-<message_id>#n · main.py → MAC-<lần chạy>#n. Luật: LuatKho.maDong.
 let ROW_SRC = null;
 let LAST_MSG_ID = '';
+let LAST_MSG_LUC = 0; // giờ tin Zalo (ms) — Nhập hàng gửi web để xếp thứ tự ảnh / tin
 function rowSrcStart_(nguon, goc) {
   goc = String(goc || '').trim();
   ROW_SRC = { nguon, goc: /^TAY-/i.test(goc) ? '' : goc, n: 0 }; // gốc TAY- dành cho web cấp dòng gõ tay → bot không cấp
@@ -141,6 +142,7 @@ function doPost(e) {
     const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true';
     const sellerName = msg.from && msg.from.display_name ? String(msg.from.display_name).slice(0, 50) : '';
     LAST_MSG_ID = String(msg.message_id || (msg.chat.id + '_' + msg.date));
+    LAST_MSG_LUC = datNccLuc_(msg.date);
     const reply = handleText_(msg.text, dryRun, chatId, sellerName);
     if (reply) sendMessage_(chatId, reply); // trống = tin Đặt NCC đang gom, không trả lời
   } catch (err) {
@@ -2278,7 +2280,7 @@ function datNccAskText_(item) {
 
 /** Ảnh Chủ gửi (doPost). Khoá chỉ quanh lô; gọi web ngoài khoá để không chặn tin khác. */
 function datNccImage_(chatId, msg) {
-  const item = { loai: 'anh', url: String(msg.photo_url || ''), msg_id: String(msg.message_id || ''), ghi_chu: String(msg.caption || '').slice(0, 500) };
+  const item = { loai: 'anh', url: String(msg.photo_url || ''), msg_id: String(msg.message_id || ''), ghi_chu: String(msg.caption || '').slice(0, 500), luc: datNccLuc_(msg.date) };
   if (!item.url) return '⚠️ Không lấy được ảnh từ Zalo — gửi lại ảnh.';
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -2291,7 +2293,7 @@ function datNccImage_(chatId, msg) {
 
 /** Tin chữ Chủ chia sẻ (không phải lệnh) — chạy trong khoá của handleText_. */
 function datNccText_(chatId, text, dryRun) {
-  const item = { loai: 'tin', text: String(text || '').slice(0, 1500), msg_id: String(LAST_MSG_ID || '') };
+  const item = { loai: 'tin', text: String(text || '').slice(0, 1500), msg_id: String(LAST_MSG_ID || ''), luc: LAST_MSG_LUC || Date.now() };
   const r = datNccAdd_(chatId, item);
   if (r.hoi) return datNccAskText_(item);
   if (r.gui) return dryRun ? '🧪 CHẠY THỬ — chưa gửi web' : datNccSend_(chatId, r.gui, [item], 'them');
@@ -2322,23 +2324,51 @@ function datNccMime_(bytes) {
   return '';
 }
 
+/** Giờ tin Zalo → ms (Zalo có thể gửi giây hoặc ms); không có → bây giờ. */
+function datNccLuc_(d) {
+  const n = Number(d) || 0;
+  return n ? (n < 1e12 ? n * 1000 : n) : Date.now();
+}
+
+/** Tải 1 ảnh Zalo, kiểm đủ byte: Content-Length, JPEG có FFD9 ở cuối, PNG có IEND, WEBP đúng cỡ RIFF. Trả { bytes, mime } hoặc { thieu: lý do }. */
+function datNccFetchImage_(url) {
+  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('Zalo trả ' + res.getResponseCode());
+  const b = res.getBlob(), bytes = b.getBytes();
+  const mime = datNccMime_(bytes);
+  if (!mime) throw new Error('Zalo trả không phải ảnh (' + (b.getContentType() || '?') + ', ' + bytes.length + ' byte)');
+  const h = (res.getHeaders && res.getHeaders()) || {};
+  const len = Number(h['Content-Length'] || h['content-length'] || 0);
+  if (len && bytes.length < len) return { thieu: bytes.length + '/' + len + ' byte' };
+  const u = i => ((bytes[i] || 0) + 256) % 256, n = bytes.length;
+  if (mime === 'image/jpeg') {
+    let ok = false;
+    for (let i = n - 2; i >= Math.max(0, n - 64); i--) if (u(i) === 0xFF && u(i + 1) === 0xD9) { ok = true; break; }
+    if (!ok) return { thieu: 'JPEG thiếu đuôi FFD9, ' + n + ' byte' };
+  } else if (mime === 'image/png') {
+    if (String.fromCharCode(u(n - 8), u(n - 7), u(n - 6), u(n - 5)) !== 'IEND') return { thieu: 'PNG thiếu IEND, ' + n + ' byte' };
+  } else if (u(4) + u(5) * 256 + u(6) * 65536 + u(7) * 16777216 + 8 > n) return { thieu: 'WEBP thiếu, ' + n + ' byte' };
+  return { bytes, mime };
+}
+
 /** Gửi web: tải ảnh từ Zalo → base64; web trả { ok, phieu_id, tom_tat (không giá), link }. Trả câu trả lời cho Chủ. */
 function datNccSend_(chatId, lo, items, che) {
   const props = PropertiesService.getScriptProperties();
-  const anh = [], tin = [], loi = [];
+  const anh = [], tin = [], loi = [], hong = [];
+  let soAnh = 0;
   items.forEach(it => {
-    if (it.loai === 'tin') { tin.push({ text: it.text, msg_id: it.msg_id }); return; }
+    const luc = new Date(it.luc || Date.now()).toISOString();
+    if (it.loai === 'tin') { tin.push({ text: it.text, msg_id: it.msg_id, luc }); return; }
+    soAnh++;
     try {
-      const res = UrlFetchApp.fetch(it.url, { muteHttpExceptions: true });
-      if (res.getResponseCode() !== 200) throw new Error('Zalo trả ' + res.getResponseCode());
-      const b = res.getBlob(), bytes = b.getBytes();
-      const mime = datNccMime_(bytes);
-      if (!mime) throw new Error('Zalo trả không phải ảnh (' + (b.getContentType() || '?') + ', ' + bytes.length + ' byte)');
-      anh.push({ mime, b64: Utilities.base64Encode(bytes), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '' });
-    } catch (err) { loi.push(err && err.message ? err.message : String(err)); }
+      let a = datNccFetchImage_(it.url);
+      if (a.thieu) { Utilities.sleep(1000); a = datNccFetchImage_(it.url); } // ảnh tải thiếu byte → tải lại 1 lần
+      if (a.thieu) throw new Error('ảnh tải thiếu (' + a.thieu + ')');
+      anh.push({ mime: a.mime, b64: Utilities.base64Encode(a.bytes), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '', luc });
+    } catch (err) { hong.push(soAnh); loi.push('ảnh ' + soAnh + ': ' + (err && err.message ? err.message : String(err))); }
   });
-  if (!anh.length && !tin.length) { console.error('Đặt NCC: ' + loi.join(' | ')); return '⚠️ Không tải được ảnh từ Zalo (' + loi[0] + ') — gửi lại ảnh.\nNhắn số: 9 Menu'; }
-  if (loi.length) console.error('Đặt NCC: ' + loi.join(' | '));
+  if (loi.length) console.error('Nhập hàng: ' + loi.join(' | '));
+  if (!anh.length && !tin.length) return '⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi (' + loi[0] + ') — gửi lại ảnh này.\nNhắn số: 9 Menu';
   const phieu = lo.phieu || props.getProperty('datncc_phieu_' + chatId) || '';
   const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo: món gửi thêm có mã riêng
   const out = webForward_({ che, phieu_id: che === 'them' ? phieu : '', ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin },
@@ -2350,7 +2380,7 @@ function datNccSend_(chatId, lo, items, che) {
     props.setProperty('datncc_phieu_' + chatId, lo.phieu);
   }
   return '📦 ' + (out.tom_tat || ('Đã lưu phiếu Nhập hàng ' + (out.phieu_id || ''))) +
-    (loi.length ? '\n⚠️ ' + loi.length + ' ảnh không tải được từ Zalo — gửi lại ảnh đó.' : '') +
+    (hong.length ? '\n⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi — gửi lại ảnh này.' : '') +
     (out.link ? '\n🔗 ' + out.link : '') + '\nGửi thêm ảnh trong 2 phút sẽ tự thêm vào phiếu này.\nNhắn số: 9 Menu';
 }
 
