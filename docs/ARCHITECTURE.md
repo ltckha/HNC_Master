@@ -95,7 +95,7 @@ Hoá đơn NCC: bot gom NHAP theo ngày × NCC × kho, so với thư mục `Hoá
 - `credentials.json` (Mac, git bỏ qua): service account Google Sheets cho main.py / spec_fill.
 - Script Properties bot (tuỳ chọn thêm `MISA_CHAT_IDS`): `BOT_TOKEN`, `WEBHOOK_KEY`, `WEBAPP_URL`, `ALLOWED_CHAT_IDS`, `OWNER_CHAT_ID`, `DRY_RUN`, `SALE_KEY`, `STOCK_KEY`, `EXPORT_KEY`, `WEB_NOTIFY_KEY`, `SYNC_HINT_URL`, `SYNC_HINT_KEY`, `GEMINI_API_KEY`, `HKD_15E`, `HKD_Y3C`; tuỳ chọn `INVOICE_FOLDER_ID`, `PN_FOLDER_ID`, `APP_URL`, `OWNER_EMAILS`. Kiểm bằng hàm `checkConfig`.
 - Đặt khoá Gemini: chỉ dùng `~/Developer/Ecosystem-Hub/commands/dat_khoa_gemini.command` (chọn 3 = HNC).
-- Thứ tự mô hình Gemini chung (02/11): `shared/gemini_models.json` (2.5 → 3.7 → 3.8 → 3.6), đọc qua `tools/gemini_models.py` (main.py AI nhập SP, spec_fill); bot giữ bản chép `RECEIPT_MODELS`, test bot kiểm khớp. 429 / 503 / 504 chờ rồi thử lại 1 lần. Mỗi lỗi ghi 1 dòng: Mac `~/Library/Logs/hnc_gemini.log`, bot nhật ký Executions (`Gemini lỗi …`).
+- Thứ tự mô hình Gemini chung (02/11): `shared/gemini_models.json` (3.7 → 3.8 → 3.6 → 2.5; 2.5 ngừng 23/12/2026), đọc qua `tools/gemini_models.py` (main.py AI nhập SP, spec_fill); bot giữ bản chép `RECEIPT_MODELS`, test bot kiểm khớp. 429 / 503 / 504 chờ rồi thử lại 1 lần; 404 và lỗi khác sang mô hình kế. Mỗi lỗi ghi 1 dòng: Mac `~/Library/Logs/hnc_gemini.log`, bot nhật ký Executions (`Gemini lỗi …`).
 
 ## Nối với project khác
 - **Website-giayhainancy** gọi bot (5 cửa trên), đọc Sheet bằng service account chỉ xem, đọc `channel_links.csv` trên Drive, lấy ảnh cho file sàn: main.py dùng `<WEB_IMG_BASE>/img/<mã>/<n>.jpg`.
