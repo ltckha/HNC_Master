@@ -853,7 +853,7 @@ delete PROPS.SYNC_HINT_URL; delete PROPS.URL_ALLOW;
 if (nk0) PROPS.WEB_NOTIFY_KEY = nk0; else delete PROPS.WEB_NOTIFY_KEY;
 
 // ---- Hoá đơn NCC theo lô (hoa_don) ----
-vm.runInContext('this.invoiceAction_=invoiceAction_;this.misaStockExport_=misaStockExport_;', ctx);
+vm.runInContext('this.invoiceAction_=invoiceAction_;this.misaStockExport_=misaStockExport_;this.misaLabels_=misaLabels_;', ctx);
 DATA.NHAP[0].push('don_gia_phieu', 'don_gia_hd', 'so_hd', 'ngay_hd'); // cột 12–15
 const hdIx = n => DATA.NHAP[0].indexOf(n);
 const today = (() => { const d = new Date(); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear(); })();
@@ -893,6 +893,18 @@ const rowOf = doc => (WROTE[0] ? WROTE[0].rows : []).find(r => r[3] === doc);
 eq('MISA lô: có HĐ → giá HĐ + số HĐ trong diễn giải', [rowOf('NK000090') && rowOf('NK000090')[16], /HĐ 00055 ngày 03\/10\/2026/.test(rowOf('NK000090') && rowOf('NK000090')[6])], [420000, true]);
 eq('MISA lô: chưa HĐ ≤3 ngày → chờ, không xuất, cờ trống', [!rowOf('NK000091'), rNew[10], ms.cho_hd.some(x => x.so_chung_tu === 'NK000091')], [true, '', true]);
 eq('MISA lô: chưa HĐ quá 3 ngày → giá phiếu, ghi "giá tạm"', [rowOf('NK000092') && rowOf('NK000092')[16], /giá tạm/.test(rowOf('NK000092') && rowOf('NK000092')[6]), /giá tạm/.test(rOld[10])], [415000, true, true]);
+// Nhãn Không xuất MISA (03/11): web gửi khong_misa kèm xuat_misa → bỏ mã-size có nhãn, ghi cờ "Bỏ qua - không xuất MISA"
+const rKm = mk('NK000093', '01/10/2026', 'MS1D', 41, { don_gia_phieu: 410000, don_gia_hd: 420000, so_hd: '00056', ngay_hd: '03/10/2026' });
+WROTE.length = 0; ctx.MEMO = {};
+ctx.misaStockExport_('15E', false, true, ctx.misaLabels_([{ ho: '15E', code: 'ms1d', size: '41.0' }, { ho: 'Y3C', code: 'MS1D', size: '39' }]));
+eq('nhập kho: mã-size có nhãn hộ 15E bỏ khỏi file + cờ Bỏ qua; nhãn hộ Y3C không áp kho 15E', [!rowOf('NK000093'), rKm[10]], [true, 'Bỏ qua - không xuất MISA']);
+DATA.SANPHAM.push(['MS2', 'MS2D', '', '', 'Chú Dũng', '', '', 'Đen', 'Giày MS2 đen', 'Giày mọi nam', 'Đôi', 900000, 400000, '39,40', 'male', '7', '', 'Việt Nam', ''],
+  ['MS3', 'MS3D', '', '', 'Chú Dũng', '', '', 'Đen', 'Giày MS3 đen', 'Giày mọi nam', 'Đôi', 900000, 400000, '39', 'male', '7', '', 'Việt Nam', '']);
+WROTE.length = 0; ctx.MEMO = {};
+xr = xm2({ loai: 'danh_muc', khong_misa: [{ ho: '15E', code: 'MS2D', size: '39' }, { ho: '15E', code: 'MS3D', size: '39' }] }, true);
+eq('danh mục: bỏ size có nhãn, mã có nhãn hết size thì không có dòng cha', [WROTE[0].rows.map(r => r[4])], [['MS2', 'MS2D40']]);
+eq('xuat_misa không kèm nhãn → cảnh báo', /chưa gửi danh sách Không xuất MISA/.test(xm2({ loai: 'danh_muc' }, true).canh_bao[0]), true);
+DATA.SANPHAM.splice(-2, 2);
 ctx.misaWriteFile_ = realWrite;
 const hx2 = ha({ che_do: 'xem', phieu: hdT.id }, true);
 eq('hoa_don xem: kèm tin xin hoá đơn soạn sẵn (không giá)', [hx2.thieu_mst, /Hiệu giày Hải Nancy nhờ anh\/chị xuất hoá đơn/.test(hx2.tin_xin_hd), /\d{3}\.\d{3}đ/.test(hx2.tin_xin_hd)], [false, true, false]);

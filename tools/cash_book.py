@@ -218,10 +218,10 @@ def _ssl():
         return ssl.create_default_context(cafile='/etc/ssl/cert.pem')
 
 
-def fetch(url=URL, act='so_quy_ds'):
+def fetch(url=URL, act='so_quy_ds', extra=None):
     with open(KEY_FILE) as f:
         key = json.load(f)['BOT_CALLBACK_KEY']
-    raw = json.dumps({'act': act}, separators=(',', ':'))
+    raw = json.dumps(dict({'act': act}, **(extra or {})), separators=(',', ':'), ensure_ascii=False)
     t = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
     sig = hmac.new(key.encode(), f'{t}.{raw}'.encode(), hashlib.sha256).hexdigest()
     req = urllib.request.Request(url, data=raw.encode(), method='POST', headers={
@@ -233,12 +233,12 @@ def fetch(url=URL, act='so_quy_ds'):
         raise RuntimeError(f'Lỗi {e.code}: {e.read().decode(errors="replace")[:200]}')
 
 
-def load(export_dir, url=URL, act='so_quy_ds', need='quy'):
-    """Đọc web act (so_quy_ds / cong_no_ds), lưu bản sao <act>_<lúc>.json; lỗi thì lấy bản sao gần nhất. → (data, ghi_chu)."""
+def load(export_dir, url=URL, act='so_quy_ds', need='quy', extra=None):
+    """Đọc web act (so_quy_ds / cong_no_ds / khong_misa_ds / misa_don_ds), lưu bản sao <act>_<lúc>.json; lỗi thì lấy bản sao gần nhất. → (data, ghi_chu)."""
     d = os.path.join(export_dir, COPY_DIR)
     os.makedirs(d, exist_ok=True)
     try:
-        data = fetch(url, act)
+        data = fetch(url, act, extra)
         if not isinstance(data, dict) or need not in data:
             raise RuntimeError(f'web trả lạ: {str(data)[:120]}')
         path = os.path.join(d, f"{act}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")

@@ -83,6 +83,7 @@ LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Thư mục Drive khai 1 chỗ ở hnc_paths.py: My Drive/HNC/He_thong → My Drive/Spark/HNC_Master; không thấy thì dừng, không dùng local.
 from hnc_paths import find_system_dir, in_csv_path
+from tools import misa_orders
 try:
     GDRIVE_DIR = find_system_dir()
 except FileNotFoundError as _e:
@@ -2360,6 +2361,10 @@ def process_export_task(choice, loader):
         row_status_list = []
         warning_rows = []
         valid_records = []
+        labels = misa_labels()
+        if labels is None:
+            return
+        labels_15e = labels.get('15E', set())  # danh mục MISA là của hộ 15E (như web misa_sales)
 
         for rel_idx, rec in zip(pending_row_indices, pending_records):
             parent_code = str(rec.get('Mã hàng hóa cha') or rec.get('parent_product_code', '')).strip()
@@ -2380,6 +2385,11 @@ def process_export_task(choice, loader):
 
             # Lấy dải Size chuẩn từ cột Size (đã bao gồm đầy đủ dải size và size plus)
             all_sizes = unroll_sizes(rec.get('Size', ''))
+            # Nhãn Không xuất MISA (03/11): bỏ size có nhãn; mọi size có nhãn thì cả dòng không xuất
+            all_sizes = [z for z in all_sizes if not misa_orders.skip(labels_15e, pcode, z)]
+            if pcode and not all_sizes:
+                row_status_list.append("Bỏ qua - không xuất MISA")
+                continue
 
             # KIỂM TRA TÍNH TOÀN VẸN DỮ LIỆU (STRICT QA GATE)
             missing_reasons = []
@@ -2673,11 +2683,19 @@ def process_export_task(choice, loader):
         warning_rows = []
         valid_count = 0
 
+        labels = misa_labels()
+        if labels is None:
+            return
+
         for rel_idx, rec in zip(pending_row_indices, pending_records):
             pcode = str(rec.get('product_code', '')).strip()
             sz = str(rec.get('item_size', '')).strip()
             if sz.endswith('.0'): sz = sz[:-2]
             sku = f"{pcode}{sz}" if sz else pcode
+            ho_kho = 'Y3C' if '3C' in str(rec.get('KHO', '')).upper() else '15E'
+            if misa_orders.skip(labels.get(ho_kho, set()), pcode, sz):  # nhãn Không xuất MISA (như web misa_receipts, 03/11)
+                row_status_list.append("Bỏ qua - không xuất MISA")
+                continue
 
             sp_info = product_map.get(pcode, {})
             sup_name = sp_info.get('supplier', '')
@@ -4326,6 +4344,7 @@ def print_submenu_misa():
        tách Hộ Hải Nancy (tiệm 15E) / Hộ Yen Leather (tiệm 3C), giá theo hoá đơn mua hàng
   [3] 💵 Xuất sổ quỹ theo tháng (dự phòng web Sổ quỹ: tiền mặt từng tiệm + tài khoản từng hộ)
   [4] 🧾 Xuất công nợ nhà cung cấp (dự phòng web Sổ quỹ › Công nợ NCC)
+  [5] 🛒 Tải file đơn bán (dự phòng web Đơn bán MISA; bỏ dòng Không xuất MISA)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4637,9 +4656,9 @@ def handle_submenu_misa(loader):
         print_submenu_misa()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-4][/bold blue]", default="0")
+            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-5][/bold blue]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ MISA [0-4]: ").strip()
+            sub_choice = input("Mời chọn tác vụ MISA [0-5]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4651,6 +4670,8 @@ def handle_submenu_misa(loader):
             export_cash_book(loader)
         elif sub_choice == "4":
             export_supplier_debt()
+        elif sub_choice == "5":
+            export_misa_orders()
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
@@ -4697,6 +4718,67 @@ def export_cash_book(loader):
             print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán CK / thẻ chưa vào tài khoản nào (web: chọn \"Nhận tiền bán CK / thẻ\").".replace(',', '.'))
         if ngoai:
             print(f"ℹ️ Hộ {ho} chưa vào quỹ: " + ' · '.join(f"{k} {v:,.0f}đ".replace(',', '.') for k, v in ngoai.items() if v))
+
+
+def misa_labels():
+    """Nhãn Không xuất MISA theo mã (web khong_misa_ds) → {hộ: {(mã, size)}}; web lỗi thì bản sao gần nhất. None = anh dừng."""
+    from tools import cash_book
+    try:
+        data, ghi_chu = cash_book.load(EXPORT_DIR, act='khong_misa_ds', need='ma')
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Chưa đọc được nhãn Không xuất MISA ({e}) — mã có nhãn sẽ vào file.")
+        return {} if input("Vẫn xuất không lọc nhãn? (c/K): ").strip().lower() == 'c' else None
+    if ghi_chu:
+        print(ghi_chu)
+    out = {ho: misa_orders.label_set(data, ho) for ho in ('15E', 'Y3C')}
+    print(f"🏷️ Không xuất MISA: {len(out['15E'])} mã-size hộ 15E · {len(out['Y3C'])} hộ Y3C (bỏ khỏi file)")
+    return out
+
+
+def export_misa_orders(url=None):
+    """[4][5] Đơn bán MISA dự phòng (anh Kha "làm" 03/11, luật 15): cùng file với web Đơn bán MISA — tools/misa_orders.py.
+    Đánh dấu "đã nhập lên MISA" vẫn bấm trên web."""
+    from tools import cash_book
+    hn = cash_book.homnay()
+    ho = '15E' if input("Hộ [1] Hải Nancy 15E · [2] Yen Leather Y3C (Enter = 1): ").strip() != '2' else 'Y3C'
+    tu = input(f"Từ ngày (yyyy-mm-dd, Enter = {hn}): ").strip() or hn
+    den = input(f"Đến ngày (yyyy-mm-dd, Enter = {tu}): ").strip() or tu
+    if not (re.match(r'^\d{4}-\d{2}-\d{2}$', tu) and re.match(r'^\d{4}-\d{2}-\d{2}$', den)):
+        print("⛔ Ngày phải dạng yyyy-mm-dd, vd 2026-11-03.")
+        return
+    try:
+        data, ghi_chu = cash_book.load(EXPORT_DIR, url or cash_book.URL, 'misa_don_ds', 'ho', {'ho': ho, 'tu': tu, 'den': den})
+    except Exception as e:  # noqa: BLE001
+        print(f"⛔ {e}")
+        return
+    if ghi_chu:
+        print(ghi_chu)
+    if data.get('error'):
+        print(f"⛔ {data['error']}")
+        return
+    if data.get('need_moc'):
+        print(f"⛔ Hộ {ho} chưa chọn mốc MISA — chọn trên web Đơn bán MISA trước.")
+        return
+    don = data.get('orders') or []
+    if not don:
+        print(f"✅ Không có đơn nào chưa lên MISA ({data.get('from')} → {data.get('to')}, mốc {data.get('moc')}).")
+        return
+    tpl = os.path.join(TEMPLATES_DIR, misa_orders.tpl_name(ho))
+    if not os.path.exists(tpl):
+        print(f"⛔ Thiếu tệp mẫu {tpl}")
+        return
+    path = os.path.join(EXPORT_DIR, misa_orders.file_name(data, datetime.now().strftime('%Y%m%d_%H%M%S')))
+    misa_orders.write(tpl, path, data)
+    so_dong = sum(len(o['lines']) for o in don)
+    print(f"✅ {so_dong} dòng · {len(don)} đơn ({data['from']} → {data['to']}, mốc {data['moc']}).")
+    if data.get('noCat'):
+        print(f"⚠️ {len(data['noCat'])} mã chưa có trong danh mục MISA: {', '.join(data['noCat'][:30])} — xuất [4][1] trước.")
+    if any(o.get('payDef') for o in don):
+        print("⚠️ Có đơn chưa ghi cách trả → để Tiền mặt (như web).")
+    if not data.get('stk') and any(o['pay'] == 'Chuyển khoản' for o in don):
+        print("⚠️ Hộ này chưa lưu tài khoản trên web — dòng chuyển khoản thiếu STK.")
+    print("ℹ️ MISA chặn đơn khi thiếu tồn: nhập phiếu nhập kho trước. Nhập xong bấm \"Đã nhập lên MISA\" trên web.")
+    print(f"   {path}")
 
 
 def export_supplier_debt():
