@@ -94,6 +94,15 @@ def _day(v):
     return m.group(0) if m else ''
 
 
+CHI_SO_THUE_SELLER = {'doi_tra', 'doi_tra_moi', 'dieu_chinh', 'misa'}
+
+
+def chi_so_thue(seller, ma_dong):
+    """Như web CHI_SO_THUE (cash_book.ts, 03/11): dòng chỉ cho sổ thuế (bổ sung / điều chỉnh theo MISA, đổi trả giống MISA) — không phải tiền thật."""
+    md = str(ma_dong or '').strip()
+    return str(seller or '').strip() in CHI_SO_THUE_SELLER or md.startswith(('MISA1103', 'DC-MISA'))
+
+
 def ban_rows(values):
     """get_all_values() của tab BAN → [{day, kho, chu, ch, pay, t}] (t = Giá × SL), đọc theo tên cột (luật 4)."""
     h = [str(c).strip() for c in values[0]]
@@ -106,6 +115,8 @@ def ban_rows(values):
     out = []
     for r in values[1:]:
         if not str(g(r, 'product_code')).strip():
+            continue
+        if chi_so_thue(g(r, 'seller'), g(r, 'ma_dong')):
             continue
         out.append({'day': _day(g(r, 'Ngày')), 'kho': str(g(r, 'KHO')).strip(), 'chu': str(g(r, 'chu_hang')).strip(),
                     'ch': str(g(r, 'channel')).strip(), 'pay': str(g(r, 'payment_method')).strip(), 't': _money(g(r, 'Giá')) * _qty(g(r, 'item_quantity'))})

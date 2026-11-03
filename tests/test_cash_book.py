@@ -62,6 +62,10 @@ eq('hộ Y3C: CK chưa có tài khoản nhận', chua3, 400000)
 so12, _, _ = c.so_quy(data, ban, '15E', '2026-12', today='2026-12-05')
 eq('tháng sau: đầu kỳ = cuối kỳ tháng trước', so12[0]['dau_ky'], 7355000)
 eq('tên file như web', c.file_name(QUY[0], '2026-11'), 'So_quy_Tiền_mặt_tiệm_15E_2026-11.xlsx')
+eq('dòng chỉ sổ thuế không vào quỹ (như web CHI_SO_THUE)', len(c.ban_rows([
+    ['Ngày', 'product_code', 'Giá', 'item_quantity', 'KHO', 'seller', 'ma_dong'],
+    ['01/11/2026', 'A1', '1', '1', '15E', 'doi_tra', 'DT1-TRA'], ['01/11/2026', 'A1', '1', '1', '15E', 'Kha', 'MISA1103D-1'],
+    ['01/11/2026', 'A1', '1', '1', '15E', '', 'DC-MISA-2'], ['01/11/2026', 'A1', '1', '1', '15E', 'Kha', 'X#1']])), 1)
 eq('cách thu như web', [c.payment_method(x) for x in ['', 'ck', 'Thẻ', 'momo', 'ghi nợ', 'ship thu hộ', 'abc']],
    ['', 'Chuyển khoản', 'Thẻ', 'Ví', 'Ghi nợ', 'COD', 'Tiền mặt'])
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
