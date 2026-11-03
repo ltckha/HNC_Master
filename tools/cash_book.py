@@ -4,6 +4,7 @@
 - Tiền vào từ bán: tự tính từ tab BAN (Sheet) theo đúng LUAT web trả về:
   bỏ kênh sàn (shopee / tiktok / lazada); cách thu = payment_method (trống = Tiền mặt), Ví / COD / Ghi nợ chưa vào quỹ;
   Tiền mặt → quỹ tiền mặt của tiệm bán (KHO chứa "3C" = 3C, còn lại 15E); Chuyển khoản / Thẻ → tài khoản nhan_ck = 1 của hộ chủ hàng (chu_hang, trống thì KHO);
+  từ ngay_dau của quỹ loai cho_the / cho_cod (hộ 15E, bật 05/11): Thẻ → "Tiền thẻ chờ về", COD → "Tiền COD chờ về" (mọi hộ chủ hàng; trước đó Thẻ như CK, COD chưa vào quỹ);
   gộp 1 dòng / quỹ / ngày, tổng âm → cột Chi "Trả tiền khách trả hàng (…)"; Ngày trống (web day_inf) bỏ; chỉ tính từ ngay_dau của từng quỹ.
 - File Excel: cùng cột / tên file như nút "Tải Excel" của web (Ngày · Số chứng từ · Diễn giải · Nhóm chi · Thu · Chi · Tồn).
 """
@@ -132,21 +133,25 @@ def tien_ban(qs, ban, tu, den):
             grp[k] = grp.get(k, 0) + r['t']
     tm = lambda h: next((q for q in qs if q['loai'] == 'tien_mat' and kho_ho(q.get('kho')) == h), None)
     ck = lambda h: next((q for q in qs if q['loai'] == 'ngan_hang' and q['ho'] == h and q.get('nhan_ck')), None)
+    cho_loai = {'Thẻ': 'cho_the', 'COD': 'cho_cod'}  # 04/11 GĐ2 (web ff5d162e): Thẻ / COD → quỹ chờ về (hộ 15E) từ ngay_dau của quỹ đó
+    cho_q = lambda p, day: next((q for q in qs if q['loai'] == cho_loai.get(p) and day >= q['ngay_dau']), None)
     by, ngoai, chua_tk = {}, {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}
     for (day, kho, chu, ch, pay), t in grp.items():
         if SAN.search(ch or '') or not t:
             continue
         p = payment_method(pay) or 'Tiền mặt'
         ho = ho_of(chu, kho)
-        if p in CACH_THU_NGOAI:
+        cho = cho_q(p, day)
+        if not cho and p in CACH_THU_NGOAI:
             ngoai[ho][p] = ngoai[ho].get(p, 0) + t
             continue
-        q = tm(kho_ho(kho)) if p == 'Tiền mặt' else ck(ho)
+        q = cho or (tm(kho_ho(kho)) if p == 'Tiền mặt' else ck(ho))
         if not q:
             chua_tk[ho] += t
             continue
         d = by.setdefault((q['id'], day), {'quy': q['id'], 'ngay': day, 'so': 'BH', 'vao': 0, 'ra': 0, 'nhom': '',
-                                           'dien': 'Tiền bán hàng (tiền mặt)' if p == 'Tiền mặt' else 'Tiền bán hàng (chuyển khoản / thẻ)'})
+                                           'dien': f"Tiền bán hàng ({'thẻ' if p == 'Thẻ' else 'COD'}, chờ về)" if cho else
+                                           'Tiền bán hàng (tiền mặt)' if p == 'Tiền mặt' else 'Tiền bán hàng (chuyển khoản / thẻ)'})
         d['vao'] += t
     dong = []
     for d in by.values():

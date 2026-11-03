@@ -68,5 +68,19 @@ eq('dòng chỉ sổ thuế không vào quỹ (như web CHI_SO_THUE)', len(c.ban
     ['01/11/2026', 'A1', '1', '1', '15E', '', 'DC-MISA-2'], ['01/11/2026', 'A1', '1', '1', '15E', 'Kha', 'X#1']])), 1)
 eq('cách thu như web', [c.payment_method(x) for x in ['', 'ck', 'Thẻ', 'momo', 'ghi nợ', 'ship thu hộ', 'abc']],
    ['', 'Chuyển khoản', 'Thẻ', 'Ví', 'Ghi nợ', 'COD', 'Tiền mặt'])
+QUY2 = QUY + [{'id': 8, 'ho': '15E', 'loai': 'cho_the', 'ten': 'Tiền thẻ chờ về', 'kho': None, 'nhan_ck': 0, 'du_dau': 0, 'ngay_dau': '2026-11-05', 'an': 0},
+              {'id': 9, 'ho': '15E', 'loai': 'cho_cod', 'ten': 'Tiền COD chờ về', 'kho': None, 'nhan_ck': 0, 'du_dau': 0, 'ngay_dau': '2026-11-05', 'an': 0}]
+BAN2 = BAN[:1] + [
+    ['04/11/2026', 'B1', '500000', '1', '15E', '', '', 'Thẻ'],   # trước ngày bật: như CK → TK 15E
+    ['05/11/2026', 'B2', '600000', '1', '15E', '', '', 'Thẻ'],   # từ ngày bật → quỹ thẻ chờ về
+    ['05/11/2026', 'B3', '400000', '1', 'Y3C', '', 'Y3C', 'Thẻ'],  # hàng hộ 3C cũng vào quỹ chờ về 15E
+    ['05/11/2026', 'B4', '300000', '1', '15E', '', '', 'COD'],   # COD → quỹ COD chờ về
+    ['04/11/2026', 'B5', '200000', '1', '15E', '', '', 'COD'],   # trước ngày bật: chưa vào quỹ
+]
+so5, ngoai5, _ = c.so_quy({'quy': QUY2, 'phieu': []}, c.ban_rows(BAN2), '15E', '2026-11', today='2026-11-05')
+by5 = {s['quy']['id']: [r[2:5] for r in c.xlsx_rows(s)[2:]] for s in so5}
+eq('GĐ2: thẻ trước ngày bật vào TK 15E', by5[3], [['Tiền bán hàng (chuyển khoản / thẻ)', None, 500000]])
+eq('GĐ2: thẻ từ ngày bật (mọi hộ chủ hàng) vào quỹ chờ về', by5[8], [['Tiền bán hàng (thẻ, chờ về)', None, 1000000]])
+eq('GĐ2: COD từ ngày bật vào quỹ chờ về, trước đó chưa vào quỹ', (by5[9], ngoai5), ([['Tiền bán hàng (COD, chờ về)', None, 300000]], {'COD': 200000}))
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)
