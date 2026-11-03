@@ -219,9 +219,10 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       CacheService.getScriptCache().put('last_' + chatId,
         JSON.stringify({ label: res.label || '', ops: res.ops }), UNDO_SECONDS);
       // Sau lệnh ghi: chọn bằng số (anh Kha 17/10) — bán thì chọn / đổi cách trả (PAY_HOI); 6 huỷ lệnh vừa rồi
-      const banRows = res.ops.filter(o => o.sheet === 'BAN').map(o => o.row);
-      navSetAsk_(chatId, 'after', { ban: res.batch ? [] : banRows });
-      res.text += '\nNhắn số: ' + (banRows.length && !res.batch ? PAY_HOI + ' (cách thu) · ' : '') +
+      // Lô nhiều dòng: chỉ hỏi 1 lần cách thu cho các dòng bán chưa ghi cách trả (03/11, như web)
+      const banRows = res.batch ? (res.banChuaThu || []) : res.ops.filter(o => o.sheet === 'BAN').map(o => o.row);
+      navSetAsk_(chatId, 'after', { ban: banRows });
+      res.text += '\nNhắn số: ' + (banRows.length ? PAY_HOI + (res.batch ? ' (cách thu cả lượt) · ' : ' (cách thu) · ') : '') +
         '6 Huỷ lệnh này' + (res.batch ? ' (cả lô)' : '') + ' · 9 Menu';
     }
     return { reply: (dryRun && isWrite ? '🧪 CHẠY THỬ — chưa ghi Sheet\n' : '') + res.text, syncTabs };
@@ -258,12 +259,14 @@ function runBatch_(lines, dryRun) {
   const known = knownCodes_();
   const out = [];
   const ops = [];
+  const banChuaThu = []; // dòng BAN của lệnh bán chưa ghi cách trả → hỏi 1 lần cả lượt
   let okCount = 0;
   lines.forEach((line, i) => {
     let r;
     try {
       const p = parseMessage_(line, known);
       r = doMovement_(p, p.action, p.kho, dryRun);
+      if (p.action === ACTIONS.SELL && !p.payment && r.ops) r.ops.forEach(o => { if (o.sheet === 'BAN') banChuaThu.push(o.row); });
     } catch (err) {
       r = { text: '⚠️ Lỗi: ' + (err && err.message ? err.message : err) };
     }
@@ -273,7 +276,7 @@ function runBatch_(lines, dryRun) {
   });
   const failed = lines.length - okCount;
   return {
-    batch: true, ops, label: 'LÔ ' + okCount + ' lệnh',
+    batch: true, ops, banChuaThu, label: 'LÔ ' + okCount + ' lệnh',
     text: '📋 ' + lines.length + ' lệnh — ' + okCount + ' ghi được' + (failed ? ', ' + failed + ' lỗi (xem bên dưới)' : '') + '\n' + out.join('\n'),
   };
 }

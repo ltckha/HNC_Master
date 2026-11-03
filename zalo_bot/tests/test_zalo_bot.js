@@ -744,6 +744,11 @@ zr = z('7', 'nv9');
 eq('nhắn 7 → Ghi nợ vào dòng vừa bán', [/Đã ghi cách thu: Ghi nợ/.test(zr), lastBan()[pIx('payment_method')]], [true, 'Ghi nợ']);
 zr = z('4', 'nv9');
 eq('nhắn 4 → đổi sang Ví', lastBan()[pIx('payment_method')], 'Ví');
+{ const n0 = DATA.BAN.filter(r => r[1]).length;
+  const zl = z('ban TH2040D 40 YEN 800k\nban TH2040D 41 YEN 800k ck', 'nv9');
+  eq('lô 2 lệnh bán, 1 dòng chưa có cách trả → hỏi 1 lần cả lượt', /4 Ví · 5 COD · 7 Ghi nợ \(cách thu cả lượt\) · 6 Huỷ lệnh này \(cả lô\)/.test(zl), true);
+  z('5', 'nv9');
+  eq('nhắn 5 → COD cho dòng chưa có, dòng ck giữ nguyên', DATA.BAN.filter(r => r[1]).slice(n0).map(r => r[pIx('payment_method')]), ['COD', 'Chuyển khoản']); }
 dp = ctx.parseMessage_('ban TH2040D 40 YEN 800k cod', ctx.knownCodes_());
 eq('bán Zalo: đọc cod / vi / no', [dp.payment, ctx.parseMessage_('ban TH2040D 40 YEN vi', ctx.knownCodes_()).payment, ctx.parseMessage_('ban TH2040D 40 YEN no', ctx.knownCodes_()).payment], ['COD', 'Ví', 'Ghi nợ']);
 dp = ctx.parseMessage_('nhap TH2040D 41 TBH nk45', ctx.knownCodes_());
