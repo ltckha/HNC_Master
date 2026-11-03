@@ -218,10 +218,10 @@ def _ssl():
         return ssl.create_default_context(cafile='/etc/ssl/cert.pem')
 
 
-def fetch(url=URL):
+def fetch(url=URL, act='so_quy_ds'):
     with open(KEY_FILE) as f:
         key = json.load(f)['BOT_CALLBACK_KEY']
-    raw = json.dumps({'act': 'so_quy_ds'}, separators=(',', ':'))
+    raw = json.dumps({'act': act}, separators=(',', ':'))
     t = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
     sig = hmac.new(key.encode(), f'{t}.{raw}'.encode(), hashlib.sha256).hexdigest()
     req = urllib.request.Request(url, data=raw.encode(), method='POST', headers={
@@ -233,37 +233,37 @@ def fetch(url=URL):
         raise RuntimeError(f'Lỗi {e.code}: {e.read().decode(errors="replace")[:200]}')
 
 
-def load(export_dir, url=URL):
-    """Đọc web, lưu bản sao; lỗi thì lấy bản sao gần nhất. → (data, ghi_chu)."""
+def load(export_dir, url=URL, act='so_quy_ds', need='quy'):
+    """Đọc web act (so_quy_ds / cong_no_ds), lưu bản sao <act>_<lúc>.json; lỗi thì lấy bản sao gần nhất. → (data, ghi_chu)."""
     d = os.path.join(export_dir, COPY_DIR)
     os.makedirs(d, exist_ok=True)
     try:
-        data = fetch(url)
-        if not isinstance(data, dict) or 'quy' not in data:
+        data = fetch(url, act)
+        if not isinstance(data, dict) or need not in data:
             raise RuntimeError(f'web trả lạ: {str(data)[:120]}')
-        path = os.path.join(d, f"so_quy_ds_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        path = os.path.join(d, f"{act}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False)
-        for old in sorted(glob.glob(os.path.join(d, 'so_quy_ds_*.json')))[:-30]:  # giữ 30 bản gần nhất
+        for old in sorted(glob.glob(os.path.join(d, f'{act}_*.json')))[:-30]:  # giữ 30 bản gần nhất
             os.remove(old)
         return data, ''
     except Exception as e:  # noqa: BLE001 — web hỏng / mạng: dùng bản sao
-        cs = sorted(glob.glob(os.path.join(d, 'so_quy_ds_*.json')))
+        cs = sorted(glob.glob(os.path.join(d, f'{act}_*.json')))
         if not cs:
             raise RuntimeError(f'Không đọc được web ({e}) và chưa có bản sao nào trong {d}')
         with open(cs[-1], encoding='utf-8') as f:
             data = json.load(f)
         luc = datetime.fromtimestamp(os.path.getmtime(cs[-1])).strftime('%d/%m/%Y %H:%M')
-        return data, f'⚠ Không đọc được web ({e}) — phiếu tay / quỹ lấy theo bản sao lúc {luc}: phiếu tay tới {luc}.'
+        return data, f'⚠ Không đọc được web ({e}) — dùng bản sao lúc {luc}: số liệu web (phiếu tay / nhập hàng) tới {luc}.'
 
 
-def write_xlsx(path, rows):
+def write_xlsx(path, rows, widths=(12, 14, 46, 16, 13, 13, 13)):
     from openpyxl import Workbook
     wb = Workbook()
     ws = wb.active
     ws.title = 'So'
     for r in rows:
         ws.append(r)
-    for col, w in zip('ABCDEFG', (12, 14, 46, 16, 13, 13, 13)):
+    for col, w in zip('ABCDEFG', widths):
         ws.column_dimensions[col].width = w
     wb.save(path)

@@ -4325,6 +4325,7 @@ def print_submenu_misa():
   [2] 📥 Tải file nhập kho (MISA: Nghiệp vụ khác › Nhập kho › Thêm mới ▾ › Nhập khẩu)
        tách Hộ Hải Nancy (tiệm 15E) / Hộ Yen Leather (tiệm 3C), giá theo hoá đơn mua hàng
   [3] 💵 Xuất sổ quỹ theo tháng (dự phòng web Sổ quỹ: tiền mặt từng tiệm + tài khoản từng hộ)
+  [4] 🧾 Xuất công nợ nhà cung cấp (dự phòng web Sổ quỹ › Công nợ NCC)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4636,9 +4637,9 @@ def handle_submenu_misa(loader):
         print_submenu_misa()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-3][/bold blue]", default="0")
+            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-4][/bold blue]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ MISA [0-3]: ").strip()
+            sub_choice = input("Mời chọn tác vụ MISA [0-4]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4648,6 +4649,8 @@ def handle_submenu_misa(loader):
             process_export_task(8, loader)
         elif sub_choice == "3":
             export_cash_book(loader)
+        elif sub_choice == "4":
+            export_supplier_debt()
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
@@ -4694,6 +4697,29 @@ def export_cash_book(loader):
             print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán CK / thẻ chưa vào tài khoản nào (web: chọn \"Nhận tiền bán CK / thẻ\").".replace(',', '.'))
         if ngoai:
             print(f"ℹ️ Hộ {ho} chưa vào quỹ: " + ' · '.join(f"{k} {v:,.0f}đ".replace(',', '.') for k, v in ngoai.items() if v))
+
+
+def export_supplier_debt():
+    """[4][4] Công nợ NCC dự phòng (GĐ1 thay MISA, 03/11, luật 15): cùng số / cùng file Excel như web — tools/supplier_debt.py."""
+    from tools import cash_book, supplier_debt
+    try:
+        cn, g1 = cash_book.load(EXPORT_DIR, act='cong_no_ds', need='ncc')
+        sq, g2 = cash_book.load(EXPORT_DIR)
+    except Exception as e:  # noqa: BLE001
+        print(f"⛔ {e}")
+        return
+    for g in (g1, g2):
+        if g:
+            print(g)
+    ds = supplier_debt.cong_no(cn, sq.get('phieu', []))
+    path = os.path.join(EXPORT_DIR, f"Cong_no_NCC_{cash_book.homnay()}.xlsx")
+    cash_book.write_xlsx(path, supplier_debt.xlsx_rows(ds), widths=(36, 14, 18, 14, 14))
+    tong = sum(o['con'] for o in ds)
+    print(f"✅ Công nợ NCC: tổng còn nợ {tong:,.0f}đ · {sum(1 for o in ds if o['con'])} nhà cung cấp còn nợ".replace(',', '.'))
+    for o in ds[:10]:
+        if o['con']:
+            print(f"   {o['ncc']}: {o['con']:,.0f}đ".replace(',', '.'))
+    print(f"   {path}")
 
 
 def handle_submenu_media(loader):
