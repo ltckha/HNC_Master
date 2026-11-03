@@ -4324,6 +4324,7 @@ def print_submenu_misa():
   [1] 📊 Tải file hàng hoá mới (MISA: Hàng hóa › Thêm hàng hóa ▾ › Nhập khẩu hàng hóa)
   [2] 📥 Tải file nhập kho (MISA: Nghiệp vụ khác › Nhập kho › Thêm mới ▾ › Nhập khẩu)
        tách Hộ Hải Nancy (tiệm 15E) / Hộ Yen Leather (tiệm 3C), giá theo hoá đơn mua hàng
+  [3] 💵 Xuất sổ quỹ theo tháng (dự phòng web Sổ quỹ: tiền mặt từng tiệm + tài khoản từng hộ)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4635,9 +4636,9 @@ def handle_submenu_misa(loader):
         print_submenu_misa()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-2][/bold blue]", default="0")
+            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-3][/bold blue]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ MISA [0-2]: ").strip()
+            sub_choice = input("Mời chọn tác vụ MISA [0-3]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4645,11 +4646,54 @@ def handle_submenu_misa(loader):
             process_export_task(4, loader)
         elif sub_choice == "2":
             process_export_task(8, loader)
+        elif sub_choice == "3":
+            export_cash_book(loader)
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
         if HAS_RICH: Prompt.ask("\n[dim]Nhấn Enter để quay lại Sub-Menu...[/dim]")
         else: input("\nNhấn Enter để quay lại Sub-Menu...")
+
+
+def export_cash_book(loader):
+    """[4][3] Sổ quỹ dự phòng (GĐ1 thay MISA, 03/11, luật 15): cùng số / cùng file Excel như web Sổ quỹ — tools/cash_book.py."""
+    from tools import cash_book
+    hn = cash_book.homnay()
+    thang = input(f"Tháng (yyyy-mm, Enter = {hn[:7]}): ").strip() or hn[:7]
+    if not re.match(r'^\d{4}-\d{2}$', thang):
+        print("⛔ Tháng phải dạng yyyy-mm, vd 2026-11.")
+        return
+    if loader.is_google_api and loader.cho_chep() > 0:
+        print(f"⚠️ Web còn {loader.cho_chep()} dòng đang chép sang Sheet — tiền bán có thể thiếu, chờ vài phút rồi chạy lại nếu cần.")
+    try:
+        data, ghi_chu = cash_book.load(EXPORT_DIR)
+        ban = cash_book.ban_rows(loader.spreadsheet.worksheet('BAN').get_all_values())
+    except Exception as e:  # noqa: BLE001
+        print(f"⛔ {e}")
+        return
+    if ghi_chu:
+        print(ghi_chu)
+    web_dau = {(x['quy_id'], x['thang']): x['du_dau'] for x in data.get('dau_ky', [])}
+    da = set()
+    for ho in ('15E', 'Y3C'):
+        so, ngoai, chua_tk = cash_book.so_quy(data, ban, ho, thang)
+        for s in so:
+            q = s['quy']
+            if q['id'] in da:
+                continue
+            da.add(q['id'])
+            path = os.path.join(EXPORT_DIR, cash_book.file_name(q, thang))
+            cash_book.write_xlsx(path, cash_book.xlsx_rows(s))
+            cuoi = s['rows'][-1]['du'] if s['rows'] else s['dau_ky']
+            print(f"✅ {q['ten']}: đầu kỳ {s['dau_ky']:,.0f}đ → cuối kỳ {cuoi:,.0f}đ ({len(s['rows'])} dòng)".replace(',', '.'))
+            print(f"   {path}")
+            w = web_dau.get((q['id'], thang))
+            if w is not None and w != s['dau_ky']:
+                print(f"   ⚠ Số dư đầu kỳ web {w:,.0f}đ ≠ Mac {s['dau_ky']:,.0f}đ — sổ bán Sheet và web lệch tháng trước, báo Thực thi · Web.".replace(',', '.'))
+        if chua_tk:
+            print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán CK / thẻ chưa vào tài khoản nào (web: chọn \"Nhận tiền bán CK / thẻ\").".replace(',', '.'))
+        if ngoai:
+            print(f"ℹ️ Hộ {ho} chưa vào quỹ: " + ' · '.join(f"{k} {v:,.0f}đ".replace(',', '.') for k, v in ngoai.items() if v))
 
 
 def handle_submenu_media(loader):
