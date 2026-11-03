@@ -82,5 +82,8 @@ by5 = {s['quy']['id']: [r[2:5] for r in c.xlsx_rows(s)[2:]] for s in so5}
 eq('GĐ2: thẻ trước ngày bật vào TK 15E', by5[3], [['Tiền bán hàng (chuyển khoản / thẻ)', None, 500000]])
 eq('GĐ2: thẻ từ ngày bật (mọi hộ chủ hàng) vào quỹ chờ về', by5[8], [['Tiền bán hàng (thẻ, chờ về)', None, 1000000]])
 eq('GĐ2: COD từ ngày bật vào quỹ chờ về, trước đó chưa vào quỹ', (by5[9], ngoai5), ([['Tiền bán hàng (COD, chờ về)', None, 300000]], {'COD': 200000}))
+QUY3 = QUY2 + [{'id': 4, 'ho': 'Y3C', 'loai': 'ngan_hang', 'ten': 'TK 3C', 'kho': None, 'nhan_ck': 1, 'du_dau': 0, 'ngay_dau': '2026-11-01', 'an': 0}]
+so3c, _, _ = c.so_quy({'quy': QUY3, 'phieu': []}, c.ban_rows(BAN2), 'Y3C', '2026-11', today='2026-11-05')
+eq('GĐ2 (web 6de3ca04): sổ hộ 3C không ghi thẻ từ ngày bật vào TK 3C', [r[2:5] for s in so3c for r in c.xlsx_rows(s)[2:]], [])
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)

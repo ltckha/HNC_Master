@@ -124,7 +124,7 @@ def ban_rows(values):
     return out
 
 
-def tien_ban(qs, ban, tu, den):
+def tien_ban(qs, ban, tu, den, tat_ca=None):
     """Như web tienBan: gộp (ngày, kho, chủ, kênh, cách thu) → dòng tiền bán / quỹ / ngày + phần chưa vào quỹ."""
     grp = {}
     for r in ban:
@@ -134,7 +134,8 @@ def tien_ban(qs, ban, tu, den):
     tm = lambda h: next((q for q in qs if q['loai'] == 'tien_mat' and kho_ho(q.get('kho')) == h), None)
     ck = lambda h: next((q for q in qs if q['loai'] == 'ngan_hang' and q['ho'] == h and q.get('nhan_ck')), None)
     cho_loai = {'Thẻ': 'cho_the', 'COD': 'cho_cod'}  # 04/11 GĐ2 (web ff5d162e): Thẻ / COD → quỹ chờ về (hộ 15E) từ ngay_dau của quỹ đó
-    cho_q = lambda p, day: next((q for q in qs if q['loai'] == cho_loai.get(p) and day >= q['ngay_dau']), None)
+    # quỹ chờ về tìm trong mọi quỹ (web 6de3ca04): trang hộ 3C không có quỹ này nhưng vẫn phải biết Thẻ / COD đã về hộ 15E
+    cho_q = lambda p, day: next((q for q in (tat_ca or qs) if q['loai'] == cho_loai.get(p) and day >= q['ngay_dau']), None)
     by, ngoai, chua_tk = {}, {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}
     for (day, kho, chu, ch, pay), t in grp.items():
         if SAN.search(ch or '') or not t:
@@ -142,6 +143,8 @@ def tien_ban(qs, ban, tu, den):
         p = payment_method(pay) or 'Tiền mặt'
         ho = ho_of(chu, kho)
         cho = cho_q(p, day)
+        if cho and not any(q['id'] == cho['id'] for q in qs):
+            continue  # sổ hộ 3C: tiền này nằm ở quỹ chờ về hộ 15E (khoản bù trừ), không vào quỹ nào của hộ này
         if not cho and p in CACH_THU_NGOAI:
             ngoai[ho][p] = ngoai[ho].get(p, 0) + t
             continue
@@ -161,11 +164,11 @@ def tien_ban(qs, ban, tu, den):
     return dong, ngoai, chua_tk
 
 
-def dong_tien(qs, ten_moi, phieu, ban, tu, den):
+def dong_tien(qs, ten_moi, phieu, ban, tu, den, tat_ca=None):
     """Như web dongTien: tiền bán + phiếu tay (bỏ phiếu huỷ) trong [tu, den], cắt theo ngay_dau từng quỹ, xếp ngày → BH trước → số phiếu."""
     if tu > den:
         return [], {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}
-    dong, ngoai, chua_tk = tien_ban(qs, ban, tu, den)
+    dong, ngoai, chua_tk = tien_ban(qs, ban, tu, den, tat_ca)
     for p in phieu:
         if p.get('huy_luc') or not (tu <= p['ngay'] <= den):
             continue
@@ -194,11 +197,11 @@ def so_quy(data, ban, ho, thang, today=None):
     qs = [q for q in data['quy'] if not q.get('an') and (q['ho'] == ho or (q['loai'] == 'tien_mat' and kho_ho(q.get('kho')) == ho))]
     ten_moi = {q['id']: q['ten'] for q in data['quy'] if not q.get('an')}
     tu, den = f"{thang}-01", min(cuoi_thang(thang), hn)
-    dong, ngoai, chua_tk = dong_tien(qs, ten_moi, data['phieu'], ban, tu, den)
+    dong, ngoai, chua_tk = dong_tien(qs, ten_moi, data['phieu'], ban, tu, den, data['quy'])
     truoc = ngay_truoc(tu)
     du_truoc = {q['id']: q['du_dau'] for q in qs}
     if qs:
-        cu, _, _ = dong_tien(qs, ten_moi, data['phieu'], ban, min(q['ngay_dau'] for q in qs), truoc)
+        cu, _, _ = dong_tien(qs, ten_moi, data['phieu'], ban, min(q['ngay_dau'] for q in qs), truoc, data['quy'])
         for d in cu:
             du_truoc[d['quy']] += d['vao'] - d['ra']
     out = []
