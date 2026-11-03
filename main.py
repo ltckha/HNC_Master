@@ -84,6 +84,7 @@ LOCAL_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Thư mục Drive khai 1 chỗ ở hnc_paths.py: My Drive/HNC/He_thong → My Drive/Spark/HNC_Master; không thấy thì dừng, không dùng local.
 from hnc_paths import find_system_dir, in_csv_path
 from tools import misa_orders
+from tools import book_lock
 try:
     GDRIVE_DIR = find_system_dir()
 except FileNotFoundError as _e:
@@ -737,9 +738,37 @@ class EngineDataLoader:
             print(f"[!] Lỗi khi batch update media results: {e}")
             return False
 
+    def _lock_ok(self, sheet_name, new_rows):
+        """Khoá sổ tháng (web book_lock d10686ac, luật 15): không thêm dòng BAN có ngày thuộc tháng đã khoá."""
+        if sheet_name != 'BAN' or not new_rows or not self.is_google_api:
+            return True
+        from tools import cash_book
+        try:
+            h = [c.strip() for c in self.spreadsheet.worksheet('BAN').row_values(1)]
+        except Exception as e:  # noqa: BLE001
+            print(f"⛔ Không đọc được tiêu đề tab BAN để kiểm khoá sổ: {e}")
+            return False
+        if 'Ngày' not in h:
+            return True
+        i, hn = h.index('Ngày'), cash_book.homnay()
+        loi = [book_lock.loi_khoa(cash_book._day(r[i] if i < len(r) else ''), hn) for r in new_rows]
+        if not any(loi):
+            return True
+        try:  # có dòng thuộc tháng khoá → hỏi web tháng nào đang mở lại 24 giờ
+            mo = book_lock.dang_mo(cash_book.fetch().get('so_mo'))
+        except Exception:  # noqa: BLE001
+            mo = None
+        loi = [book_lock.loi_khoa(cash_book._day(r[i] if i < len(r) else ''), hn, mo) for r in new_rows]
+        if any(loi):
+            print(f"⛔ {next(x for x in loi if x)} (chưa ghi tab BAN).")
+            return False
+        return True
+
     def append_rows_to_sheet(self, sheet_name, new_rows):
         """Append các dòng mới vào cuối bảng Google Sheet (với công thức USER_ENTERED)."""
         if not self._write_ok(sheet_name, them_dong=True):
+            return False
+        if not self._lock_ok(sheet_name, new_rows):
             return False
         if not new_rows:
             return True
@@ -757,6 +786,8 @@ class EngineDataLoader:
     def insert_rows_with_exact_range(self, sheet_name, new_rows, start_row):
         """Ghi các dòng mới vào đúng tọa độ A{start_row}:{last_col}{end_row} (tránh 100% lỗi lệch cột của append_rows)."""
         if not self._write_ok(sheet_name, them_dong=True):
+            return False
+        if not self._lock_ok(sheet_name, new_rows):
             return False
         if not new_rows or not self.is_google_api:
             return False
