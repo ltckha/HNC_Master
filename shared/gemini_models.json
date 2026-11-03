@@ -1,4 +1,4 @@
 {
-  "_ghi_chu": "Thứ tự mô hình Gemini chung (anh Kha làm 02/11, theo Ecosystem-Hub/docs/research/2026-11-02_gemini_model_stability.md). main.py + tools/spec_fill.py đọc file này; bot zalo_bot/Code.gs RECEIPT_MODELS phải khớp (test_zalo_bot.js kiểm). 3.8 và 3.6 hay 503 nhất nên không đứng cùng ở đầu; 2.5 ngừng 23/12/2026, từng 404 → chỉ để cuối dự phòng. Lỗi 404 → sang mô hình kế.",
-  "models": ["gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+  "_ghi_chu": "Thứ tự mô hình Gemini chung (anh Kha làm 02/11; 03/11 bỏ 3.7 vì không có trong bảng hạn mức AI Studio). main.py + tools/spec_fill.py đọc file này; bot zalo_bot/Code.gs RECEIPT_MODELS phải khớp (test_zalo_bot.js kiểm). 3.8 và 3.6 hay 503 nhất nhưng nay chỉ còn 2 mô hình này đứng đầu → 503 thì chờ thử lại 1 lần rồi sang mô hình kế; 2.5 ngừng 23/12/2026, từng 404 → chỉ để cuối dự phòng. Lỗi 404 → sang mô hình kế.",
+  "models": ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
 }

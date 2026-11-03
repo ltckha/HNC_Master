@@ -2193,7 +2193,7 @@ const PN_REASONS = { thieu: 'Thiếu so phiếu', du: 'Dư so phiếu', loi_tra_
 const PN_STATUS_LABEL = { nhap: 'cho_chia', da_ghi: 'da_ghi', huy: 'huy' };
 const GEMINI_SHARED_HASH = '8412f316'; // khoá Gemini chung cũ của các repo (checkConfig cảnh báo nếu bot còn dùng)
 // Thứ tự mô hình Gemini chung (02/11): PHẢI khớp shared/gemini_models.json (main.py, spec_fill.py đọc file đó; test bot kiểm khớp)
-const RECEIPT_MODELS = ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+const RECEIPT_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
 // Mã "cần bổ sung" (anh Kha 16/10): SANPHAM trống Tên Ngành Hàng hoặc giá bán → xuất sàn / MISA / mark_exported bỏ qua, web ẩn.
 const PN_NEED_INFO_COLS = ['Tên Ngành Hàng', 'product_price'];
 // Cột thông tin mẫu: chép từ mẫu cùng mã cha khi tạo mã mới; form "Bổ sung thông tin" (bo_sung_sp) chỉ được ghi các cột này + product_price

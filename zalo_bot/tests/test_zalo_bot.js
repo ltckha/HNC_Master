@@ -405,8 +405,8 @@ PROPS.OWNER_CHAT_ID = 'owner1';
 PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
 pr = pn({ action: 'doc_phieu', anh_base64: Buffer.from('anh-2').toString('base64'), mime: 'image/jpeg' });
 const p2 = pr.id;
-eq('V2 đọc phiếu: model đầu chuỗi (3.7) trước + Zalo báo phiếu chờ chia', [pr.ok, pr.model, GEMINI_CALLS, SENT.length - SENT0, /Có phiếu nhập kho chờ chia: Chú Dũng PX3000 · 2 dòng · 13 đôi → https:\/\/giayhainancy\.vn\/admin\/app#phieu-PN/.test((SENT[SENT0] || {}).text || '')],
-  [true, 'gemini-3.7-flash', 1, 1, true]);
+eq('V2 đọc phiếu: model đầu chuỗi (3.8) trước + Zalo báo phiếu chờ chia', [pr.ok, pr.model, GEMINI_CALLS, SENT.length - SENT0, /Có phiếu nhập kho chờ chia: Chú Dũng PX3000 · 2 dòng · 13 đôi → https:\/\/giayhainancy\.vn\/admin\/app#phieu-PN/.test((SENT[SENT0] || {}).text || '')],
+  [true, 'gemini-3.8-flash', 1, 1, true]);
 const sz = o => o; // sizes
 const v2 = {
   action: 'xac_nhan', id: p2, ticket_id: 'V2A',
