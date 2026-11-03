@@ -4713,7 +4713,7 @@ CHE_DO_SO = [
 def tra_doi_hang(loader):
     """[8] Trả / Đổi hàng dự phòng (26/10, luật 15): cùng dòng như web nút Đổi / Trả và bot tra_hang — tools/returns_exchanges.py.
     Từ 01/11: món trả NHAP TRA-, món đổi XUAT (không BÁN), tiền chênh 1 dòng BÁN BU_DOI_HANG."""
-    from tools.returns_exchanges import TraDoi
+    from tools.returns_exchanges import TraDoi, PAY_SO
     kieu = input("[1] Trả hàng (khách trả, nhập lại kho)  [2] Đổi hàng (trả + xuất mã khác)  [Enter] thôi: ").strip()
     if kieu not in ('1', '2'):
         return
@@ -4750,7 +4750,10 @@ def tra_doi_hang(loader):
                 else:
                     t.ghi_chu.append(f"Không hoàn {-chenh:,}đ phần thừa — tiệm giữ, Sheet không ghi dòng nào.".replace(',', '.'))
             if bu:
-                tt = {'1': 'Tiền mặt', '2': 'Chuyển khoản'}.get(input("Tiền chênh trả bằng [1] Tiền mặt  [2] Chuyển khoản: ").strip(), 'Tiền mặt')
+                hoi = "  ".join(f"[{k}] {v}" for k, v in PAY_SO.items())
+                tt = None
+                while not tt:  # bắt chọn cách thu như web / bot (03/11), không mặc định Tiền mặt
+                    tt = PAY_SO.get(input(f"Tiền chênh thu / trả bằng {hoi}: ").strip())
                 t.bu(bu, kho, tt)
     except (RuntimeError, ValueError) as e:
         print(f"⛔ {e}")

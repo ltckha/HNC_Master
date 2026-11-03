@@ -736,8 +736,16 @@ eq('bán Zalo: đọc ck + sdt, không lẫn vào giá / size', [dp.payment, dp.
 dp = ctx.parseMessage_('ban TH2040D 41 TBH 0912345678 the', ctx.knownCodes_());
 eq('bán Zalo: số điện thoại trần + thẻ', [dp.payment, dp.phone, dp.price], ['Thẻ', '0912345678', '']);
 const bl = DATA.BAN.length;
-z('ban TH2040D 40 YEN 800k', 'nv9');
-eq('bán Zalo không ghi cách trả → mặc định Tiền mặt', DATA.BAN.filter(r => r[pIx('payment_method')]).map(r => [r[1], r[pIx('payment_method')]]).slice(-1), [['TH2040D', 'Tiền mặt']]);
+const zb = z('ban TH2040D 40 YEN 800k', 'nv9');
+const lastBan = () => DATA.BAN.filter(r => r[1]).slice(-1)[0];
+eq('bán Zalo không ghi cách trả → để trống + hỏi đủ 6 cách thu (03/11)', [lastBan()[1], lastBan()[pIx('payment_method')] || '',
+  /Chưa chọn cách thu/.test(zb), /1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ · 4 Ví · 5 COD · 7 Ghi nợ \(cách thu\) · 6 Huỷ lệnh này/.test(zb)], ['TH2040D', '', true, true]);
+zr = z('7', 'nv9');
+eq('nhắn 7 → Ghi nợ vào dòng vừa bán', [/Đã ghi cách thu: Ghi nợ/.test(zr), lastBan()[pIx('payment_method')]], [true, 'Ghi nợ']);
+zr = z('4', 'nv9');
+eq('nhắn 4 → đổi sang Ví', lastBan()[pIx('payment_method')], 'Ví');
+dp = ctx.parseMessage_('ban TH2040D 40 YEN 800k cod', ctx.knownCodes_());
+eq('bán Zalo: đọc cod / vi / no', [dp.payment, ctx.parseMessage_('ban TH2040D 40 YEN vi', ctx.knownCodes_()).payment, ctx.parseMessage_('ban TH2040D 40 YEN no', ctx.knownCodes_()).payment], ['COD', 'Ví', 'Ghi nợ']);
 dp = ctx.parseMessage_('nhap TH2040D 41 TBH nk45', ctx.knownCodes_());
 eq('nhập Zalo có số chứng từ', [dp.nhapDoc, dp.sizes.map(x => x.size).join(), dp.code], ['NK000045', '41', 'TH2040D']);
 const nl = DATA.NHAP.length;
@@ -764,7 +772,7 @@ zr = z('ban TH2040D 41 YEN 800k', 'nv8');
 eq('bán xong → hỏi cách trả bằng số', /Nhắn số: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ/.test(zr), true);
 zr = z('2', 'nv8');
 const lastPay = DATA.BAN.filter(r => r[1] === 'TH2040D' && String(r[4]) === '41' && r[pIx('payment_method')]).slice(-1)[0];
-eq('nhắn 2 → ghi Chuyển khoản vào dòng vừa bán', [/Đã ghi hình thức thanh toán: Chuyển khoản/.test(zr), lastPay && lastPay[pIx('payment_method')]], [true, 'Chuyển khoản']);
+eq('nhắn 2 → ghi Chuyển khoản vào dòng vừa bán', [/Đã ghi cách thu: Chuyển khoản/.test(zr), lastPay && lastPay[pIx('payment_method')]], [true, 'Chuyển khoản']);
 z('ban TH2040D 40 YEN 700k');
 zr = z('6');
 eq('Chủ: menu 6 → 1 lệnh vừa rồi + các dòng bán 2 ngày', [/1 Lệnh vừa rồi/.test(zr), /2 Đơn hàng .* TH2040D size 40 × 1/.test(zr)], [true, true]);
@@ -1090,7 +1098,7 @@ eq('CSV bọc dấu phẩy / ngoặc kép', ctx.labelCsv_([{ 'Tên': 'Giày "da"
   if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 // Hình thức trả tiền chuẩn (COD tách riêng, anh Kha 20/10)
 vm.runInContext('this.paymentMethod_=paymentMethod_;', ctx);
-eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản', ['COD', 'ship thu hộ', 'Shopee', 'CK Techcombank', ''].map(ctx.paymentMethod_), ['COD', 'COD', 'Chuyển khoản', 'Chuyển khoản', '']);
+eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản', ['COD', 'ship thu hộ', 'Shopee', 'CK Techcombank', '', 'tiền mặt', 'abc'].map(ctx.paymentMethod_), ['COD', 'COD', 'Chuyển khoản', 'Chuyển khoản', '', 'Tiền mặt', '']);
 // META cho_chep > 0 (web còn chép) ở chế độ master → bot chưa ghi BAN / NHAP / XUAT
 { const meta0 = DATA.META; DATA.META = [['key', 'value', 'updated_at'], ['cho_chep', '2', '']]; vm.runInContext('MEMO={};', ctx);
   const n0 = DATA.BAN.length;
@@ -1457,5 +1465,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
   ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }
 eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 15)', JSON.stringify(vm.runInContext('RECEIPT_MODELS', ctx)), JSON.stringify(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'gemini_models.json'), 'utf8')).models));
+{ const py = fs.readFileSync(path.join(__dirname, '..', '..', 'tools', 'returns_exchanges.py'), 'utf8').match(/^PAY_SO = (\{.*\})$/m);
+  eq('Cách thu: bot PAY_SO khớp Mac tools/returns_exchanges.py (luật 15)', JSON.stringify(vm.runInContext('PAY_SO', ctx)), JSON.stringify(JSON.parse(py[1].replace(/'/g, '"')))); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

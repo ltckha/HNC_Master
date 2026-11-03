@@ -18,6 +18,8 @@ KY_COL = {'15E': 'cua_Y3C', 'Y3C': 'cua_15E'}  # cột hàng của hộ kia đan
 NHAP_MARK = ('web_stock', 'web_label', 'misa_stock')
 TRA_MARK = 'Tra_hang'
 BU_MA = 'BU_DOI_HANG'  # dòng BÁN tiền chênh đổi hàng (web returns.ts BU_MA)
+# Cách thu theo số (03/11, như bot PAY_SO + web: 6 giá trị BAN.payment_method; 6 = Huỷ ở bot nên Ghi nợ = 7)
+PAY_SO = {'1': 'Tiền mặt', '2': 'Chuyển khoản', '3': 'Thẻ', '4': 'Ví', '5': 'COD', '7': 'Ghi nợ'}
 
 
 def _money(v):
@@ -144,7 +146,7 @@ class TraDoi:
             self._cell(KHO_TAB[d['kho']], r, d['cot'], ky + d['delta'], f"{d['cot']} {ky} → {ky + d['delta']} (món đổi là hàng ký gửi)")
         return tach
 
-    def bu(self, tien, kho, tt='Tiền mặt'):
+    def bu(self, tien, kho, tt):
         """Tiền chênh đổi hàng: khách bù (> 0) / Chủ hoàn (< 0) → 1 dòng BÁN BU_DOI_HANG, SL 1, Giá = tiền chênh."""
         self._append('BAN', {'Ngày': datetime.now().strftime('%d/%m/%Y'), 'product_code': BU_MA, 'product_color': '', 'Giá': tien, 'item_size': '',
                              'item_quantity': 1, 'KHO': kho, 'seller': 'mac', 'ma_dong': self.ma_dong(), 'nguon': f'doi_tra {self.phieu}',

@@ -42,6 +42,10 @@ const ACTIONS = {
   INVOICE: 'HOÁ ĐƠN NCC',
 };
 
+/** Cách thu theo số (03/11, như web: 6 giá trị cột BAN.payment_method). 6 giữ cho "Huỷ lệnh này" nên Ghi nợ = 7. */
+const PAY_SO = { 1: 'Tiền mặt', 2: 'Chuyển khoản', 3: 'Thẻ', 4: 'Ví', 5: 'COD', 7: 'Ghi nợ' };
+const PAY_HOI = Object.keys(PAY_SO).map(k => k + ' ' + PAY_SO[k]).join(' · ');
+
 const HELP_TEXT = [
   '📖 HƯỚNG DẪN BOT KHO HNC',
   '🔎 Kiểm tồn kho: TH2040D 40 (mã + size)  |  TH2040 (mẫu, mọi màu)',
@@ -214,10 +218,10 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
     if (res.ops && res.ops.length && !dryRun && chatId) {
       CacheService.getScriptCache().put('last_' + chatId,
         JSON.stringify({ label: res.label || '', ops: res.ops }), UNDO_SECONDS);
-      // Sau lệnh ghi: chọn bằng số (anh Kha 17/10) — bán thì đổi cách trả 1/2/3; 6 huỷ lệnh vừa rồi
+      // Sau lệnh ghi: chọn bằng số (anh Kha 17/10) — bán thì chọn / đổi cách trả (PAY_HOI); 6 huỷ lệnh vừa rồi
       const banRows = res.ops.filter(o => o.sheet === 'BAN').map(o => o.row);
       navSetAsk_(chatId, 'after', { ban: res.batch ? [] : banRows });
-      res.text += '\nNhắn số: ' + (banRows.length && !res.batch ? '1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ (hình thức thanh toán) · ' : '') +
+      res.text += '\nNhắn số: ' + (banRows.length && !res.batch ? PAY_HOI + ' (cách thu) · ' : '') +
         '6 Huỷ lệnh này' + (res.batch ? ' (cả lô)' : '') + ' · 9 Menu';
     }
     return { reply: (dryRun && isWrite ? '🧪 CHẠY THỬ — chưa ghi Sheet\n' : '') + res.text, syncTabs };
@@ -372,12 +376,12 @@ function parseMessage_(textRaw, known) {
     if (KHO_ALIASES[tk]) { used[i] = true; if (!p.kho) p.kho = KHO_ALIASES[tk]; }
   });
 
-  // ---- Bán: cách trả ck / tm / the (mặc định tm) + số điện thoại khách "sdt 09…" (dự phòng, anh Kha 17/10) ----
+  // ---- Bán: cách trả tm / ck / the / vi / cod / no (không ghi thì để trống, bot hỏi số — 03/11) + số điện thoại khách "sdt 09…" ----
   if (action === ACTIONS.SELL) {
     toks.forEach((t, i) => {
       if (used[i]) return;
       const tk = t.replace(/[^a-z0-9]/g, '');
-      const pay = { ck: 'Chuyển khoản', tm: 'Tiền mặt', the: 'Thẻ' }[tk];
+      const pay = { tm: 'Tiền mặt', ck: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví', cod: 'COD', no: 'Ghi nợ', ghino: 'Ghi nợ' }[tk];
       if (pay && !p.payment) { p.payment = pay; used[i] = true; return; }
       if ((tk === 'sdt' || tk === 'dt') && /^0\d{8,10}$/.test((toks[i + 1] || '').replace(/[^0-9]/g, ''))) {
         p.phone = toks[i + 1].replace(/[^0-9]/g, ''); used[i] = true; used[i + 1] = true; return;
@@ -568,7 +572,7 @@ const ASK_TTL_MS = 720 * 60000;
 const DU_PHONG_TEXT = [
   '🛟 DỰ PHÒNG — web / app lỗi thì làm qua Zalo (chọn số, chỉ gõ mã / size / giá):',
   '🔎 Kiểm tồn kho: menu → 1 → gõ mã (vd TH2040D 40)',
-  '🛒 Đơn hàng: gõ "ban TH2040D 40 YEN 800k" → bot hỏi hình thức thanh toán: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ (có SĐT khách thì thêm "sdt 09…")',
+  '🛒 Đơn hàng: gõ "ban TH2040D 40 YEN 800k" → bot hỏi cách thu: ' + PAY_HOI + ' (có SĐT khách thì thêm "sdt 09…")',
   '📥 Phiếu nhập kho (hàng NCC): gõ "nhap TH2040D 38/2 39 TBH misa" → vào tem + MISA (chữ misa = bot tự lấy số chứng từ)',
   '↩️ Khách trả: gõ "nhap TH2040D 40 15E tra hang"',
   '❌ Huỷ: menu → 6 → chọn số (lệnh vừa rồi; Chủ: các đơn hàng 2 ngày gần nhất)',
@@ -733,7 +737,7 @@ function navHandle_(text, chatId, dryRun) {
     case 'huyban': return saleLineCancelPick_(n, chatId, a.d, dryRun);
     case 'after':
       if (n === 6) return navMenuPick_(6, chatId, owner);
-      if ([1, 2, 3].indexOf(n) !== -1 && (a.d.ban || []).length) return navSetPayment_(n, chatId, a.d.ban, dryRun);
+      if (PAY_SO[n] && (a.d.ban || []).length) return navSetPayment_(n, chatId, a.d.ban, dryRun);
       return { text: navMenu_(chatId) };
     case 'huy6': return navCancelPick_(n, chatId, a.d, dryRun);
     case 'web': return navWebPick_(n, chatId, a.d, dryRun);
@@ -889,15 +893,15 @@ function navCancelPick_(n, chatId, d, dryRun) {
   return { text: navMenu_(chatId) };
 }
 
-/** Đổi cách trả của dòng bán vừa ghi: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ. */
+/** Chọn / đổi cách thu của dòng bán vừa ghi (PAY_SO). */
 function navSetPayment_(n, chatId, rows, dryRun) {
-  const pay = { 1: 'Tiền mặt', 2: 'Chuyển khoản', 3: 'Thẻ' }[n];
+  const pay = PAY_SO[n];
   const ban = getSheet_('BAN');
   const c = headerMap_(ban.getRange(1, 1, 1, ban.getLastColumn()).getValues()[0]);
   if (c.payment_method === undefined) return { text: '⚠️ Tab BAN chưa có cột payment_method.\nNhắn số: 9 Menu' };
   if (!dryRun) rows.forEach(r => ban.getRange(r, c.payment_method + 1).setValue(pay));
   navSetAsk_(chatId, 'after', { ban: rows });
-  return { text: '💳 Đã ghi hình thức thanh toán: ' + pay + '\nNhắn số: 1 Tiền mặt · 2 Chuyển khoản · 3 Thẻ · 6 Huỷ lệnh này · 9 Menu', touched: ['BAN'] };
+  return { text: '💳 Đã ghi cách thu: ' + pay + '\nNhắn số: ' + PAY_HOI + ' · 6 Huỷ lệnh này · 9 Menu', touched: ['BAN'] };
 }
 
 function navReport_(n, chatId) {
@@ -1145,7 +1149,7 @@ function doMovement_(p, action, kho, dryRun) {
     }
     // channel trống = bán tại cửa hàng theo KHO (quy ước 16/10); chỉ ghi khi bán ngoài cửa hàng. Bán: trừ hàng ký gửi trước.
     if (action === ACTIONS.SELL) {
-      const sr = kyguiSale_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller, dryRun, p.payment || 'Tiền mặt', p.phone || '');
+      const sr = kyguiSale_(p.code, color, p.price, s.size, s.qty, kho, p.channel || '', CTX.seller, dryRun, p.payment || '', p.phone || '');
       sr.ops.forEach(o => ops.push(o));
       sr.phan.filter(x => x.chu_hang !== kho).forEach(x => kygui.push({ size: s.size, chu_hang: x.chu_hang, qty: x.qty, loai: 'ban_hang_ky_gui' }));
     } else if (action === ACTIONS.OUT) {
@@ -1197,7 +1201,7 @@ function doMovement_(p, action, kho, dryRun) {
       '\n  ' + written.join('\n  ') + (kyText.length ? '\n' + kyText.join('\n') : '') + '\n→ ' + ({ BAN: 'sổ bán hàng', XUAT: 'phiếu xuất kho', NHAP: 'phiếu nhập kho' })[tab] +
       (action === ACTIONS.IN && p.returnGoods ? '\n(Phiếu trả hàng TRA-…, không xuất phiếu nhập kho MISA)' : '') +
       (action === ACTIONS.IN && nhapDoc ? '\n🧾 Số chứng từ ' + nhapDoc + ': vào tem + file nhập kho MISA như phiếu thường' : '') +
-      (action === ACTIONS.SELL ? '\n💳 ' + (p.payment || 'Tiền mặt') + (p.phone ? ' · khách ' + p.phone : '') : '') +
+      (action === ACTIONS.SELL ? '\n💳 ' + (p.payment || 'Chưa chọn cách thu — nhắn số bên dưới') + (p.phone ? ' · khách ' + p.phone : '') : '') +
       (warnings.length ? '\n' + warnings.join('\n') : ''),
   };
 }
@@ -3252,7 +3256,8 @@ function paymentMethod_(text) {
   if (/\bno\b|ghi no|cong no/.test(n)) return 'Ghi nợ';
   if (/\bcod\b|thu\s*ho|ship\s*thu/.test(n)) return 'COD'; // giao thu hộ: tách riêng để đối soát tiền đơn vị giao trả (anh Kha 20/10)
   if (/shopee|tiktok|lazada|san/.test(n)) return 'Chuyển khoản'; // tiền về qua sàn
-  return 'Tiền mặt';
+  if (/tien\s*mat|\btm\b|cash/.test(n)) return 'Tiền mặt';
+  return ''; // không đoán được → để trống, không gán Tiền mặt (03/11)
 }
 
 /** Kiểm trường khách / hoá đơn của phiếu bán → { hd?, khach?, thanh_toan, phi_ship } hoặc { error }. */
