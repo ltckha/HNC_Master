@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 
 URL_BETA = 'https://beta.giayhainancy.vn/api/tach-nen/mac'
 URL_MAIN = 'https://giayhainancy.vn/api/tach-nen/mac'
-URL = URL_BETA  # 03/11: web Sổ quỹ đang ở beta — đổi sang URL_MAIN khi web "Lên"
+URL = URL_MAIN  # 03/11: web Sổ quỹ đã Lên bản chính (02c1c4e); thử beta thì truyền url=URL_BETA
 KEY_FILE = os.path.expanduser('~/.hnc_mac_key.json')
 COPY_DIR = 'cash_book_copy'
 SAN = re.compile(r'shopee|tiktok|lazada', re.I)
