@@ -298,7 +298,7 @@ Không thêm tab hay cột nào vào Sheet; bot tự tính từ dữ liệu sẵ
   - `hoadon`: danh sách phiếu từ 01/09/2026 chưa có hoá đơn, nhóm theo nhà cung cấp; ⏰ = quá 7 ngày.
   - `hoadon <mã phiếu>`: trạng thái + **câu nhắn soạn sẵn** gửi nhà cung cấp: tên / MST / địa chỉ của hộ kinh doanh, hàng gom gọn theo **mã cha** (cùng mẫu khác màu cộng lại, vd `CT2637 x 6`), dòng `Tổng: N sản phẩm`, không ghi tên / giá.
   - `hoadon <mã phiếu> da` / `khong` / `chua`: sửa tay, thắng kết quả tự ghép. Mã phiếu gõ một phần thì áp cho mọi phiếu khớp (vd `hoadon 260925-TP da` = cả 2 kho). Lưu ở Script Properties `hdon_<mã>`.
-- **Nhắc tuần:** trigger `weeklyInvoiceReminder` 8:00 sáng thứ Hai gửi `OWNER_CHAT_ID` các phiếu quá 7 ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn (tối đa 10 câu).
+- **Nhắc tuần:** trigger `weeklyInvoiceReminder` 8:00 sáng thứ Hai gửi `OWNER_CHAT_ID` các phiếu quá 7 ngày chưa có hoá đơn, kèm câu nhắn soạn sẵn (tối đa 10 câu). Từ 04/11 gộp thêm (cùng 1 tin) phiếu Nhập hàng giao thiếu / quá hẹn: bot gọi `DAT_NCC_URL` (mặc định web chính) body `{che: "nhac_tuan"}` ký như Nhập hàng, web trả `{ok, so, text}`; web lỗi / không có phiếu thì chỉ phần hoá đơn.
 - **Cấu hình** (Script Properties):
   - `HKD_15E`, `HKD_Y3C` = `Tên | MST | Địa chỉ`.
   - Chạy lại `setupChangeTrigger` để thêm trigger nhắc tuần.

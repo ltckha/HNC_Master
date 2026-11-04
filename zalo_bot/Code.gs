@@ -5159,7 +5159,7 @@ function weeklyInvoiceReminder() {
     MEMO = {};
     const owner = PropertiesService.getScriptProperties().getProperty('OWNER_CHAT_ID');
     if (!owner) return;
-    invoiceReminderMessages_().forEach(m => sendMessage_(owner, m));
+    weeklyReminderMessages_().forEach(m => sendMessage_(owner, m));
     navSetAsk_(owner, 'menu', {});
   } catch (err) { console.error(err && err.stack ? err.stack : err); }
 }
@@ -5176,11 +5176,27 @@ function invoiceReminderMessages_() {
   return [lines.join('\n')];
 }
 
+/** 04/11 (Nhập hàng tự động, anh "làm thử"): tin nhắc thứ Hai = hoá đơn chưa có + phiếu nhập hàng giao thiếu / quá hẹn (web {che:"nhac_tuan"}), gộp 1 tin.
+ *  Web lỗi / không có phiếu → chỉ phần hoá đơn như cũ (lỗi ghi Nhật ký, không gửi Zalo). */
+function weeklyReminderMessages_() {
+  const hd = invoiceReminderMessages_();
+  let nh = '';
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const out = webForward_({ che: 'nhac_tuan' }, props.getProperty('DAT_NCC_URL') || DAT_NCC_MAIN, props.getProperty('DAT_NCC_KEY') || '');
+    if (out.ok) nh = String(out.text || '').trim(); else console.error('Nhắc tuần nhập hàng: ' + (out.error || 'lỗi'));
+  } catch (err) { console.error(err && err.stack ? err.stack : err); }
+  if (!nh) return hd;
+  if (!hd.length) return [nh + '\nNhắn số: 9 Menu'];
+  const ls = hd[0].split('\n'), cuoi = ls.pop(); // dòng "Nhắn số" để cuối tin gộp
+  return [ls.join('\n') + '\n\n' + nh + '\n' + cuoi];
+}
+
 /** Chạy thử trong trình soạn thảo: in danh sách phiếu + tin nhắc tuần (KHÔNG gửi Zalo). */
 function testInvoice() {
   MEMO = {};
   console.log(doInvoice_('hoadon', true).text);
-  invoiceReminderMessages_().forEach(m => console.log(m));
+  weeklyReminderMessages_().forEach(m => console.log(m));
 }
 
 // =====================================================================

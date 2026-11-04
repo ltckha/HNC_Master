@@ -966,6 +966,17 @@ ctx.dailyMisaSummary();
 eq('mặc định: không tự nhắn phiếu chờ chia / MISA cuối ngày', SENT.length - s9, 0);
 ctx.weeklyInvoiceReminder();
 eq('nhắc hoá đơn thứ Hai vẫn gửi (nếu có phiếu quá hạn)', SENT.length - s9 >= 0, true);
+{ // 04/11: nhắc thứ Hai gộp phiếu nhập hàng giao thiếu / quá hẹn từ web (che nhac_tuan) vào 1 tin
+  vm.runInContext('this.weeklyReminderMessages_=weeklyReminderMessages_;', ctx);
+  const f0 = ctx.UrlFetchApp.fetch, k0 = PROPS.DAT_NCC_KEY; PROPS.DAT_NCC_KEY = 'datncckey_1234567890'; let body = null, tra = { ok: true, so: 1, text: '📦 1 phiếu nhập hàng giao thiếu / quá hẹn:\n• NH-12 · Tuấn Phong · thiếu 3 đôi' };
+  ctx.UrlFetchApp.fetch = (url, opt) => /dat-ncc/.test(url) ? (body = JSON.parse(opt.payload), { getResponseCode: () => 200, getContentText: () => JSON.stringify(tra) }) : f0(url, opt);
+  const hd = ctx.invoiceReminderMessages_(), m = ctx.weeklyReminderMessages_();
+  eq('Nhắc tuần: gọi web che nhac_tuan, gộp 1 tin, có phiếu nhập hàng, kết bằng Nhắn số', [body && body.che, m.length, /NH-12 · Tuấn Phong/.test(m[0]), /Nhắn số: [^\n]*$/.test(m[0]), hd.length ? m[0].indexOf(hd[0].split('\n')[0]) === 0 : true], ['nhac_tuan', 1, true, true, true]);
+  tra = { ok: true, so: 0, text: '' };
+  eq('Nhắc tuần: web không có phiếu → như cũ (chỉ hoá đơn)', JSON.stringify(ctx.weeklyReminderMessages_()), JSON.stringify(hd));
+  ctx.UrlFetchApp.fetch = (url, opt) => /dat-ncc/.test(url) ? { getResponseCode: () => 503, getContentText: () => '{}' } : f0(url, opt);
+  eq('Nhắc tuần: web lỗi → vẫn gửi phần hoá đơn', JSON.stringify(ctx.weeklyReminderMessages_()), JSON.stringify(hd));
+  ctx.UrlFetchApp.fetch = f0; if (k0 === undefined) delete PROPS.DAT_NCC_KEY; else PROPS.DAT_NCC_KEY = k0; }
 nt({ order_id: 'HN-1810-001', text: 'Đơn mới' });
 eq('tin web (notify) vẫn gửi', SENT.length - s9 >= 1, true);
 
