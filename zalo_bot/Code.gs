@@ -118,7 +118,9 @@ function doPost(e) {
     const msg = body.message;
     if (!msg || !msg.chat) return ok_();
     const isImage = body.event_name === 'message.image.received' || !!msg.photo_url;
-    if (!msg.text && !(isImage && datNccOn_() && navIsOwner_(String(msg.chat.id)))) {
+    const isFile = !isImage && (/file|document/i.test(String(body.event_name || '')) || !!datNccFileUrl_(msg)); // 04/11: hoá đơn PDF gửi dạng file
+    if (!msg.text) datNccLog_(body.event_name + ' · ' + Object.keys(msg).join(',') + (datNccOn_() ? '' : ' · Nhập hàng tắt'));
+    if (!msg.text && !((isImage || isFile) && datNccOn_() && navIsOwner_(String(msg.chat.id)))) {
       console.log('Zalo sự kiện chưa xử lý: ' + body.event_name + ' | khoá message: ' + Object.keys(msg).join(','));
       return ok_();
     }
@@ -130,8 +132,8 @@ function doPost(e) {
     cache.put(dedupeKey, '1', 21600);
 
     const chatId = String(msg.chat.id);
-    if (!msg.text) { // ảnh của Chủ khi bật Đặt NCC (chỉ Chủ, đã kiểm ở trên)
-      const t = datNccImage_(chatId, msg);
+    if (!msg.text) { // ảnh / file của Chủ khi bật Nhập hàng (chỉ Chủ, đã kiểm ở trên)
+      const t = isImage ? datNccImage_(chatId, msg) : datNccFile_(chatId, msg);
       if (t) sendMessage_(chatId, t);
       return ok_();
     }
@@ -2242,14 +2244,17 @@ const DAT_NCC_GOM_MS = 2 * 60000;
 const DAT_NCC_MAX = 20; // ảnh / tin tối đa mỗi lô (ô Script Property ≤ 9KB)
 const DAT_NCC_BETA = 'https://beta.giayhainancy.vn/api/bot/dat-ncc';
 const DAT_NCC_MAIN = 'https://giayhainancy.vn/api/bot/dat-ncc'; // bản chính (Nhập hàng 4 bước lên web chính 02/11)
+const DAT_NCC_DAY = '⚠️ Lô đã đầy (tối đa ' + DAT_NCC_MAX + ' ảnh / file / tin) — món này chưa nhận. Chọn số cho lô này trước, rồi gửi tiếp.\n' + 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 0 Bỏ · 9 Menu';
+const DAT_NCC_LOG_MAX = 30;
 const DAT_NCC_HOI = 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ';
 
 /** Chủ nhắn "nhap hang bat" → bật (web chính), "nhap hang thu" / "dat ncc thu" → bật (web beta), "… tat" → tắt. Không phải lệnh này → null. (Quy trình đổi tên "Nhập hàng" 02/11) */
 function datNccSwitch_(text, chatId) {
-  const m = String(text || '').trim().toLowerCase().normalize('NFC').match(/^(?:(?:dat|đặt)\s*ncc|(?:nhap|nhập)\s*(?:hang|hàng))\s+(bat|bật|thu|thử|tat|tắt)$/);
+  const m = String(text || '').trim().toLowerCase().normalize('NFC').match(/^(?:(?:dat|đặt)\s*ncc|(?:nhap|nhập)\s*(?:hang|hàng))\s+(bat|bật|thu|thử|tat|tắt|log)$/);
   if (!m) return null;
   if (!navIsOwner_(chatId)) return '🔒 Lệnh này chỉ Chủ dùng.\nNhắn số: 9 Menu';
   const props = PropertiesService.getScriptProperties();
+  if (m[1] === 'log') return '🧾 Nhật ký Nhập hàng (' + DAT_NCC_LOG_MAX + ' dòng cuối):\n' + (props.getProperty('datncc_log') || '(trống)') + '\nNhắn số: 9 Menu';
   if (/^(th|ba)/.test(m[1])) {
     const chinh = /^ba/.test(m[1]);
     props.setProperty('DAT_NCC_URL', chinh ? DAT_NCC_MAIN : DAT_NCC_BETA);
@@ -2270,19 +2275,23 @@ function datNccClear_(chatId) { PropertiesService.getScriptProperties().deletePr
 function datNccAdd_(chatId, item) {
   const now = Date.now();
   let lo = datNccLoad_(chatId);
-  const moi = !lo || now - lo.t > DAT_NCC_GOM_MS;
+  const qua = lo && now - lo.t > DAT_NCC_GOM_MS;
+  // 04/11: lô chưa chọn số (chưa gửi web) không bị bỏ khi quá 2 phút — gom tiếp và hỏi lại (trước đây ảnh cũ mất im)
+  const moi = !lo || (qua && (lo.chon || !lo.items.length)) || (lo && now - lo.t > ASK_TTL_MS);
   if (moi) lo = { id: 'DN-' + now, items: [], t: now, chon: 0, phieu: '' };
   lo.t = now;
   if (!moi && lo.chon) { datNccSave_(chatId, lo); return { gui: lo }; }
-  if (lo.items.length < DAT_NCC_MAX) lo.items.push(item);
-  datNccSave_(chatId, lo);
-  if (!moi) return {};
+  if (lo.items.length >= DAT_NCC_MAX) { datNccLog_('lô ' + lo.id + ' đầy ' + DAT_NCC_MAX + ' — bỏ ' + item.loai); return { day: true }; }
+  lo.items.push(item);
+  try { datNccSave_(chatId, lo); } catch (e) { lo.items.pop(); datNccLog_('lô ' + lo.id + ' không lưu được món ' + (lo.items.length + 1) + ': ' + e.message); return { day: true }; }
+  if (!moi && !qua) return {};
   navSetAsk_(chatId, 'datncc', { id: lo.id });
-  return { hoi: true };
+  return { hoi: true, n: lo.items.length };
 }
 
-function datNccAskText_(item) {
-  return (item.loai === 'anh' ? '🖼 Nhận ảnh. Gửi thêm ảnh trong 2 phút sẽ gom chung, không hỏi lại.' : '💬 Nhận tin.') + '\n' + DAT_NCC_HOI + ' · 9 Menu';
+function datNccAskText_(item, n) {
+  return (item.loai === 'anh' ? '🖼 Nhận ảnh.' : item.loai === 'file' ? '📄 Nhận file.' : '💬 Nhận tin.') + (n > 1 ? ' Lô này có ' + n + ' món chưa gửi.' : '') +
+    ' Gửi thêm ảnh / file trong 2 phút sẽ gom chung, không hỏi lại.\n' + DAT_NCC_HOI + ' · 9 Menu';
 }
 
 /** Ảnh Chủ gửi (doPost). Khoá chỉ quanh lô; gọi web ngoài khoá để không chặn tin khác. */
@@ -2293,16 +2302,49 @@ function datNccImage_(chatId, msg) {
   lock.waitLock(30000);
   let r;
   try { r = datNccAdd_(chatId, item); } finally { lock.releaseLock(); }
-  if (r.hoi) return datNccAskText_(item);
+  if (r.day) return DAT_NCC_DAY;
+  if (r.hoi) return datNccAskText_(item, r.n);
   if (r.gui) return datNccSend_(chatId, r.gui, [item], 'them');
   return '';
+}
+
+/** Link file trong tin Zalo (khoá có chữ url, trừ photo_url). */
+function datNccFileUrl_(msg) {
+  const k = Object.keys(msg || {}).find(x => x !== 'photo_url' && /url/i.test(x) && /^https?:\/\//.test(String(msg[x] || '')));
+  return k ? String(msg[k]) : '';
+}
+
+/** File Chủ gửi (04/11: hoá đơn PDF) — gom chung lô với ảnh; web nhận mime application/pdf. */
+function datNccFile_(chatId, msg) {
+  const ten = String(msg.file_name || msg.name || msg.title || '').slice(0, 200);
+  const item = { loai: 'file', url: datNccFileUrl_(msg), msg_id: String(msg.message_id || ''), ghi_chu: ten || String(msg.caption || '').slice(0, 500), luc: datNccLuc_(msg.date) };
+  if (!item.url) return '⚠️ Không lấy được file từ Zalo — gửi lại file.';
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  let r;
+  try { r = datNccAdd_(chatId, item); } finally { lock.releaseLock(); }
+  if (r.day) return DAT_NCC_DAY;
+  if (r.hoi) return datNccAskText_(item, r.n);
+  if (r.gui) return datNccSend_(chatId, r.gui, [item], 'them');
+  return '';
+}
+
+/** Nhật ký Nhập hàng (30 dòng cuối, Script Property) — Chủ nhắn "nhap hang log" để xem. */
+function datNccLog_(t) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ds = String(props.getProperty('datncc_log') || '').split('\n').filter(Boolean);
+    ds.push(Utilities.formatDate(new Date(), TZ, 'dd/MM HH:mm:ss') + ' ' + String(t).slice(0, 200));
+    props.setProperty('datncc_log', ds.slice(-DAT_NCC_LOG_MAX).join('\n'));
+  } catch (e) { console.error(e && e.stack ? e.stack : e); }
 }
 
 /** Tin chữ Chủ chia sẻ (không phải lệnh) — chạy trong khoá của handleText_. */
 function datNccText_(chatId, text, dryRun) {
   const item = { loai: 'tin', text: String(text || '').slice(0, 1500), msg_id: String(LAST_MSG_ID || ''), luc: LAST_MSG_LUC || Date.now() };
   const r = datNccAdd_(chatId, item);
-  if (r.hoi) return datNccAskText_(item);
+  if (r.day) return DAT_NCC_DAY;
+  if (r.hoi) return datNccAskText_(item, r.n);
   if (r.gui) return dryRun ? '🧪 CHẠY THỬ — chưa gửi web' : datNccSend_(chatId, r.gui, [item], 'them');
   return '';
 }
@@ -2327,6 +2369,7 @@ function datNccMime_(bytes) {
   const u = i => ((bytes[i] || 0) + 256) % 256;
   if (u(0) === 0xFF && u(1) === 0xD8) return 'image/jpeg';
   if (u(0) === 0x89 && u(1) === 0x50 && u(2) === 0x4E && u(3) === 0x47) return 'image/png';
+  if (String.fromCharCode(u(0), u(1), u(2), u(3)) === '%PDF') return 'application/pdf';
   if (String.fromCharCode(u(0), u(1), u(2), u(3)) === 'RIFF' && String.fromCharCode(u(8), u(9), u(10), u(11)) === 'WEBP') return 'image/webp';
   return '';
 }
@@ -2343,7 +2386,7 @@ function datNccFetchImage_(url) {
   if (res.getResponseCode() !== 200) throw new Error('Zalo trả ' + res.getResponseCode());
   const b = res.getBlob(), bytes = b.getBytes();
   const mime = datNccMime_(bytes);
-  if (!mime) throw new Error('Zalo trả không phải ảnh (' + (b.getContentType() || '?') + ', ' + bytes.length + ' byte)');
+  if (!mime) throw new Error('Zalo trả không phải ảnh / PDF (' + (b.getContentType() || '?') + ', ' + bytes.length + ' byte)');
   const h = (res.getHeaders && res.getHeaders()) || {};
   const len = Number(h['Content-Length'] || h['content-length'] || 0);
   if (len && bytes.length < len) return { thieu: bytes.length + '/' + len + ' byte' };
@@ -2352,6 +2395,10 @@ function datNccFetchImage_(url) {
     let ok = false;
     for (let i = n - 2; i >= Math.max(0, n - 64); i--) if (u(i) === 0xFF && u(i + 1) === 0xD9) { ok = true; break; }
     if (!ok) return { thieu: 'JPEG thiếu đuôi FFD9, ' + n + ' byte' };
+  } else if (mime === 'application/pdf') {
+    let ok = false;
+    for (let i = n - 5; i >= Math.max(0, n - 1024); i--) if (String.fromCharCode(u(i), u(i + 1), u(i + 2), u(i + 3), u(i + 4)) === '%%EOF') { ok = true; break; }
+    if (!ok) return { thieu: 'PDF thiếu %%EOF, ' + n + ' byte' };
   } else if (mime === 'image/png') {
     if (String.fromCharCode(u(n - 8), u(n - 7), u(n - 6), u(n - 5)) !== 'IEND') return { thieu: 'PNG thiếu IEND, ' + n + ' byte' };
   } else if (u(4) + u(5) * 256 + u(6) * 65536 + u(7) * 16777216 + 8 > n) return { thieu: 'WEBP thiếu, ' + n + ' byte' };
@@ -2375,11 +2422,14 @@ function datNccSend_(chatId, lo, items, che) {
     } catch (err) { hong.push(soAnh); loi.push('ảnh ' + soAnh + ': ' + (err && err.message ? err.message : String(err))); }
   });
   if (loi.length) console.error('Nhập hàng: ' + loi.join(' | '));
+  datNccLog_('gửi ' + lo.id + ' (' + che + '): ' + items.length + ' món → ảnh ' + anh.filter(a => a.mime !== 'application/pdf').length + ', PDF ' + anh.filter(a => a.mime === 'application/pdf').length + ', tin ' + tin.length + (loi.length ? ' · lỗi ' + loi.join(' | ') : ''));
   if (!anh.length && !tin.length) return '⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi (' + loi[0] + ') — gửi lại ảnh này.\nNhắn số: 9 Menu';
+  const soLoai = pdf => anh.filter(a => (a.mime === 'application/pdf') === pdf).length;
   const phieu = lo.phieu || props.getProperty('datncc_phieu_' + chatId) || '';
   const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo: món gửi thêm có mã riêng
   const out = webForward_({ che, phieu_id: che === 'them' ? phieu : '', ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin },
     props.getProperty('DAT_NCC_URL'), props.getProperty('DAT_NCC_KEY') || '');
+  if (!out.ok) datNccLog_('web chưa nhận ' + lo.id + ': ' + (out.error || 'lỗi'));
   if (!out.ok) return '⚠️ Web chưa nhận: ' + (out.error || 'lỗi') + ' — ảnh vẫn ở chat Zalo, thử lại sau.\nNhắn số: 9 Menu';
   if (out.phieu_id) {
     lo.phieu = String(out.phieu_id);
@@ -2387,7 +2437,8 @@ function datNccSend_(chatId, lo, items, che) {
     props.setProperty('datncc_phieu_' + chatId, lo.phieu);
   }
   return '📦 ' + (out.tom_tat || ('Đã lưu phiếu Nhập hàng ' + (out.phieu_id || ''))) +
-    (hong.length ? '\n⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi — gửi lại ảnh này.' : '') +
+    '\n📎 Đã gửi ' + [soLoai(false) + ' ảnh', soLoai(true) + ' PDF', tin.length + ' tin'].filter(x => !/^0 /.test(x)).join(' · ') +
+    (hong.length ? '\n⚠️ Ảnh / file ' + hong.join(', ') + ' gửi lỗi — gửi lại.' : '') +
     (out.link ? '\n🔗 ' + out.link : '') + '\nGửi thêm ảnh trong 2 phút sẽ tự thêm vào phiếu này.\nNhắn số: 9 Menu';
 }
 

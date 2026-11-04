@@ -1446,6 +1446,8 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, phieu_id: 'DN7', tom_tat: 'Phiếu DN7 · NCC Tuấn Phong · ' + b.anh.length + ' ảnh', link: 'https://beta.x/admin/dat-ncc/DN7' }) }; }
     if (/zalo-img/.test(url)) { CUT[url] = (CUT[url] || 0) + 1; const cut = /cut2/.test(url) || (/cut1/.test(url) && CUT[url] === 1);
       return { getResponseCode: () => 200, getHeaders: () => ({}), getBlob: () => ({ getContentType: () => 'application/octet-stream', getBytes: () => (/html/.test(url) ? [60, 104, 116] : cut ? [-1, -40, 1, 2] : [-1, -40, 1, -1, -39]) }) }; }
+    if (/zalo-file/.test(url)) { const pdf = Array.from(Buffer.from('%PDF-1.7\n1 0 obj\n%%EOF\n'));
+      return { getResponseCode: () => 200, getHeaders: () => ({}), getBlob: () => ({ getContentType: () => 'application/octet-stream', getBytes: () => (/cut/.test(url) ? pdf.slice(0, 12) : pdf) }) }; }
     if (/sendMessage/.test(url)) { zalo.push(JSON.parse(opt.payload)); return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' }; }
     return f0(url, opt); };
   const img = (chat, id) => ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.image.received', message: { chat: { id: chat }, message_id: id, date: 1793593412, photo_url: 'https://zalo-img/' + id + '.jpg' } }) } });
@@ -1468,11 +1470,26 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   { delete PROPS.datncc_chu1; const w0 = web.length; img('chu1', 'html1'); const r = ctx.handleText_('1', false, 'chu1', 'Chủ');
     eq('Đặt NCC: Zalo trả trang không phải ảnh → báo rõ, không gửi web', [/không phải ảnh/.test(r), web.length - w0], [true, 0]); }
   { delete PROPS.datncc_chu1; const w0 = web.length; img('chu1', 'ok1'); img('chu1', 'cut1'); img('chu1', 'cut2'); const r = ctx.handleText_('1', false, 'chu1', 'Chủ');
-    eq('Nhập hàng: ảnh tải thiếu đuôi → tải lại 1 lần; vẫn thiếu → báo "ảnh 3 gửi lỗi", 2 ảnh vẫn gửi', [web.length - w0, web[web.length - 1].b.anh.length, /Ảnh 3 gửi lỗi — gửi lại ảnh này/.test(r), CUT['https://zalo-img/cut1.jpg'], CUT['https://zalo-img/cut2.jpg']], [1, 2, true, 2, 2]); }
-  delete PROPS.datncc_chu1; img('chu1', 'b1');
+    eq('Nhập hàng: ảnh tải thiếu đuôi → tải lại 1 lần; vẫn thiếu → báo "ảnh 3 gửi lỗi", 2 ảnh vẫn gửi', [web.length - w0, web[web.length - 1].b.anh.length, /Ảnh \/ file 3 gửi lỗi — gửi lại/.test(r), CUT['https://zalo-img/cut1.jpg'], CUT['https://zalo-img/cut2.jpg']], [1, 2, true, 2, 2]); }
+  { // 04/11: hoá đơn PDF (tin file Zalo) gom chung lô với ảnh, gửi web mime application/pdf
+    const file = (id, extra) => ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.file.received', message: Object.assign({ chat: { id: 'chu1' }, message_id: id, date: 1793593412, file_url: 'https://zalo-file/' + id + '.pdf', file_name: 'HD ' + id + '.pdf' }, extra || {}) }) } });
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; const w0 = web.length, z0 = zalo.length; file('f1'); img('chu1', 'p1'); file('fcut');
+    eq('Nhập hàng: file PDF → hỏi 1 lần, gom với ảnh', [zalo.length - z0, /Nhận file/.test(zalo[z0].text), JSON.parse(PROPS.datncc_chu1).items.map(x => x.loai).join(',')], [1, true, 'file,anh,file']);
+    const r = ctx.handleText_('1', false, 'chu1', 'Chủ'), b = web[web.length - 1].b;
+    eq('Nhập hàng: PDF gửi web mime application/pdf + tên file; PDF thiếu %%EOF báo lỗi; đếm từng loại', [web.length - w0, b.anh.map(a => a.mime).join(','), b.anh[0].ghi_chu, /Đã gửi 1 ảnh · 1 PDF/.test(r), /file 3 gửi lỗi/.test(r)],
+      [1, 'application/pdf,image/jpeg', 'HD f1.pdf', true, true]);
+    eq('Nhập hàng: nhật ký ghi sự kiện file + lần gửi', [/message\.file\.received/.test(PROPS.datncc_log), /PDF 1, tin 0 · lỗi/.test(PROPS.datncc_log)], [true, true]);
+    eq('Nhập hàng: Chủ "nhap hang log" → xem nhật ký; nhân viên không xem được', [/Nhật ký Nhập hàng/.test(ctx.handleText_('nhap hang log', false, 'chu1', 'Chủ')), /chỉ Chủ/.test(ctx.handleText_('nhap hang log', false, 'nv9', 'NV'))], [true, true]); }
+  { // 04/11: lô chưa chọn số quá 2 phút không bị bỏ — gom tiếp, hỏi lại kèm số món
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; const z0 = zalo.length; img('chu1', 'g1');
+    const lo = JSON.parse(PROPS.datncc_chu1); lo.t -= 5 * 60000; PROPS.datncc_chu1 = JSON.stringify(lo); img('chu1', 'g2');
+    eq('Nhập hàng: ảnh sau 5 phút khi chưa chọn → giữ ảnh cũ, hỏi lại "2 món chưa gửi"', [JSON.parse(PROPS.datncc_chu1).items.length, JSON.parse(PROPS.datncc_chu1).id === lo.id, zalo.length - z0, /2 món chưa gửi/.test(zalo[zalo.length - 1].text)], [2, true, 2, true]);
+    const l2 = JSON.parse(PROPS.datncc_chu1); while (l2.items.length < 20) l2.items.push({ loai: 'tin', text: 'x' }); PROPS.datncc_chu1 = JSON.stringify(l2); img('chu1', 'g3');
+    eq('Nhập hàng: lô đủ 20 → báo lô đầy, không bỏ im', [/Lô đã đầy/.test(zalo[zalo.length - 1].text), JSON.parse(PROPS.datncc_chu1).items.length], [true, 20]); }
+  delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'b1');
   eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);
   img('chu1', 'b2');
-  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 4]);
+  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 5]);
   eq('Đặt NCC: chữ lạ của nhân viên → menu như cũ', /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: nhân viên không bật được', /chỉ Chủ/.test(ctx.handleText_('dat ncc thu', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: Chủ "dat ncc tat" → tắt', [/Tắt Nhập hàng/.test(ctx.handleText_('dat ncc tat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, undefined]);
