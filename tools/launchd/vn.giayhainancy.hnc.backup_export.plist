@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- File dự phòng hằng ngày (anh Kha "làm" 04/11): web du_phong_ds → My Drive/HNC_du_phong/YYYY-MM-DD.xlsx + ảnh chứng từ mới.
+     Chỉ Mac, không Claude — khung 13–16h (luật 18), 15:00. Trực ca: hnc.backup_export. Cài: tools/launchd/install_backup_export.sh -->
+<dict>
+  <key>Label</key><string>vn.giayhainancy.hnc.backup_export</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/khan/Developer/HNC_Master/venv/bin/python</string>
+    <string>/Users/khan/Developer/HNC_Master/tools/export_backup.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/khan/Developer/HNC_Master</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/khan/Library/Logs/hnc_backup_export.log</string>
+  <key>StandardErrorPath</key><string>/Users/khan/Library/Logs/hnc_backup_export.log</string>
+  <key>EnvironmentVariables</key><dict><key>PYTHONWARNINGS</key><string>ignore</string><key>PYTHONUNBUFFERED</key><string>1</string></dict>
+</dict>
+</plist>
