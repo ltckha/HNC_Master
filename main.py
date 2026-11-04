@@ -4731,7 +4731,7 @@ def export_cash_book(loader):
     web_dau = {(x['quy_id'], x['thang']): x['du_dau'] for x in data.get('dau_ky', [])}
     da = set()
     for ho in ('15E', 'Y3C'):
-        so, ngoai, chua_tk = cash_book.so_quy(data, ban, ho, thang)
+        so, ngoai, chua_tk, chua_the = cash_book.so_quy(data, ban, ho, thang)
         for s in so:
             q = s['quy']
             if q['id'] in da:
@@ -4746,7 +4746,9 @@ def export_cash_book(loader):
             if w is not None and w != s['dau_ky']:
                 print(f"   ⚠ Số dư đầu kỳ web {w:,.0f}đ ≠ Mac {s['dau_ky']:,.0f}đ — sổ bán Sheet và web lệch tháng trước, báo Thực thi · Web.".replace(',', '.'))
         if chua_tk:
-            print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán CK / thẻ chưa vào tài khoản nào (web: chọn \"Nhận tiền bán CK / thẻ\").".replace(',', '.'))
+            print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán chuyển khoản chưa có tài khoản nhận (web: chọn \"Nhận chuyển khoản bán hàng\").".replace(',', '.'))
+        if chua_the:
+            print(f"⚠ Hộ {ho}: {chua_the:,.0f}đ tiền bán thẻ (trước ngày bật quỹ Tiền thẻ chờ về) chưa có tài khoản nhận (web: chọn \"Nhận chuyển khoản bán hàng\").".replace(',', '.'))
         if ngoai:
             print(f"ℹ️ Hộ {ho} chưa vào quỹ: " + ' · '.join(f"{k} {v:,.0f}đ".replace(',', '.') for k, v in ngoai.items() if v))
 

@@ -136,7 +136,7 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
     cho_loai = {'Thẻ': 'cho_the', 'COD': 'cho_cod'}  # 04/11 GĐ2 (web ff5d162e): Thẻ / COD → quỹ chờ về (hộ 15E) từ ngay_dau của quỹ đó
     # quỹ chờ về tìm trong mọi quỹ (web 6de3ca04): trang hộ 3C không có quỹ này nhưng vẫn phải biết Thẻ / COD đã về hộ 15E
     cho_q = lambda p, day: next((q for q in (tat_ca or qs) if q['loai'] == cho_loai.get(p) and day >= q['ngay_dau']), None)
-    by, ngoai, chua_tk = {}, {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}
+    by, ngoai, chua_tk, chua_the = {}, {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}, {'15E': 0, 'Y3C': 0}  # 04/11 (web 18ee47f9): thiếu TK tách theo vai CK / thẻ
     for (day, kho, chu, ch, pay), t in grp.items():
         if SAN.search(ch or '') or not t:
             continue
@@ -150,7 +150,7 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
             continue
         q = cho or (tm(kho_ho(kho)) if p == 'Tiền mặt' else ck(ho))
         if not q:
-            chua_tk[ho] += t
+            (chua_the if p == 'Thẻ' else chua_tk)[ho] += t
             continue
         d = by.setdefault((q['id'], day), {'quy': q['id'], 'ngay': day, 'so': 'BH', 'vao': 0, 'ra': 0, 'nhom': '',
                                            'dien': f"Tiền bán hàng ({'thẻ' if p == 'Thẻ' else 'COD'}, chờ về)" if cho else
@@ -161,14 +161,14 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
         if d['vao'] < 0:
             d = dict(d, ra=-d['vao'], vao=0, dien=d['dien'].replace('Tiền bán hàng', 'Trả tiền khách trả hàng'))
         dong.append(d)
-    return dong, ngoai, chua_tk
+    return dong, ngoai, chua_tk, chua_the
 
 
 def dong_tien(qs, ten_moi, phieu, ban, tu, den, tat_ca=None):
     """Như web dongTien: tiền bán + phiếu tay (bỏ phiếu huỷ) trong [tu, den], cắt theo ngay_dau từng quỹ, xếp ngày → BH trước → số phiếu."""
     if tu > den:
-        return [], {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}
-    dong, ngoai, chua_tk = tien_ban(qs, ban, tu, den, tat_ca)
+        return [], {'15E': {}, 'Y3C': {}}, {'15E': 0, 'Y3C': 0}, {'15E': 0, 'Y3C': 0}
+    dong, ngoai, chua_tk, chua_the = tien_ban(qs, ban, tu, den, tat_ca)
     for p in phieu:
         if p.get('huy_luc') or not (tu <= p['ngay'] <= den):
             continue
@@ -188,20 +188,20 @@ def dong_tien(qs, ten_moi, phieu, ban, tu, den, tat_ca=None):
     dau = {q['id']: q['ngay_dau'] for q in qs}
     dong = [d for d in dong if d['quy'] in dau and d['ngay'] >= dau[d['quy']]]
     dong.sort(key=lambda d: (d['ngay'], 0 if d['so'] == 'BH' else 1, d['so']))
-    return dong, ngoai, chua_tk
+    return dong, ngoai, chua_tk, chua_the
 
 
 def so_quy(data, ban, ho, thang, today=None):
-    """Sổ từng quỹ của hộ `ho` tháng `thang` (như trang web Hộ 15E / Hộ 3C) → [{quy, dau_ky, rows, ngoai, chua_tk}]."""
+    """Sổ từng quỹ của hộ `ho` tháng `thang` (như trang web Hộ 15E / Hộ 3C) → (sổ [{quy, dau_ky, rows}], ngoai, chua_tk (CK chưa có TK nhận), chua_the (thẻ trước ngày bật quỹ chờ về chưa có TK))."""
     hn = today or homnay()
     qs = [q for q in data['quy'] if not q.get('an') and (q['ho'] == ho or (q['loai'] == 'tien_mat' and kho_ho(q.get('kho')) == ho))]
     ten_moi = {q['id']: q['ten'] for q in data['quy'] if not q.get('an')}
     tu, den = f"{thang}-01", min(cuoi_thang(thang), hn)
-    dong, ngoai, chua_tk = dong_tien(qs, ten_moi, data['phieu'], ban, tu, den, data['quy'])
+    dong, ngoai, chua_tk, chua_the = dong_tien(qs, ten_moi, data['phieu'], ban, tu, den, data['quy'])
     truoc = ngay_truoc(tu)
     du_truoc = {q['id']: q['du_dau'] for q in qs}
     if qs:
-        cu, _, _ = dong_tien(qs, ten_moi, data['phieu'], ban, min(q['ngay_dau'] for q in qs), truoc, data['quy'])
+        cu, _, _, _ = dong_tien(qs, ten_moi, data['phieu'], ban, min(q['ngay_dau'] for q in qs), truoc, data['quy'])
         for d in cu:
             du_truoc[d['quy']] += d['vao'] - d['ra']
     out = []
@@ -212,7 +212,7 @@ def so_quy(data, ban, ho, thang, today=None):
             du += d['vao'] - d['ra']
             rows.append(dict(d, du=du))
         out.append({'quy': q, 'dau_ky': dau_ky, 'rows': rows})
-    return out, ngoai[ho], chua_tk[ho]
+    return out, ngoai[ho], chua_tk[ho], chua_the[ho]
 
 
 def xlsx_rows(s):
