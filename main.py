@@ -4731,7 +4731,8 @@ def export_cash_book(loader):
     web_dau = {(x['quy_id'], x['thang']): x['du_dau'] for x in data.get('dau_ky', [])}
     da = set()
     for ho in ('15E', 'Y3C'):
-        so, ngoai, chua_tk, chua_the = cash_book.so_quy(data, ban, ho, thang)
+        so, ngoai, thieu = cash_book.so_quy(data, ban, ho, thang)
+        chua_tk, chua_the, mat_khac = thieu['ck'], thieu['the'], thieu['mat']
         for s in so:
             q = s['quy']
             if q['id'] in da:
@@ -4745,6 +4746,9 @@ def export_cash_book(loader):
             w = web_dau.get((q['id'], thang))
             if w is not None and w != s['dau_ky']:
                 print(f"   ⚠ Số dư đầu kỳ web {w:,.0f}đ ≠ Mac {s['dau_ky']:,.0f}đ — sổ bán Sheet và web lệch tháng trước, báo Thực thi · Web.".replace(',', '.'))
+        if mat_khac:
+            kia = '3C' if ho == '15E' else '15E'
+            print(f"ℹ️ Hộ {ho}: {mat_khac:,.0f}đ tiền mặt hàng hộ này bán ở tiệm {kia} · đang ở két {kia} (xem Bù trừ 2 hộ trên web).".replace(',', '.'))
         if chua_tk:
             print(f"⚠ Hộ {ho}: {chua_tk:,.0f}đ tiền bán chuyển khoản chưa có tài khoản nhận (web: chọn \"Nhận chuyển khoản bán hàng\").".replace(',', '.'))
         if chua_the:

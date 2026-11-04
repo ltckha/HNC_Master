@@ -42,7 +42,7 @@ def eq(name, got, want):
 
 data = {'quy': QUY, 'phieu': PHIEU}
 ban = c.ban_rows(BAN)
-so, ngoai, chua, _ = c.so_quy(data, ban, '15E', '2026-11', today='2026-11-03')
+so, ngoai, _ = c.so_quy(data, ban, '15E', '2026-11', today='2026-11-03')
 tm = c.xlsx_rows(so[0])
 eq('tiền mặt 15E: đầu kỳ + bán + trả hàng + phiếu (bỏ huỷ, bỏ trước ngày bắt đầu)', tm, [
     c.COT,
@@ -55,11 +55,11 @@ eq('tiền mặt 15E: đầu kỳ + bán + trả hàng + phiếu (bỏ huỷ, b�
 ])
 eq('TK 15E nhận thẻ của hàng ký gửi bán ở 3C', c.xlsx_rows(so[1])[2], ['01/11/2026', None, 'Tiền bán hàng (chuyển khoản / thẻ)', None, 700000, None, 5700000])
 eq('hộ 15E: COD chưa vào quỹ', ngoai, {'COD': 300000})
-so3, _, chua3, _ = c.so_quy(data, ban, 'Y3C', '2026-11', today='2026-11-03')
+so3, _, t3 = c.so_quy(data, ban, 'Y3C', '2026-11', today='2026-11-03')
 eq('két 3C: tiền mặt bán ở 3C (cả hàng ký gửi) + nhận chuyển quỹ', [r[2:7] for r in c.xlsx_rows(so3[0])[2:]],
    [['Tiền bán hàng (tiền mặt)', None, 200000, None, 200000], ['Nhận từ Tiền mặt tiệm 15E · Thử chuyển quỹ', None, 100000, None, 300000]])
-eq('hộ Y3C: CK chưa có tài khoản nhận', chua3, 400000)
-so12, _, _, _ = c.so_quy(data, ban, '15E', '2026-12', today='2026-12-05')
+eq('hộ Y3C: CK chưa có tài khoản nhận', t3['ck'], 400000)
+so12, _, _ = c.so_quy(data, ban, '15E', '2026-12', today='2026-12-05')
 eq('tháng sau: đầu kỳ = cuối kỳ tháng trước', so12[0]['dau_ky'], 7355000)
 eq('tên file như web', c.file_name(QUY[0], '2026-11'), 'So_quy_Tiền_mặt_tiệm_15E_2026-11.xlsx')
 eq('dòng chỉ sổ thuế không vào quỹ (như web CHI_SO_THUE)', len(c.ban_rows([
@@ -77,16 +77,16 @@ BAN2 = BAN[:1] + [
     ['05/11/2026', 'B4', '300000', '1', '15E', '', '', 'COD'],   # COD → quỹ COD chờ về
     ['04/11/2026', 'B5', '200000', '1', '15E', '', '', 'COD'],   # trước ngày bật: chưa vào quỹ
 ]
-so5, ngoai5, _, _ = c.so_quy({'quy': QUY2, 'phieu': []}, c.ban_rows(BAN2), '15E', '2026-11', today='2026-11-05')
+so5, ngoai5, _ = c.so_quy({'quy': QUY2, 'phieu': []}, c.ban_rows(BAN2), '15E', '2026-11', today='2026-11-05')
 by5 = {s['quy']['id']: [r[2:5] for r in c.xlsx_rows(s)[2:]] for s in so5}
 eq('GĐ2: thẻ trước ngày bật vào TK 15E', by5[3], [['Tiền bán hàng (chuyển khoản / thẻ)', None, 500000]])
 eq('GĐ2: thẻ từ ngày bật (mọi hộ chủ hàng) vào quỹ chờ về', by5[8], [['Tiền bán hàng (thẻ, chờ về)', None, 1000000]])
 eq('GĐ2: COD từ ngày bật vào quỹ chờ về, trước đó chưa vào quỹ', (by5[9], ngoai5), ([['Tiền bán hàng (COD, chờ về)', None, 300000]], {'COD': 200000}))
 QUY3 = QUY2 + [{'id': 4, 'ho': 'Y3C', 'loai': 'ngan_hang', 'ten': 'TK 3C', 'kho': None, 'nhan_ck': 1, 'du_dau': 0, 'ngay_dau': '2026-11-01', 'an': 0}]
-so3c, _, _, _ = c.so_quy({'quy': QUY3, 'phieu': []}, c.ban_rows(BAN2), 'Y3C', '2026-11', today='2026-11-05')
+so3c, _, _ = c.so_quy({'quy': QUY3, 'phieu': []}, c.ban_rows(BAN2), 'Y3C', '2026-11', today='2026-11-05')
 eq('GĐ2 (web 6de3ca04): sổ hộ 3C không ghi thẻ từ ngày bật vào TK 3C', [r[2:5] for s in so3c for r in c.xlsx_rows(s)[2:]], [])
-_, _, ck0, the0 = c.so_quy({'quy': [q for q in QUY if q['id'] != 3], 'phieu': []}, ban, '15E', '2026-11', today='2026-11-03')
-eq('Vai TK (web 18ee47f9): 15E chưa có TK nhận CK → thẻ trước ngày bật tách riêng (200k = tiền mặt hàng 15E bán ở tiệm 3C, như web)', (ck0, the0), (200000, 700000))
-eq('Vai TK: hộ 3C chưa có TK → CK vào cảnh báo chuyển khoản', c.so_quy(data, ban, 'Y3C', '2026-11', today='2026-11-03')[2:], (400000, 0))
+_, _, t0 = c.so_quy({'quy': [q for q in QUY if q['id'] != 3], 'phieu': []}, ban, '15E', '2026-11', today='2026-11-03')
+eq('Vai TK: 15E chưa có TK nhận CK → thẻ trước ngày bật tách riêng; tiền mặt hàng 15E bán ở 3C không tính thiếu TK (web fac6e7e4)', t0, {'ck': 0, 'the': 700000, 'mat': 200000})
+eq('Vai TK: hộ 3C chưa có TK → CK vào cảnh báo chuyển khoản', c.so_quy(data, ban, 'Y3C', '2026-11', today='2026-11-03')[2], {'ck': 400000, 'the': 0, 'mat': 0})
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)
