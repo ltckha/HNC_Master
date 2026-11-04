@@ -1455,19 +1455,19 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   img('nv9', 'n1');
   eq('Đặt NCC: ảnh của nhân viên → bỏ qua như cũ', [zalo.length, web.length], [0, 0]);
   img('chu1', 'a1'); img('chu1', 'a2'); img('chu1', 'a2'); img('chu1', 'a3');
-  eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 4 Ảnh chuyển khoản NCC · 0 Bỏ/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
+  eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /Nhắn số: 1 Phiếu mới · 0 Bỏ \(gõ số phiếu khác/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
   const r1 = ctx.handleText_('1', false, 'chu1', 'Chủ');
-  eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].mime, !!web[0].sig, web[0].b.anh[0].luc], [1, 'moi', 3, 'image/jpeg', true, new Date(1793593412000).toISOString()]);
+  eq('Nhập hàng mới: chọn 1 → gửi web 3 ảnh, che lo + phieu moi, có ký', [web.length, web[0].b.che + '/' + web[0].b.phieu, web[0].b.anh.length, web[0].b.anh[0].mime, !!web[0].sig, web[0].b.anh[0].luc], [1, 'lo/moi', 3, 'image/jpeg', true, new Date(1793593412000).toISOString()]);
   eq('Đặt NCC: trả tóm tắt + link + Nhắn số', [/Phiếu DN7/.test(r1), /admin\/dat-ncc\/DN7/.test(r1), /Nhắn số: 9 Menu$/.test(r1)], [true, true, true]);
   img('chu1', 'a4');
   eq('Đặt NCC: ảnh gửi thêm có ma_lo riêng (web chống trùng theo ma_lo)', [web[1].b.ma_lo !== web[0].b.ma_lo, web[1].b.ma_lo.indexOf(web[0].b.ma_lo) === 0], [true, true]);
-  eq('Đặt NCC: ảnh tiếp trong 2 phút → tự thêm vào DN7, không hỏi lại', [web.length, web[1].b.che, web[1].b.phieu_id, /Nhắn số/.test(zalo[zalo.length - 1].text), /Nhập hàng mới/.test(zalo[zalo.length - 1].text)], [2, 'them', 'DN7', true, false]);
+  eq('Đặt NCC: ảnh tiếp trong 2 phút → tự thêm vào DN7, không hỏi lại', [web.length, web[1].b.che, web[1].b.phieu, /Nhắn số/.test(zalo[zalo.length - 1].text), /Phiếu mới/.test(zalo[zalo.length - 1].text)], [2, 'lo', 'DN7', true, false]);
   const lo = JSON.parse(PROPS.datncc_chu1); lo.t -= 3 * 60000; PROPS.datncc_chu1 = JSON.stringify(lo);
   const q = ctx.handleText_('Anh ơi mẫu này còn size 40 không, giao thứ 5 nhé', false, 'chu1', 'Chủ');
-  eq('Đặt NCC: tin chia sẻ sau 2 phút → lô mới, hỏi lại', [/Nhận tin/.test(q), /Nhập hàng mới/.test(q)], [true, true]);
+  eq('Đặt NCC: tin chia sẻ sau 2 phút → lô mới, hỏi lại (2 = phiếu đang mở DN7)', [/Nhận tin/.test(q), /1 Phiếu mới · 2 Thêm vào DN7/.test(q)], [true, true]);
   eq('Đặt NCC: tin thứ 2 khi chưa chọn → gom im', ctx.handleText_('mẫu 2 màu đen', false, 'chu1', 'Chủ'), '');
   ctx.handleText_('2', false, 'chu1', 'Chủ');
-  eq('Đặt NCC: chọn 2 → them, gợi ý phiếu DN7, 2 tin', [web[2].b.che, web[2].b.phieu_id, web[2].b.tin.length, web[2].b.anh.length], ['them', 'DN7', 2, 0]);
+  eq('Nhập hàng mới: chọn 2 → phiếu đang mở DN7, ảnh + tin 1 lô (2 tin)', [web[2].b.che, web[2].b.phieu, web[2].b.tin.length, web[2].b.anh.length], ['lo', 'DN7', 2, 0]);
   { delete PROPS.datncc_chu1; const w0 = web.length; img('chu1', 'html1'); const r = ctx.handleText_('1', false, 'chu1', 'Chủ');
     eq('Đặt NCC: Zalo trả trang không phải ảnh → báo rõ, không gửi web', [/không phải ảnh/.test(r), web.length - w0], [true, 0]); }
   { delete PROPS.datncc_chu1; const w0 = web.length; img('chu1', 'ok1'); img('chu1', 'cut1'); img('chu1', 'cut2'); const r = ctx.handleText_('1', false, 'chu1', 'Chủ');
@@ -1477,7 +1477,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
     delete PROPS.datncc_chu1; delete PROPS.ask_chu1; const w0 = web.length, z0 = zalo.length; file('f1'); img('chu1', 'p1'); file('fcut');
     eq('Nhập hàng: file PDF → hỏi 1 lần, gom với ảnh', [zalo.length - z0, /Nhận file/.test(zalo[z0].text), JSON.parse(PROPS.datncc_chu1).items.map(x => x.loai).join(',')], [1, true, 'file,anh,file']);
     const r = ctx.handleText_('1', false, 'chu1', 'Chủ'), b = web[web.length - 1].b;
-    eq('Nhập hàng: PDF gửi web mime application/pdf + tên file; PDF thiếu %%EOF báo lỗi; đếm từng loại', [web.length - w0, b.anh.map(a => a.mime).join(','), b.anh[0].ghi_chu, /Đã gửi 1 ảnh · 1 PDF/.test(r), /file 3 gửi lỗi/.test(r)],
+    eq('Nhập hàng: PDF gửi web mime application/pdf + tên file; PDF thiếu %%EOF báo lỗi; đếm từng loại', [web.length - w0, b.anh.map(a => a.mime).join(','), b.anh[0].ten, /Phiếu DN7/.test(r), /file 3 gửi lỗi/.test(r)],
       [1, 'application/pdf,image/jpeg', 'HD f1.pdf', true, true]);
     eq('Nhập hàng: nhật ký ghi sự kiện file + lần gửi', [/message\.file\.received/.test(PROPS.datncc_log), /PDF 1, tin 0 · lỗi/.test(PROPS.datncc_log)], [true, true]);
     eq('Nhập hàng: Chủ "nhap hang log" → xem nhật ký; nhân viên không xem được', [/Nhật ký Nhập hàng/.test(ctx.handleText_('nhap hang log', false, 'chu1', 'Chủ')), /chỉ Chủ/.test(ctx.handleText_('nhap hang log', false, 'nv9', 'NV'))], [true, true]); }
@@ -1492,23 +1492,20 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
     eq('Nhập hàng: ảnh sau 5 phút khi chưa chọn → giữ ảnh cũ, hỏi lại "2 món chưa gửi"', [JSON.parse(PROPS.datncc_chu1).items.length, JSON.parse(PROPS.datncc_chu1).id === lo.id, zalo.length - z0, /2 món chưa gửi/.test(zalo[zalo.length - 1].text)], [2, true, 2, true]);
     const l2 = JSON.parse(PROPS.datncc_chu1); while (l2.items.length < 20) l2.items.push({ loai: 'tin', text: 'x' }); PROPS.datncc_chu1 = JSON.stringify(l2); img('chu1', 'g3');
     eq('Nhập hàng: lô đủ 20 → báo lô đầy, không bỏ im', [/Lô đã đầy/.test(zalo[zalo.length - 1].text), JSON.parse(PROPS.datncc_chu1).items.length], [true, 20]); }
-  { // 04/11: 4 Ảnh chuyển khoản NCC → che ck + ck_phieu (phiếu đang mở gần nhất, chưa có thì gõ số phiếu)
-    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; PROPS.datncc_phieu_chu1 = 'NH-3'; const w0 = web.length;
-    img('chu1', 'k1'); img('chu1', 'k2'); const r = ctx.handleText_('4', false, 'chu1', 'Chủ'), b = web[web.length - 1].b;
-    eq('Nhập hàng: 4 → gửi 2 ảnh chuyển khoản vào phiếu đang mở NH-3', [web.length - w0, b.che, b.ck_phieu, b.anh.length, /2 ảnh chuyển khoản vào NH-3/.test(r)], [1, 'ck', 'NH-3', 2, true]);
-    img('chu1', 'k3');
-    eq('Nhập hàng: ảnh gửi thêm sau 4 → vẫn ảnh chuyển khoản NH-3', [web[web.length - 1].b.che, web[web.length - 1].b.ck_phieu], ['ck', 'NH-3']);
-    delete PROPS.datncc_chu1; delete PROPS.datncc_phieu_chu1; const w1 = web.length; img('chu1', 'k4');
-    eq('Nhập hàng: 4 khi chưa có phiếu → hỏi số phiếu, chưa gửi', [/Gõ số phiếu/.test(ctx.handleText_('4', false, 'chu1', 'Chủ')), web.length - w1], [true, 0]);
-    eq('Nhập hàng: gõ chữ lạ → hỏi lại', /Gõ số phiếu nhập/.test(ctx.handleText_('abc', false, 'chu1', 'Chủ')), true);
-    const r2 = ctx.handleText_('nh 7', false, 'chu1', 'Chủ');
-    delete PROPS.datncc_chu1; PROPS.datncc_phieu_chu1 = 'NH-3'; const w2 = web.length; for (let i = 0; i < 11; i++) img('chu1', 'm' + i);
-    eq('Nhập hàng: 4 với 11 ảnh → báo tối đa 10, không gửi', [/tối đa 10 ảnh/.test(ctx.handleText_('4', false, 'chu1', 'Chủ')), web.length - w2], [true, 0]);
-    eq('Nhập hàng: gõ "nh 7" → gửi vào NH-7', [web[web.length - 1].b.ck_phieu, /vào NH-7/.test(r2)], ['NH-7', true]); }
+  { // 04/11 Nhập hàng mới: gõ số phiếu khác khi đang hỏi lô; 2 khi chưa có phiếu mở; số lẻ 3–8 không đoán
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; delete PROPS.datncc_phieu_chu1; const w0 = web.length;
+    img('chu1', 'k1');
+    eq('Nhập hàng mới: 2 khi chưa có phiếu mở → nhắc, chưa gửi', [/Chưa có phiếu đang mở/.test(ctx.handleText_('2', false, 'chu1', 'Chủ')), web.length - w0], [true, 0]);
+    eq('Nhập hàng mới: số 5 → nhắc gõ NH-5, chưa gửi', [/gõ NH-5/.test(ctx.handleText_('5', false, 'chu1', 'Chủ')), web.length - w0], [true, 0]);
+    const r = ctx.handleText_('nh 7', false, 'chu1', 'Chủ');
+    eq('Nhập hàng mới: gõ "nh 7" → gửi lô vào NH-7', [web.length - w0, web[web.length - 1].b.phieu, /Phiếu DN7/.test(r)], [1, 'NH-7', true]);
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'k2'); ctx.handleText_('18', false, 'chu1', 'Chủ');
+    eq('Nhập hàng mới: gõ "18" → NH-18', web[web.length - 1].b.phieu, 'NH-18');
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'k3'); const w1 = web.length; ctx.handleText_('mẫu này giao thứ 5', false, 'chu1', 'Chủ');
+    eq('Nhập hàng mới: tin chữ khi đang hỏi → gom vào lô, không gửi', [web.length - w1, JSON.parse(PROPS.datncc_chu1).items.length], [0, 2]); }
   delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'b1');
-  eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);
-  img('chu1', 'b2');
-  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 8]);
+  eq('Nhập hàng mới: bỏ lựa chọn 3 (ảnh phiếu) → nhắc, giữ lô', [/gõ NH-3/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 !== undefined], [true, true]);
+  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 7]);
   eq('Đặt NCC: chữ lạ của nhân viên → menu như cũ', /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: nhân viên không bật được', /chỉ Chủ/.test(ctx.handleText_('dat ncc thu', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: Chủ "dat ncc tat" → tắt', [/Tắt Nhập hàng/.test(ctx.handleText_('dat ncc tat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, undefined]);

@@ -749,13 +749,13 @@ function navHandle_(text, chatId, dryRun) {
     const a = navGetAsk_(chatId);
     if (a && a.k === 'check') navClearAsk_(chatId); // gõ mã sau "1 Kiểm hàng" → chạy kiểm hàng như thường
     if (a && a.k === 'hdso') return navInvoiceNumber_(text, chatId, a.d, dryRun); // số hoá đơn sau menu 4 → 1
-    if (a && a.k === 'datnccck') return datNccCkPhieu_(text, chatId, a.d, dryRun); // số phiếu sau Nhập hàng → 4
+    if (a && a.k === 'datncc') { const r = datNccPickPhieu_(text, chatId, a.d, dryRun); if (r) return r; } // gõ số phiếu khác khi đang hỏi lô Nhập hàng
     return null;
   }
   const n = Number(t);
   const a = navGetAsk_(chatId);
   if (!a) return { text: navMenu_(chatId) }; // số không có câu hỏi đang mở → menu, không đoán
-  if (n === 0) { navClearAsk_(chatId); if (a.k === 'datncc' || a.k === 'datnccck') datNccClear_(chatId); return { text: '👌 Để sau. Nhắn "menu" khi cần.' }; }
+  if (n === 0) { navClearAsk_(chatId); if (a.k === 'datncc') datNccClear_(chatId); return { text: '👌 Để sau. Nhắn "menu" khi cần.' }; }
   if (n === 9 && a.k !== 'menu') return { text: navMenu_(chatId) };
   const owner = navIsOwner_(chatId);
   switch (a.k) {
@@ -763,7 +763,6 @@ function navHandle_(text, chatId, dryRun) {
     case 'report': return navReport_(n, chatId);
     case 'pn': return navReceiptStep_(n, chatId, a.d);
     case 'datncc': return { text: datNccPick_(n, chatId, a.d, dryRun) };
-    case 'datnccck': return datNccCkPhieu_(t, chatId, a.d, dryRun);
     case 'hd': return navInvoiceStep_(n, chatId, a.d, dryRun);
     case 'hdso': return { text: navMenu_(chatId) };
     case 'bs': return n === 1 ? { text: '🔗 Bổ sung trên web: ' + webOrigin_() + '/admin (Tổng quan → Mã cần bổ sung thông tin)\nNhắn số: 9 Menu' } : { text: navMenu_(chatId) };
@@ -2294,7 +2293,13 @@ const DAT_NCC_MAIN = 'https://giayhainancy.vn/api/bot/dat-ncc'; // bản chính 
 const DAT_NCC_DAY = '⚠️ Lô đã đầy (tối đa ' + DAT_NCC_MAX + ' ảnh / file / tin) — món này chưa nhận. Chọn số cho lô này trước, rồi gửi tiếp.\n' + 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 0 Bỏ · 9 Menu';
 const DAT_NCC_LOG_MAX = 30;
 const DAT_NCC_PDF = '📄 Zalo không chuyển file PDF qua bot. Hoá đơn PDF: mở giayhainancy.vn › Hàng hoá › Nhập hàng › 🧾 Thả hoá đơn, chọn file.\nNhắn số: 9 Menu';
-const DAT_NCC_HOI = 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 4 Ảnh chuyển khoản NCC · 0 Bỏ';
+// 04/11 Nhập hàng mới (anh Kha "làm"): web tự xếp ảnh / tin vào Đặt hàng / Nhận hàng / Hoá đơn / Trả tiền → bot chỉ hỏi phiếu mới hay phiếu đang mở
+function datNccHoi_(chatId) {
+  const ph = nhSo_(PropertiesService.getScriptProperties().getProperty('datncc_phieu_' + chatId) || '');
+  return 'Nhắn số: 1 Phiếu mới' + (ph ? ' · 2 Thêm vào ' + ph : '') + ' · 0 Bỏ (gõ số phiếu khác, vd NH-18)';
+}
+/** Số phiếu web → "NH-x" (web trả số hoặc "NH-x"). */
+function nhSo_(x) { x = String(x || '').trim(); return /^\d+$/.test(x) ? 'NH-' + x : x; }
 
 /** Chủ nhắn "nhap hang bat" → bật (web chính), "nhap hang thu" / "dat ncc thu" → bật (web beta), "… tat" → tắt. Không phải lệnh này → null. (Quy trình đổi tên "Nhập hàng" 02/11) */
 function datNccSwitch_(text, chatId) {
@@ -2337,9 +2342,9 @@ function datNccAdd_(chatId, item) {
   return { hoi: true, n: lo.items.length };
 }
 
-function datNccAskText_(item, n) {
+function datNccAskText_(item, n, chatId) {
   return (item.loai === 'anh' ? '🖼 Nhận ảnh.' : item.loai === 'file' ? '📄 Nhận file.' : '💬 Nhận tin.') + (n > 1 ? ' Lô này có ' + n + ' món chưa gửi.' : '') +
-    ' Gửi thêm ảnh / file trong 2 phút sẽ gom chung, không hỏi lại.\n' + DAT_NCC_HOI + ' · 9 Menu';
+    ' Gửi thêm ảnh / tin trong 2 phút sẽ gom chung, không hỏi lại.\n' + datNccHoi_(chatId) + ' · 9 Menu';
 }
 
 /** Ảnh Chủ gửi (doPost). Khoá chỉ quanh lô; gọi web ngoài khoá để không chặn tin khác. */
@@ -2351,8 +2356,8 @@ function datNccImage_(chatId, msg) {
   let r;
   try { r = datNccAdd_(chatId, item); } finally { lock.releaseLock(); }
   if (r.day) return DAT_NCC_DAY;
-  if (r.hoi) return datNccAskText_(item, r.n);
-  if (r.gui) return datNccSend_(chatId, r.gui, [item], r.gui.chon === 4 ? 'ck' : 'them');
+  if (r.hoi) return datNccAskText_(item, r.n, chatId);
+  if (r.gui) return datNccSend_(chatId, r.gui, [item]);
   return '';
 }
 
@@ -2365,15 +2370,15 @@ function datNccFileUrl_(msg) {
 /** File Chủ gửi (04/11: hoá đơn PDF) — gom chung lô với ảnh; web nhận mime application/pdf. */
 function datNccFile_(chatId, msg) {
   const ten = String(msg.file_name || msg.name || msg.title || '').slice(0, 200);
-  const item = { loai: 'file', url: datNccFileUrl_(msg), msg_id: String(msg.message_id || ''), ghi_chu: ten || String(msg.caption || '').slice(0, 500), luc: datNccLuc_(msg.date) };
+  const item = { loai: 'file', url: datNccFileUrl_(msg), msg_id: String(msg.message_id || ''), ghi_chu: String(msg.caption || '').slice(0, 500), ten, luc: datNccLuc_(msg.date) };
   if (!item.url) return '⚠️ Không lấy được file từ Zalo — gửi lại file.';
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   let r;
   try { r = datNccAdd_(chatId, item); } finally { lock.releaseLock(); }
   if (r.day) return DAT_NCC_DAY;
-  if (r.hoi) return datNccAskText_(item, r.n);
-  if (r.gui) return datNccSend_(chatId, r.gui, [item], r.gui.chon === 4 ? 'ck' : 'them');
+  if (r.hoi) return datNccAskText_(item, r.n, chatId);
+  if (r.gui) return datNccSend_(chatId, r.gui, [item]);
   return '';
 }
 
@@ -2392,50 +2397,36 @@ function datNccText_(chatId, text, dryRun) {
   const item = { loai: 'tin', text: String(text || '').slice(0, 1500), msg_id: String(LAST_MSG_ID || ''), luc: LAST_MSG_LUC || Date.now() };
   const r = datNccAdd_(chatId, item);
   if (r.day) return DAT_NCC_DAY;
-  if (r.hoi) return datNccAskText_(item, r.n);
-  if (r.gui) return dryRun ? '🧪 CHẠY THỬ — chưa gửi web' : datNccSend_(chatId, r.gui, [item], r.gui.chon === 4 ? 'ck' : 'them');
+  if (r.hoi) return datNccAskText_(item, r.n, chatId);
+  if (r.gui) return dryRun ? '🧪 CHẠY THỬ — chưa gửi web' : datNccSend_(chatId, r.gui, [item]);
   return '';
 }
 
 function datNccPick_(n, chatId, d, dryRun) {
   const lo = datNccLoad_(chatId);
   if (!lo || lo.id !== d.id || Date.now() - lo.t > ASK_TTL_MS) { navClearAsk_(chatId); return '⌛ Lô ảnh này đã quá hạn — gửi lại ảnh.\nNhắn số: 9 Menu'; }
-  if (n === 3) {
-    navClearAsk_(chatId); datNccClear_(chatId);
-    return '📄 Ảnh phiếu nhập kho vẫn tải trên app (Kho → Nhập từ phiếu): ' + appLink_('kho') + '\nNhắn số: 9 Menu';
-  }
-  if (n === 4) { // 04/11: ảnh chuyển khoản trả NCC → web gắn vào phiếu nhập (ck_phieu)
-    const ph = lo.phieu || PropertiesService.getScriptProperties().getProperty('datncc_phieu_' + chatId) || '';
-    if (!ph) { navSetAsk_(chatId, 'datnccck', { id: lo.id }); return '💳 Ảnh chuyển khoản vào phiếu nhập nào? Gõ số phiếu, vd NH-3.\nNhắn số: 0 Bỏ · 9 Menu'; }
-    return datNccCk_(chatId, lo, ph, dryRun);
-  }
-  if (n !== 1 && n !== 2) return '🤔 Chọn 1 trong các số dưới.\n' + DAT_NCC_HOI + ' · 9 Menu';
-  navClearAsk_(chatId);
-  if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' món (' + (n === 1 ? 'Nhập hàng mới' : 'thêm vào phiếu đang mở') + ')\nNhắn số: 9 Menu';
-  lo.chon = n; lo.t = Date.now();
-  datNccSave_(chatId, lo);
-  return datNccSend_(chatId, lo, lo.items, n === 1 ? 'moi' : 'them');
+  const mo = nhSo_(PropertiesService.getScriptProperties().getProperty('datncc_phieu_' + chatId) || '');
+  if (n === 2 && !mo) return '🤔 Chưa có phiếu đang mở — nhắn 1 (phiếu mới) hoặc gõ số phiếu, vd NH-18.\n' + datNccHoi_(chatId) + ' · 9 Menu';
+  if (n !== 1 && n !== 2) return '🤔 Chọn 1 trong các số dưới (phiếu khác: gõ NH-' + n + ').\n' + datNccHoi_(chatId) + ' · 9 Menu';
+  return datNccGo_(chatId, lo, n === 1 ? 'moi' : mo, dryRun);
 }
 
-/** Gửi lô làm ảnh chuyển khoản của phiếu `ph` (che 'ck', ck_phieu). */
-const DAT_NCC_CK_MAX = 10; // web nhận tối đa 10 ảnh chuyển khoản mỗi lô (c035ad65)
-function datNccCk_(chatId, lo, ph, dryRun) {
-  navClearAsk_(chatId);
-  const soAnh = lo.items.filter(x => x.loai === 'anh').length;
-  if (soAnh > DAT_NCC_CK_MAX) { datNccClear_(chatId); return '⚠️ Ảnh chuyển khoản tối đa ' + DAT_NCC_CK_MAX + ' ảnh mỗi lần, lô này có ' + soAnh + ' ảnh — gửi lại thành nhiều lần.\nNhắn số: 9 Menu'; }
-  if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' ảnh chuyển khoản vào ' + ph + '\nNhắn số: 9 Menu';
-  lo.chon = 4; lo.ck_phieu = ph; lo.t = Date.now();
-  datNccSave_(chatId, lo);
-  return datNccSend_(chatId, lo, lo.items, 'ck');
-}
-
-/** Chủ gõ số phiếu sau "4 Ảnh chuyển khoản NCC" (chưa có phiếu đang mở): "NH-3" / "3". Không giống số phiếu → hỏi lại. */
-function datNccCkPhieu_(text, chatId, d, dryRun) {
-  const m = String(text || '').trim().toUpperCase().match(/^(?:NH\s*-?\s*)?(\d{1,6})$/);
-  if (!m) return { text: '🤔 Gõ số phiếu nhập, vd NH-3.\nNhắn số: 0 Bỏ · 9 Menu' };
+/** Chủ gõ số phiếu khi đang hỏi lô Nhập hàng: "NH-18" / "nh 18" / "18". Không giống số phiếu → null (tin chữ gom vào lô như cũ). */
+function datNccPickPhieu_(text, chatId, d, dryRun) {
+  const m = String(text || '').trim().toUpperCase().match(/^(?:NH\s*-?\s*(\d{1,6})|(\d{2,6}))$/);
+  if (!m) return null;
   const lo = datNccLoad_(chatId);
   if (!lo || lo.id !== d.id || Date.now() - lo.t > ASK_TTL_MS) { navClearAsk_(chatId); return { text: '⌛ Lô ảnh này đã quá hạn — gửi lại ảnh.\nNhắn số: 9 Menu' }; }
-  return { text: datNccCk_(chatId, lo, 'NH-' + m[1], dryRun) };
+  return { text: datNccGo_(chatId, lo, 'NH-' + (m[1] || m[2]), dryRun) };
+}
+
+/** Gửi cả lô (ảnh + tin) vào phiếu `dich` ("moi" | "NH-x"); ảnh / tin gửi thêm trong 2 phút vào cùng phiếu. */
+function datNccGo_(chatId, lo, dich, dryRun) {
+  navClearAsk_(chatId);
+  if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' món (' + (dich === 'moi' ? 'phiếu mới' : 'vào ' + dich) + ')\nNhắn số: 9 Menu';
+  lo.chon = 1; lo.dich = dich; lo.t = Date.now();
+  datNccSave_(chatId, lo);
+  return datNccSend_(chatId, lo, lo.items);
 }
 
 /** Kiểu ảnh theo byte đầu file (Zalo có thể trả content-type lạ như image/jpg, octet-stream): jpeg / png / webp, khác → ''. */
@@ -2480,7 +2471,7 @@ function datNccFetchImage_(url) {
 }
 
 /** Gửi web: tải ảnh từ Zalo → base64; web trả { ok, phieu_id, tom_tat (không giá), link }. Trả câu trả lời cho Chủ. */
-function datNccSend_(chatId, lo, items, che) {
+function datNccSend_(chatId, lo, items) {
   const props = PropertiesService.getScriptProperties();
   const anh = [], tin = [], loi = [], hong = [];
   let soAnh = 0;
@@ -2492,30 +2483,28 @@ function datNccSend_(chatId, lo, items, che) {
       let a = datNccFetchImage_(it.url);
       if (a.thieu) { Utilities.sleep(1000); a = datNccFetchImage_(it.url); } // ảnh tải thiếu byte → tải lại 1 lần
       if (a.thieu) throw new Error('ảnh tải thiếu (' + a.thieu + ')');
-      anh.push({ mime: a.mime, b64: Utilities.base64Encode(a.bytes), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '', luc });
+      anh.push({ mime: a.mime, b64: Utilities.base64Encode(a.bytes), msg_id: it.msg_id, ghi_chu: it.ghi_chu || '', luc, ten: it.ten || '' });
     } catch (err) { hong.push(soAnh); loi.push('ảnh ' + soAnh + ': ' + (err && err.message ? err.message : String(err))); }
   });
   if (loi.length) console.error('Nhập hàng: ' + loi.join(' | '));
-  datNccLog_('gửi ' + lo.id + ' (' + che + '): ' + items.length + ' món → ảnh ' + anh.filter(a => a.mime !== 'application/pdf').length + ', PDF ' + anh.filter(a => a.mime === 'application/pdf').length + ', tin ' + tin.length + (loi.length ? ' · lỗi ' + loi.join(' | ') : ''));
+  datNccLog_('gửi ' + lo.id + ' (' + (lo.phieu ? nhSo_(lo.phieu) : lo.dich || 'moi') + '): ' + items.length + ' món → ảnh ' + anh.filter(a => a.mime !== 'application/pdf').length + ', PDF ' + anh.filter(a => a.mime === 'application/pdf').length + ', tin ' + tin.length + (loi.length ? ' · lỗi ' + loi.join(' | ') : ''));
   if (!anh.length && !tin.length) return '⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi (' + loi[0] + ') — gửi lại ảnh này.\nNhắn số: 9 Menu';
   const soLoai = pdf => anh.filter(a => (a.mime === 'application/pdf') === pdf).length;
-  const phieu = lo.phieu || props.getProperty('datncc_phieu_' + chatId) || '';
-  const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo: món gửi thêm có mã riêng
-  const body = { che, phieu_id: che === 'them' ? phieu : '', ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin };
-  if (che === 'ck') body.ck_phieu = lo.ck_phieu || phieu; // 04/11: ảnh chuyển khoản NCC — tên trường chờ phiên Web chốt
+  const maLo = items === lo.items ? lo.id : lo.id + '-' + (items[0].msg_id || Date.now()); // web chống trùng theo ma_lo (cùng mã → web trả y lần trước); món gửi thêm có mã riêng
+  // 04/11 Nhập hàng mới: che "lo" + phieu "moi" | "NH-x"; web tự xếp từng ảnh / PDF / tin (Đặt · Nhận · HĐ · CK · Chờ xếp) và trả tom_tat
+  const phieu = lo.phieu ? nhSo_(lo.phieu) : (lo.dich || 'moi');
+  const body = { che: 'lo', phieu, ma_lo: maLo, chat_id: String(chatId), nguoi: (CTX && CTX.seller) || '', anh, tin };
   const out = webForward_(body,
     props.getProperty('DAT_NCC_URL'), props.getProperty('DAT_NCC_KEY') || '');
   if (!out.ok) datNccLog_('web chưa nhận ' + lo.id + ': ' + (out.error || 'lỗi'));
   if (!out.ok) return '⚠️ Web chưa nhận: ' + (out.error || 'lỗi') + ' — ảnh vẫn ở chat Zalo, thử lại sau.\nNhắn số: 9 Menu';
-  if (che === 'ck') return '💳 Đã gửi ' + anh.length + ' ảnh chuyển khoản vào ' + body.ck_phieu + (out.tom_tat ? ' · ' + out.tom_tat : '') +
-    (hong.length ? '\n⚠️ Ảnh ' + hong.join(', ') + ' gửi lỗi — gửi lại.' : '') + (out.link ? '\n🔗 ' + out.link : '') + '\nGửi thêm ảnh trong 2 phút sẽ vào cùng phiếu.\nNhắn số: 9 Menu';
   if (out.phieu_id) {
     lo.phieu = String(out.phieu_id);
     datNccSave_(chatId, lo);
     props.setProperty('datncc_phieu_' + chatId, lo.phieu);
   }
-  return '📦 ' + (out.tom_tat || ('Đã lưu phiếu Nhập hàng ' + (out.phieu_id || ''))) +
-    '\n📎 Đã gửi ' + [soLoai(false) + ' ảnh', soLoai(true) + ' PDF', tin.length + ' tin'].filter(x => !/^0 /.test(x)).join(' · ') +
+  return '📦 ' + (out.tom_tat || (nhSo_(out.phieu_id || phieu) + ': đã nhận')) +
+    (out.tom_tat ? '' : '\n📎 Đã gửi ' + [soLoai(false) + ' ảnh', soLoai(true) + ' PDF', tin.length + ' tin'].filter(x => !/^0 /.test(x)).join(' · ')) +
     (hong.length ? '\n⚠️ Ảnh / file ' + hong.join(', ') + ' gửi lỗi — gửi lại.' : '') +
     (out.link ? '\n🔗 ' + out.link : '') + '\nGửi thêm ảnh trong 2 phút sẽ tự thêm vào phiếu này.\nNhắn số: 9 Menu';
 }
