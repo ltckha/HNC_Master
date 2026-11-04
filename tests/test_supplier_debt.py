@@ -31,8 +31,23 @@ PHIEU = [
 ]
 rows = s.xlsx_rows(s.cong_no(CN, PHIEU))
 want = [s.COT,
-        ['Chú Dũng', 1000000, 10 * 300000 - 300000 - 20000 + 100000, 500000, 1000000 + 2780000 - 500000],
-        ['NCC trống', 0, 0, 0, 0],
-        ['NCC chỉ có trả', 0, 0, 200000, -200000]]
-print('✅ 1/1 ca đạt' if rows == want else f'❌ công nợ\n   got:  {rows}\n   want: {want}')
-sys.exit(0 if rows == want else 1)
+        ['Chú Dũng', 1000000, 10 * 300000 - 300000 - 20000 + 100000, 500000, 1000000 + 2780000 - 500000, 2780000 - 500000, 0],
+        ['NCC trống', 0, 0, 0, 0, 0, 0],
+        ['NCC chỉ có trả', 0, 0, 200000, -200000, -200000, 0]]
+ok = rows == want
+if not ok:
+    print(f'❌ công nợ\n   got:  {rows}\n   want: {want}')
+# 04/11 (web d6181484): theo hộ — nhận theo kho, HĐ theo hộ mua, phải trả = max(hàng + thuế, tổng HĐ); trả gắn HĐ tính cho hộ của HĐ
+CN2 = {'ncc': [], 'phieu': [{'phieu': 5, 'ncc': 'Yen NCC', 'trang_thai': 'xong'}],
+       'nhan': [{'ncc': 'Yen NCC', 'phieu': 5, 'kho': 'Y3C', 'sl': 2, 'gia_nhap': 1000000, 'huy': 0}, {'ncc': 'Yen NCC', 'phieu': 5, 'kho': '15E', 'sl': 1, 'gia_nhap': 500000, 'huy': 0}],
+       'tra_ncc': [], 'hd': [{'ncc': 'Yen NCC', 'phieu': 5, 'so_hd': 'K-146', 'chiet_khau': 0, 'phi': 0, 'tien_thue': 160000, 'tong_tt': 2200000, 'ho': 'Y3C', 'bi_thay': 0}],
+       'hd_cho': [{'ncc': 'Yen NCC', 'phieu': 5, 'so_hd': 'K-9', 'ho': '15E', 'tien_thue': 40000, 'tong_tt': 540000}]}
+PQ2 = [{'loai': 'PC', 'ncc': 'Yen NCC', 'so_tien': 1000000, 'ho': '15E', 'phieu_ncc': 5, 'hd_ncc': 'K-146', 'huy_luc': None},   # 15E trả thay HĐ hộ 3C
+       {'loai': 'PC', 'ncc': 'Yen NCC', 'so_tien': 300000, 'ho': '15E', 'phieu_ncc': 5, 'hd_ncc': None, 'huy_luc': None}]
+r2 = s.xlsx_rows(s.cong_no(CN2, PQ2))[1]
+w2 = ['Yen NCC', 0, 2200000 + 540000, 1300000, 2740000 - 1300000, 540000 - 300000, 2200000 - 1000000]
+if r2 != w2:
+    ok = False
+    print(f'❌ công nợ theo hộ\n   got:  {r2}\n   want: {w2}')
+print('✅ 2/2 ca đạt' if ok else '❌')
+sys.exit(0 if ok else 1)

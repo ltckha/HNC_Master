@@ -25,7 +25,7 @@ DATA = {'tao_luc': '2026-11-04T05:52:24Z', 'tu': '2000-01-01', 'ghi_chu': 'x',
         'bu_tru': [{'thang': '2026-11', 'khoan': {'the': 700000, 'doi': 950000}, 'tong': 1650000}]}
 s = dict(b.sheets(DATA))
 eq('bù trừ: khoản trải thành cột', s['Bu_tru'], [{'thang': '2026-11', 'tong': 1650000, 'khoan_the': 700000, 'khoan_doi': 950000}])
-eq('đủ sheet', list(s), ['So_quy_quy', 'So_quy_phieu', 'So_quy_dau_ky', 'Cong_no_ncc', 'Cong_no_phieu', 'Cong_no_nhan', 'Cong_no_tra', 'Cong_no_hd', 'Cong_no_hd_cho',
+eq('đủ sheet', list(s), ['So_quy_quy', 'So_quy_phieu', 'So_quy_dau_ky', 'Cong_no_ncc', 'Cong_no_phieu', 'Cong_no_nhan', 'Cong_no_tra', 'Cong_no_hd', 'Cong_no_hd_cho', 'Cong_no_pc_hd',
                         'Nhap_hang_phieu', 'Nhap_hang_dong', 'Nhap_hang_dot', 'Nhap_hang_sua', 'Bu_tru'])
 eq('ảnh: chỉ phiếu có link, tên theo số phiếu', b.images(DATA), [('PC000008', 'https://x/a')])
 with tempfile.TemporaryDirectory() as d:
@@ -38,6 +38,6 @@ with tempfile.TemporaryDirectory() as d:
     p = b.write_xlsx(os.path.join(d, 'x.xlsx'), DATA)
     from openpyxl import load_workbook
     wb = load_workbook(p)
-    eq('xlsx: sheet Thong_tin + 14 sheet, cột theo khoá', (len(wb.sheetnames), [c.value for c in wb['Cong_no_nhan'][1]], wb['Cong_no_nhan']['B2'].value), (15, ['sl', 'gia_nhap'], 300000))
+    eq('xlsx: sheet Thong_tin + 14 sheet, cột theo khoá', (len(wb.sheetnames), [c.value for c in wb['Cong_no_nhan'][1]], wb['Cong_no_nhan']['B2'].value), (16, ['sl', 'gia_nhap'], 300000))
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)

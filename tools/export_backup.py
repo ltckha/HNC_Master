@@ -1,5 +1,5 @@
 """File dự phòng hằng ngày (anh Kha "làm" 04/11): web act du_phong_ds → 1 file .xlsx nhiều sheet ở Drive My Drive/HNC_du_phong/YYYY-MM-DD.xlsx.
-Sheet: So_quy_quy · So_quy_phieu · Cong_no_ncc · Cong_no_nhan · Cong_no_tra · Cong_no_hd · Nhap_hang_phieu · Nhap_hang_dong · Nhap_hang_dot · Nhap_hang_sua · Bu_tru.
+Sheet: So_quy_quy · So_quy_phieu · So_quy_dau_ky · Cong_no_ncc / phieu / nhan / tra / hd / hd_cho / pc_hd · Nhap_hang_phieu · Nhap_hang_dong · Nhap_hang_dot · Nhap_hang_sua · Bu_tru.
 Có giá nhập → thư mục riêng tư, không chia sẻ. Giữ 30 file gần nhất, cũ hơn chuyển vào cu/ (không xoá).
 Ảnh chứng từ (link ký hết hạn 1 giờ): tải ngay vào HNC_du_phong/anh/<số phiếu>.<đuôi>, chỉ ảnh chưa có.
 Chạy: venv/bin/python tools/export_backup.py [--beta]   (launchd vn.giayhainancy.hnc.backup_export 15:00, mã trực ca hnc.backup_export)
@@ -38,7 +38,7 @@ def sheets(data):
     bt = [dict({k: v for k, v in x.items() if k != 'khoan'}, **{f'khoan_{k}': v for k, v in (x.get('khoan') or {}).items()}) for x in data.get('bu_tru') or []]
     return [('So_quy_quy', sq.get('quy')), ('So_quy_phieu', sq.get('phieu')), ('So_quy_dau_ky', sq.get('dau_ky')),
             ('Cong_no_ncc', cn.get('ncc')), ('Cong_no_phieu', cn.get('phieu')), ('Cong_no_nhan', cn.get('nhan')), ('Cong_no_tra', cn.get('tra_ncc')),
-            ('Cong_no_hd', cn.get('hd')), ('Cong_no_hd_cho', cn.get('hd_cho')),
+            ('Cong_no_hd', cn.get('hd')), ('Cong_no_hd_cho', cn.get('hd_cho')), ('Cong_no_pc_hd', cn.get('pc_hd')),
             ('Nhap_hang_phieu', nh.get('phieu')), ('Nhap_hang_dong', nh.get('dong')), ('Nhap_hang_dot', nh.get('dot')), ('Nhap_hang_sua', nh.get('sua')),
             ('Bu_tru', bt)]
 

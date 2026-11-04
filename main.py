@@ -4870,7 +4870,7 @@ def export_supplier_debt():
             print(g)
     ds = supplier_debt.cong_no(cn, sq.get('phieu', []))
     path = os.path.join(EXPORT_DIR, f"Cong_no_NCC_{cash_book.homnay()}.xlsx")
-    cash_book.write_xlsx(path, supplier_debt.xlsx_rows(ds), widths=(36, 14, 18, 14, 14))
+    cash_book.write_xlsx(path, supplier_debt.xlsx_rows(ds), widths=(36, 14, 22, 14, 14, 16, 16))
     tong = sum(o['con'] for o in ds)
     print(f"✅ Công nợ NCC: tổng còn nợ {tong:,.0f}đ · {sum(1 for o in ds if o['con'])} nhà cung cấp còn nợ".replace(',', '.'))
     for o in ds[:10]:
