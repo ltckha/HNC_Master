@@ -120,6 +120,10 @@ function doPost(e) {
     const isImage = body.event_name === 'message.image.received' || !!msg.photo_url;
     const isFile = !isImage && (/file|document/i.test(String(body.event_name || '')) || !!datNccFileUrl_(msg)); // 04/11: hoá đơn PDF gửi dạng file
     if (!msg.text) datNccLog_(body.event_name + ' · ' + Object.keys(msg).join(',') + (datNccOn_() ? '' : ' · Nhập hàng tắt'));
+    if (!msg.text && !isImage && !isFile && /unsupported/i.test(String(body.event_name || '')) && datNccOn_() && navIsOwner_(String(msg.chat.id))) {
+      sendMessage_(String(msg.chat.id), DAT_NCC_PDF); // 04/11: Zalo Bot API không chuyển file (chỉ date, chat, message_id, from) — không đếm vào lô
+      return ok_();
+    }
     if (!msg.text && !((isImage || isFile) && datNccOn_() && navIsOwner_(String(msg.chat.id)))) {
       console.log('Zalo sự kiện chưa xử lý: ' + body.event_name + ' | khoá message: ' + Object.keys(msg).join(','));
       return ok_();
@@ -2246,6 +2250,7 @@ const DAT_NCC_BETA = 'https://beta.giayhainancy.vn/api/bot/dat-ncc';
 const DAT_NCC_MAIN = 'https://giayhainancy.vn/api/bot/dat-ncc'; // bản chính (Nhập hàng 4 bước lên web chính 02/11)
 const DAT_NCC_DAY = '⚠️ Lô đã đầy (tối đa ' + DAT_NCC_MAX + ' ảnh / file / tin) — món này chưa nhận. Chọn số cho lô này trước, rồi gửi tiếp.\n' + 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 0 Bỏ · 9 Menu';
 const DAT_NCC_LOG_MAX = 30;
+const DAT_NCC_PDF = '📄 Zalo không chuyển file PDF qua bot. Hoá đơn PDF: mở giayhainancy.vn › Hàng hoá › Nhập hàng › 🧾 Thả hoá đơn, chọn file.\nNhắn số: 9 Menu';
 const DAT_NCC_HOI = 'Nhắn số: 1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ';
 
 /** Chủ nhắn "nhap hang bat" → bật (web chính), "nhap hang thu" / "dat ncc thu" → bật (web beta), "… tat" → tắt. Không phải lệnh này → null. (Quy trình đổi tên "Nhập hàng" 02/11) */

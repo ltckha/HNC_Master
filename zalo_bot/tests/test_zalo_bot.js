@@ -1480,6 +1480,11 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
       [1, 'application/pdf,image/jpeg', 'HD f1.pdf', true, true]);
     eq('Nhập hàng: nhật ký ghi sự kiện file + lần gửi', [/message\.file\.received/.test(PROPS.datncc_log), /PDF 1, tin 0 · lỗi/.test(PROPS.datncc_log)], [true, true]);
     eq('Nhập hàng: Chủ "nhap hang log" → xem nhật ký; nhân viên không xem được', [/Nhật ký Nhập hàng/.test(ctx.handleText_('nhap hang log', false, 'chu1', 'Chủ')), /chỉ Chủ/.test(ctx.handleText_('nhap hang log', false, 'nv9', 'NV'))], [true, true]); }
+  { // 04/11: Zalo gửi file dạng message.unsupported.received (không url) → 1 dòng hướng dẫn Thả hoá đơn, không vào lô
+    const lo0 = PROPS.datncc_chu1, z0 = zalo.length;
+    ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.unsupported.received', message: { chat: { id: 'chu1' }, message_id: 'u1', date: 1793593412, from: { id: 'chu1' } } }) } });
+    ctx.doPost({ parameter: { key: PROPS.WEBHOOK_KEY }, postData: { contents: JSON.stringify({ event_name: 'message.unsupported.received', message: { chat: { id: 'nv9' }, message_id: 'u2', date: 1793593412 } }) } });
+    eq('Nhập hàng: file Zalo không chuyển → Chủ nhận 1 dòng Thả hoá đơn, lô không đổi; nhân viên không nhận', [zalo.length - z0, /Thả hoá đơn/.test(zalo[zalo.length - 1].text), /Nhắn số/.test(zalo[zalo.length - 1].text), PROPS.datncc_chu1 === lo0], [1, true, true, true]); }
   { // 04/11: lô chưa chọn số quá 2 phút không bị bỏ — gom tiếp, hỏi lại kèm số món
     delete PROPS.datncc_chu1; delete PROPS.ask_chu1; const z0 = zalo.length; img('chu1', 'g1');
     const lo = JSON.parse(PROPS.datncc_chu1); lo.t -= 5 * 60000; PROPS.datncc_chu1 = JSON.stringify(lo); img('chu1', 'g2');
