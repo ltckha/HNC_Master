@@ -4376,6 +4376,7 @@ def print_submenu_misa():
   [3] 💵 Xuất sổ quỹ theo tháng (dự phòng web Sổ quỹ: tiền mặt từng tiệm + tài khoản từng hộ)
   [4] 🧾 Xuất công nợ nhà cung cấp (dự phòng web Sổ quỹ › Công nợ NCC)
   [5] 🛒 Tải file đơn bán (dự phòng web Đơn bán MISA; bỏ dòng Không xuất MISA)
+  [6] 📒 Sổ thuế dự phòng (doanh thu từng hộ × tháng + file S1a, như web Sổ thuế)
   -----------------------------------------------------------------
   [0] ⬅️  Quay lại Menu chính
 -------------------------------------------------------------------"""
@@ -4687,9 +4688,9 @@ def handle_submenu_misa(loader):
         print_submenu_misa()
         
         if HAS_RICH:
-            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-5][/bold blue]", default="0")
+            sub_choice = Prompt.ask("[bold blue]Mời chọn tác vụ MISA [0-6][/bold blue]", default="0")
         else:
-            sub_choice = input("Mời chọn tác vụ MISA [0-5]: ").strip()
+            sub_choice = input("Mời chọn tác vụ MISA [0-6]: ").strip()
 
         if sub_choice == "0":
             break
@@ -4703,6 +4704,8 @@ def handle_submenu_misa(loader):
             export_supplier_debt()
         elif sub_choice == "5":
             export_misa_orders()
+        elif sub_choice == "6":
+            export_tax_book(loader)
         else:
             if HAS_RICH: console.print("[bold red]❌ Lựa chọn không hợp lệ![/bold red]")
 
@@ -4770,6 +4773,39 @@ def misa_labels():
     out = {ho: misa_orders.label_set(data, ho) for ho in ('15E', 'Y3C')}
     print(f"🏷️ Không xuất MISA: {len(out['15E'])} mã-size hộ 15E · {len(out['Y3C'])} hộ Y3C (bỏ khỏi file)")
     return out
+
+
+def export_tax_book(loader):
+    """[4][6] Sổ thuế dự phòng (anh Kha "làm" 04/11, luật 15): cùng số với web Sổ sách › Sổ thuế — tools/tax_book.py (BAN + BAN_DIEU_CHINH)."""
+    from tools import cash_book, tax_book
+    hn = cash_book.homnay()
+    nam = input(f"Năm (Enter = {hn[:4]}): ").strip() or hn[:4]
+    thang = input(f"Tháng xuất file S1a (yyyy-mm, Enter = {hn[:7]}): ").strip() or hn[:7]
+    if not re.match(r'^\d{4}$', nam) or not tax_book.valid_month(thang):
+        print("⛔ Năm dạng yyyy, tháng dạng yyyy-mm.")
+        return
+    if loader.is_google_api and loader.cho_chep() > 0:
+        print(f"⚠️ Web còn {loader.cho_chep()} dòng đang chép sang Sheet — số có thể thiếu, chờ vài phút rồi chạy lại nếu cần.")
+    try:
+        ss = loader.spreadsheet
+        try:
+            dc = ss.worksheet('BAN_DIEU_CHINH').get_all_values()
+        except Exception:  # noqa: BLE001
+            dc = None
+            print("⚠️ Sheet chưa có tab BAN_DIEU_CHINH — chưa cộng dòng bổ sung / điều chỉnh MISA, số sẽ lệch web.")
+        ds = tax_book.lines(ss.worksheet('BAN').get_all_values(), dc)
+    except Exception as e:  # noqa: BLE001
+        print(f"⛔ {e}")
+        return
+    t = tax_book.by_month(ds, hn)
+    for ho in ('15E', 'Y3C'):
+        ms = {m: v for m, v in sorted(t[ho].items()) if m.startswith(nam)}
+        print(f"\n📒 Hộ {'3C' if ho == 'Y3C' else '15E'} năm {nam}: {sum(ms.values()):,.0f}đ".replace(',', '.'))
+        for m, v in ms.items():
+            print(f"   {m[5:]}/{m[:4]}: {v:,.0f}đ".replace(',', '.'))
+        path = os.path.join(EXPORT_DIR, tax_book.file_name(ho, thang))
+        tax_book.write_xlsx(path, tax_book.s1a_rows(ds, ho, thang))
+        print(f"   ✅ {path}")
 
 
 def export_misa_orders(url=None):
