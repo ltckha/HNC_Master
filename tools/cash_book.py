@@ -137,12 +137,21 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
     # quỹ chờ về tìm trong mọi quỹ (web 6de3ca04): trang hộ 3C không có quỹ này nhưng vẫn phải biết Thẻ / COD đã về hộ 15E
     cho_q = lambda p, day: next((q for q in (tat_ca or qs) if q['loai'] == cho_loai.get(p) and day >= q['ngay_dau']), None)
     # thiếu: ck / the = chưa có TK nhận theo vai (web 18ee47f9); mat = tiền mặt hàng hộ này bán ở tiệm kia, đang ở két tiệm kia (Bù trừ 2 hộ, web fac6e7e4)
-    by, ngoai, thieu = {}, {'15E': {}, 'Y3C': {}}, {h: {'ck': 0, 'the': 0, 'mat': 0} for h in ('15E', 'Y3C')}
+    # ngày bắt đầu sổ quỹ của hộ = ngay_dau sớm nhất (két tiệm của hộ + TK không ẩn của hộ) (web 2a7b1795, anh Kha: sáng 05/11);
+    # truoc = tháng có ngày trước ngày bắt đầu → dòng "Trước ngày bắt đầu sổ quỹ — chưa tính"
+    tc = tat_ca or qs
+    bat_dau = lambda h: min([q['ngay_dau'] for q in tc if (q['loai'] == 'tien_mat' and kho_ho(q.get('kho')) == h) or
+                             (q['loai'] == 'ngan_hang' and q['ho'] == h and not q.get('an'))] or ['0000'])
+    bd = {h: bat_dau(h) for h in ('15E', 'Y3C')}
+    by, ngoai = {}, {'15E': {}, 'Y3C': {}}
+    thieu = {h: {'ck': 0, 'the': 0, 'mat': 0, 'truoc': bd[h] if tu < bd[h] else None} for h in ('15E', 'Y3C')}
     for (day, kho, chu, ch, pay), t in grp.items():
         if SAN.search(ch or '') or not t:
             continue
         p = payment_method(pay) or 'Tiền mặt'
         ho = ho_of(chu, kho)
+        if day < bd[ho] and not (p == 'Tiền mặt' and day >= bd[kho_ho(kho)]):
+            continue  # trước ngày bắt đầu sổ quỹ của hộ chủ hàng (tiền mặt: còn tính cho két tiệm bán nếu két đó đã bắt đầu)
         cho = cho_q(p, day)
         if cho and not any(q['id'] == cho['id'] for q in qs):
             continue  # sổ hộ 3C: tiền này nằm ở quỹ chờ về hộ 15E (khoản bù trừ), không vào quỹ nào của hộ này
@@ -168,7 +177,7 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
 def dong_tien(qs, ten_moi, phieu, ban, tu, den, tat_ca=None):
     """Như web dongTien: tiền bán + phiếu tay (bỏ phiếu huỷ) trong [tu, den], cắt theo ngay_dau từng quỹ, xếp ngày → BH trước → số phiếu."""
     if tu > den:
-        return [], {'15E': {}, 'Y3C': {}}, {h: {'ck': 0, 'the': 0, 'mat': 0} for h in ('15E', 'Y3C')}
+        return [], {'15E': {}, 'Y3C': {}}, {h: {'ck': 0, 'the': 0, 'mat': 0, 'truoc': None} for h in ('15E', 'Y3C')}
     dong, ngoai, thieu = tien_ban(qs, ban, tu, den, tat_ca)
     for p in phieu:
         if p.get('huy_luc') or not (tu <= p['ngay'] <= den):

@@ -4749,6 +4749,8 @@ def export_cash_book(loader):
             w = web_dau.get((q['id'], thang))
             if w is not None and w != s['dau_ky']:
                 print(f"   ⚠ Số dư đầu kỳ web {w:,.0f}đ ≠ Mac {s['dau_ky']:,.0f}đ — sổ bán Sheet và web lệch tháng trước, báo Thực thi · Web.".replace(',', '.'))
+        if thieu.get('truoc'):
+            print(f"ℹ️ Hộ {ho}: trước ngày bắt đầu sổ quỹ ({thieu['truoc'][8:10]}/{thieu['truoc'][5:7]}) — chưa tính.")
         if mat_khac:
             kia = '3C' if ho == '15E' else '15E'
             print(f"ℹ️ Hộ {ho}: {mat_khac:,.0f}đ tiền mặt hàng hộ này bán ở tiệm {kia} · đang ở két {kia} (xem Bù trừ 2 hộ trên web).".replace(',', '.'))
