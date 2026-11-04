@@ -1454,7 +1454,7 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   img('nv9', 'n1');
   eq('Đặt NCC: ảnh của nhân viên → bỏ qua như cũ', [zalo.length, web.length], [0, 0]);
   img('chu1', 'a1'); img('chu1', 'a2'); img('chu1', 'a2'); img('chu1', 'a3');
-  eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 0 Bỏ/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
+  eq('Đặt NCC: 3 ảnh liền (1 trùng) → hỏi 1 lần, gom 3', [zalo.length, /1 Nhập hàng mới · 2 Thêm vào phiếu đang mở · 3 Ảnh phiếu nhập kho · 4 Ảnh chuyển khoản NCC · 0 Bỏ/.test(zalo[0].text), JSON.parse(PROPS.datncc_chu1).items.length], [1, true, 3]);
   const r1 = ctx.handleText_('1', false, 'chu1', 'Chủ');
   eq('Đặt NCC: chọn 1 → gửi web 3 ảnh, che moi, có ký', [web.length, web[0].b.che, web[0].b.anh.length, web[0].b.anh[0].mime, !!web[0].sig, web[0].b.anh[0].luc], [1, 'moi', 3, 'image/jpeg', true, new Date(1793593412000).toISOString()]);
   eq('Đặt NCC: trả tóm tắt + link + Nhắn số', [/Phiếu DN7/.test(r1), /admin\/dat-ncc\/DN7/.test(r1), /Nhắn số: 9 Menu$/.test(r1)], [true, true, true]);
@@ -1491,10 +1491,21 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
     eq('Nhập hàng: ảnh sau 5 phút khi chưa chọn → giữ ảnh cũ, hỏi lại "2 món chưa gửi"', [JSON.parse(PROPS.datncc_chu1).items.length, JSON.parse(PROPS.datncc_chu1).id === lo.id, zalo.length - z0, /2 món chưa gửi/.test(zalo[zalo.length - 1].text)], [2, true, 2, true]);
     const l2 = JSON.parse(PROPS.datncc_chu1); while (l2.items.length < 20) l2.items.push({ loai: 'tin', text: 'x' }); PROPS.datncc_chu1 = JSON.stringify(l2); img('chu1', 'g3');
     eq('Nhập hàng: lô đủ 20 → báo lô đầy, không bỏ im', [/Lô đã đầy/.test(zalo[zalo.length - 1].text), JSON.parse(PROPS.datncc_chu1).items.length], [true, 20]); }
+  { // 04/11: 4 Ảnh chuyển khoản NCC → che ck + ck_phieu (phiếu đang mở gần nhất, chưa có thì gõ số phiếu)
+    delete PROPS.datncc_chu1; delete PROPS.ask_chu1; PROPS.datncc_phieu_chu1 = 'NH-3'; const w0 = web.length;
+    img('chu1', 'k1'); img('chu1', 'k2'); const r = ctx.handleText_('4', false, 'chu1', 'Chủ'), b = web[web.length - 1].b;
+    eq('Nhập hàng: 4 → gửi 2 ảnh chuyển khoản vào phiếu đang mở NH-3', [web.length - w0, b.che, b.ck_phieu, b.anh.length, /2 ảnh chuyển khoản vào NH-3/.test(r)], [1, 'ck', 'NH-3', 2, true]);
+    img('chu1', 'k3');
+    eq('Nhập hàng: ảnh gửi thêm sau 4 → vẫn ảnh chuyển khoản NH-3', [web[web.length - 1].b.che, web[web.length - 1].b.ck_phieu], ['ck', 'NH-3']);
+    delete PROPS.datncc_chu1; delete PROPS.datncc_phieu_chu1; const w1 = web.length; img('chu1', 'k4');
+    eq('Nhập hàng: 4 khi chưa có phiếu → hỏi số phiếu, chưa gửi', [/Gõ số phiếu/.test(ctx.handleText_('4', false, 'chu1', 'Chủ')), web.length - w1], [true, 0]);
+    eq('Nhập hàng: gõ chữ lạ → hỏi lại', /Gõ số phiếu nhập/.test(ctx.handleText_('abc', false, 'chu1', 'Chủ')), true);
+    const r2 = ctx.handleText_('nh 7', false, 'chu1', 'Chủ');
+    eq('Nhập hàng: gõ "nh 7" → gửi vào NH-7', [web[web.length - 1].b.ck_phieu, /vào NH-7/.test(r2)], ['NH-7', true]); }
   delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'b1');
   eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);
   img('chu1', 'b2');
-  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 5]);
+  eq('Đặt NCC: 0 → bỏ lô, không gửi web', [/Để sau/.test(ctx.handleText_('0', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined, web.length], [true, true, 8]);
   eq('Đặt NCC: chữ lạ của nhân viên → menu như cũ', /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: nhân viên không bật được', /chỉ Chủ/.test(ctx.handleText_('dat ncc thu', false, 'nv9', 'NV')), true);
   eq('Đặt NCC: Chủ "dat ncc tat" → tắt', [/Tắt Nhập hàng/.test(ctx.handleText_('dat ncc tat', false, 'chu1', 'Chủ')), PROPS.DAT_NCC_URL], [true, undefined]);
