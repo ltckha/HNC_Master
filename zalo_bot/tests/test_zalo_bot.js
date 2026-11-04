@@ -58,6 +58,7 @@ function mockSheet(n) {
     getDataRange: () => ({ getValues: () => d }),
     getLastColumn: () => Math.max.apply(null, d.map(r => r.length)),
     getMaxRows: () => d.length + 50,
+    getLastRow: () => d.length,
     insertRowsAfter: () => {},
     getRange: (r, c, nr, nc) => {
       const put = v => { while (d.length < r) d.push([]); while (d[r - 1].length < c) d[r - 1].push(''); d[r - 1][c - 1] = v; };
@@ -1516,6 +1517,25 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   delete PROPS.DAT_NCC_URL; const zn = zalo.length; img('chu1', 'c1');
   eq('Đặt NCC: tắt cờ → ảnh Chủ bỏ qua, chữ lạ → menu', [zalo.length - zn, /chưa hiểu/.test(ctx.handleText_('abc xyz', false, 'chu1', 'Chủ'))], [0, true]);
   ctx.UrlFetchApp.fetch = f0; PROPS.OWNER_CHAT_ID = o; delete PROPS.DAT_NCC_KEY; delete PROPS.datncc_phieu_chu1; delete PROPS.ask_chu1; delete PROPS.ask_nv9; }
+{ // 04/11: web sắp BAN theo ngày → dòng bot ghi đổi chỗ: tìm lại theo ma_dong, lệch thì không ghi
+  vm.runInContext('this.navSetPayment_=navSetPayment_;this.saleLineCancelPick_=saleLineCancelPick_;this.rowLocate_=rowLocate_;', ctx);
+  const b0 = DATA.BAN, cd0 = PROPS.che_do;
+  const H = ['Ngày', 'product_code', 'product_color', 'Giá', 'item_size', 'item_quantity', 'KHO', 'channel', 'seller', 'chu_hang', 'payment_method', 'ma_dong'];
+  DATA.BAN = [H, ['04/11/2026', 'ZZ1', '', 500000, 40, 1, '15E', '', '', '', '', 'Z-9#1'], ['03/11/2026', 'ZZ2', '', 400000, 41, 1, '15E', '', '', '', '', 'S:2']];
+  const chk = { product_code: 'ZZ1', item_size: '40', item_quantity: 1, KHO: '15E' };
+  ctx.navSetPayment_(2, 'p1', [{ r: 3, md: 'Z-9#1', chk }], false);
+  eq('Đổi chỗ: cách thu ghi đúng dòng theo ma_dong (hàng 2), không ghi nhầm hàng 3', [DATA.BAN[1][10], DATA.BAN[2][10]], ['Chuyển khoản', '']);
+  const r = ctx.navSetPayment_(1, 'p1', [{ r: 2, md: 'Z-9#7', chk }], false);
+  eq('Đổi chỗ: không thấy ma_dong / lệch → không ghi, báo', [/đã đổi, chưa ghi cách thu/.test(r.text), DATA.BAN[1][10]], [true, 'Chuyển khoản']);
+  ctx.navSetPayment_(3, 'p1', [{ r: 2, md: 'Z-9#1', chk: Object.assign({}, chk, { item_quantity: 2 }) }], false);
+  eq('Đổi chỗ: đúng ma_dong nhưng SL khác → không ghi', DATA.BAN[1][10], 'Chuyển khoản');
+  ctx.navSetPayment_(4, 'p1', [2], false);
+  eq('Câu hỏi cũ (chỉ số hàng) vẫn ghi như trước', DATA.BAN[1][10], 'Ví');
+  const t = ctx.saleLineCancelPick_(1, 'p1', { rows: [{ r: 3, md: 'Z-9#1', code: 'ZZ1', size: '40', qty: 1, kho: '15E', dk: '2026-11-04' }] }, true);
+  eq('Đổi chỗ: huỷ dòng bán tìm lại theo ma_dong', /Đã huỷ đơn hàng ZZ1/.test(t.text), true);
+  const t2 = ctx.saleLineCancelPick_(1, 'p1', { rows: [{ r: 2, md: 'X#1', code: 'ZZ1', size: '40', qty: 1, kho: '15E', dk: '2026-11-04' }] }, true);
+  eq('Đổi chỗ: ma_dong không có → không huỷ', /đã đổi, không huỷ/.test(t2.text), true);
+  DATA.BAN = b0; if (cd0 === undefined) delete PROPS.che_do; else PROPS.che_do = cd0; vm.runInContext('MEMO={};', ctx); }
 eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 15)', JSON.stringify(vm.runInContext('RECEIPT_MODELS', ctx)), JSON.stringify(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'gemini_models.json'), 'utf8')).models));
 { const py = fs.readFileSync(path.join(__dirname, '..', '..', 'tools', 'returns_exchanges.py'), 'utf8').match(/^PAY_SO = (\{.*\})$/m);
   eq('Cách thu: bot PAY_SO khớp Mac tools/returns_exchanges.py (luật 15)', JSON.stringify(vm.runInContext('PAY_SO', ctx)), JSON.stringify(JSON.parse(py[1].replace(/'/g, '"')))); }

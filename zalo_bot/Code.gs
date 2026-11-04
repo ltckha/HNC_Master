@@ -80,6 +80,28 @@ function rowSrcStart_(nguon, goc) {
   goc = String(goc || '').trim();
   ROW_SRC = { nguon, goc: /^TAY-/i.test(goc) ? '' : goc, n: 0 }; // gốc TAY- dành cho web cấp dòng gõ tay → bot không cấp
 }
+/** 04/11: dòng bot ghi có thể đã đổi chỗ (web sắp BAN / XUAT theo ngày) → hàng r đúng (ma_dong khớp nếu có, ok(vals) đạt) thì giữ,
+ *  không thì dò lại cột ma_dong. Trả số hàng đúng, 0 = không thấy / lệch (không ghi). */
+function rowLocate_(sheet, col, width, r, md, ok) {
+  md = String(md || '').trim();
+  const has = md && col.ma_dong !== undefined;
+  if (Number(r) >= 2) {
+    const v = sheet.getRange(r, 1, 1, width).getValues()[0];
+    if ((!has || String(v[col.ma_dong] || '').trim() === md) && ok(v)) return Number(r);
+  }
+  if (!has) return 0;
+  const ms = sheet.getRange(1, col.ma_dong + 1, sheet.getLastRow(), 1).getValues();
+  for (let i = 1; i < ms.length; i++) {
+    if (String(ms[i][0] || '').trim() !== md) continue;
+    return ok(sheet.getRange(i + 1, 1, 1, width).getValues()[0]) ? i + 1 : 0;
+  }
+  return 0;
+}
+/** Kiểm dòng theo check {cột: giá trị} như undo (normSize_). */
+function rowCheckOk_(col, check) {
+  return v => Object.keys(check || {}).every(n => col[n] !== undefined && normSize_(v[col[n]]) === normSize_(check[n]));
+}
+
 function rowSrcFields_(sheetName) {
   if (!ROW_SRC || ['BAN', 'NHAP', 'XUAT'].indexOf(sheetName) === -1) return {};
   if (!ROW_SRC.goc) return { nguon: ROW_SRC.nguon };
@@ -226,7 +248,7 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
         JSON.stringify({ label: res.label || '', ops: res.ops }), UNDO_SECONDS);
       // Sau lệnh ghi: chọn bằng số (anh Kha 17/10) — bán thì chọn / đổi cách trả (PAY_HOI); 6 huỷ lệnh vừa rồi
       // Lô nhiều dòng: chỉ hỏi 1 lần cách thu cho các dòng bán chưa ghi cách trả (03/11, như web)
-      const banRows = res.batch ? (res.banChuaThu || []) : res.ops.filter(o => o.sheet === 'BAN').map(o => o.row);
+      const banRows = res.batch ? (res.banChuaThu || []) : res.ops.filter(o => o.sheet === 'BAN').map(banRef_);
       navSetAsk_(chatId, 'after', { ban: banRows });
       res.text += '\nNhắn số: ' + (banRows.length ? PAY_HOI + (res.batch ? ' (cách thu cả lượt) · ' : ' (cách thu) · ') : '') +
         '6 Huỷ lệnh này' + (res.batch ? ' (cả lô)' : '') + ' · 9 Menu';
@@ -272,7 +294,7 @@ function runBatch_(lines, dryRun) {
     try {
       const p = parseMessage_(line, known);
       r = doMovement_(p, p.action, p.kho, dryRun);
-      if (p.action === ACTIONS.SELL && !p.payment && r.ops) r.ops.forEach(o => { if (o.sheet === 'BAN') banChuaThu.push(o.row); });
+      if (p.action === ACTIONS.SELL && !p.payment && r.ops) r.ops.forEach(o => { if (o.sheet === 'BAN') banChuaThu.push(banRef_(o)); });
     } catch (err) {
       r = { text: '⚠️ Lỗi: ' + (err && err.message ? err.message : err) };
     }
@@ -841,7 +863,7 @@ function saleLineCancelAsk_(text, chatId) {
     if (sizes.length && sizes.indexOf(size) === -1) continue;
     const kho = String(ban[r][c.KHO] || '').trim();
     if (p.kho && KHO_ALIASES[kho.toUpperCase()] !== p.kho) continue;
-    rows.push({ r: r + 1, code: p.code, size, qty: Number(ban[r][c.item_quantity]) || 0, kho, dk,
+    rows.push({ r: r + 1, md: c.ma_dong !== undefined ? String(ban[r][c.ma_dong] || '').trim() : '', code: p.code, size, qty: Number(ban[r][c.item_quantity]) || 0, kho, dk,
       chu: c.chu_hang !== undefined ? String(ban[r][c.chu_hang] || '').trim() : '', price: moneyValue_(ban[r][c['Giá']]),
       seller: c.seller !== undefined ? String(ban[r][c.seller] || '').trim() : '' });
   }
@@ -854,16 +876,17 @@ function saleLineCancelAsk_(text, chatId) {
 
 function saleLineCancelPick_(n, chatId, d, dryRun) {
   if (cheDo_() === 'web') { navClearAsk_(chatId); return { text: '🌐 ' + WEB_MODE_SALE_TEXT + '\nNhắn số: 9 Menu' }; }
-  const x = (d.rows || [])[n - 1];
+  let x = (d.rows || [])[n - 1];
   if (!x) return { text: navMenu_(chatId) };
   navClearAsk_(chatId);
   const ban = getSheet_('BAN');
   const bh = ban.getRange(1, 1, 1, ban.getLastColumn()).getValues()[0];
   const c = headerMap_(bh);
-  const v = ban.getRange(x.r, 1, 1, bh.length).getValues()[0];
-  const same = String(v[c.product_code] || '').trim().toUpperCase() === x.code && normSize_(v[c.item_size]) === x.size &&
+  const same = v => String(v[c.product_code] || '').trim().toUpperCase() === x.code && normSize_(v[c.item_size]) === x.size &&
     (Number(v[c.item_quantity]) || 0) === x.qty && String(v[c.KHO] || '').trim() === x.kho;
-  if (!same) return { text: '⛔ Dòng BAN ' + x.r + ' đã đổi, không huỷ. Kiểm lại Sheet.\nNhắn số: 9 Menu' };
+  const r = rowLocate_(ban, c, bh.length, x.r, x.md, same); // 04/11: dòng đổi chỗ → tìm lại theo ma_dong
+  if (!r) return { text: '⛔ Dòng BAN ' + x.r + ' đã đổi, không huỷ. Kiểm lại Sheet.\nNhắn số: 9 Menu' };
+  x = Object.assign({}, x, { r });
   const touched = ['BAN'];
   const kho = KHO_ALIASES[x.kho.toUpperCase()];
   const chu = KHO_ALIASES[String(x.chu || '').toUpperCase()];
@@ -886,7 +909,7 @@ function recentSaleLines_(max) {
     const code = String(ban[r][c.product_code] || '').trim().toUpperCase();
     const dk = dateKey_(ban[r][c['Ngày']]);
     if (!code || !dk || dk < minKey) continue;
-    out.push({ r: r + 1, code, size: normSize_(ban[r][c.item_size]), qty: Number(ban[r][c.item_quantity]) || 0, kho: String(ban[r][c.KHO] || '').trim(), dk,
+    out.push({ r: r + 1, md: c.ma_dong !== undefined ? String(ban[r][c.ma_dong] || '').trim() : '', code, size: normSize_(ban[r][c.item_size]), qty: Number(ban[r][c.item_quantity]) || 0, kho: String(ban[r][c.KHO] || '').trim(), dk,
       chu: c.chu_hang !== undefined ? String(ban[r][c.chu_hang] || '').trim() : '', price: moneyValue_(ban[r][c['Giá']]),
       seller: c.seller !== undefined ? String(ban[r][c.seller] || '').trim() : '' });
   }
@@ -904,14 +927,26 @@ function navCancelPick_(n, chatId, d, dryRun) {
   return { text: navMenu_(chatId) };
 }
 
+/** Dòng BAN bot vừa ghi → {r, md, chk} để ghi cách thu / huỷ sau (dòng có thể đổi chỗ). */
+function banRef_(o) { return { r: o.row, md: o.md || '', chk: o.check || {} }; }
+
 /** Chọn / đổi cách thu của dòng bán vừa ghi (PAY_SO). */
 function navSetPayment_(n, chatId, rows, dryRun) {
   const pay = PAY_SO[n];
   const ban = getSheet_('BAN');
   const c = headerMap_(ban.getRange(1, 1, 1, ban.getLastColumn()).getValues()[0]);
   if (c.payment_method === undefined) return { text: '⚠️ Tab BAN chưa có cột payment_method.\nNhắn số: 9 Menu' };
-  if (!dryRun) rows.forEach(r => ban.getRange(r, c.payment_method + 1).setValue(pay));
-  navSetAsk_(chatId, 'after', { ban: rows });
+  // 04/11: tìm lại dòng theo ma_dong + kiểm mã / size / SL / kho; lệch thì không ghi (trước đây ghi thẳng số hàng)
+  const w = ban.getLastColumn(), lech = [], moi = [];
+  rows.forEach(x => {
+    const ref = typeof x === 'object' ? x : { r: x, md: '', chk: null };
+    const r = ref.chk ? rowLocate_(ban, c, w, ref.r, ref.md, rowCheckOk_(c, ref.chk)) : Number(ref.r);
+    if (!r) { lech.push(ref.r); return; }
+    if (!dryRun) ban.getRange(r, c.payment_method + 1).setValue(pay);
+    moi.push(Object.assign({}, ref, { r }));
+  });
+  navSetAsk_(chatId, 'after', { ban: moi });
+  if (lech.length) return { text: '⛔ Dòng BAN ' + lech.join(', ') + ' đã đổi, chưa ghi cách thu' + (moi.length ? ' (đã ghi ' + moi.length + ' dòng khác)' : '') + '. Kiểm lại Sheet.\nNhắn số: 9 Menu', touched: moi.length ? ['BAN'] : [] };
   return { text: '💳 Đã ghi cách thu: ' + pay + '\nNhắn số: ' + PAY_HOI + ' · 6 Huỷ lệnh này · 9 Menu', touched: ['BAN'] };
 }
 
@@ -1294,6 +1329,12 @@ function undoRecord_(last, dryRun) {
   const problems = [];
   const ownRows = {};
   const tabCache = {};
+  last.ops.forEach(op => { // 04/11: dòng bot ghi đổi chỗ (web sắp theo ngày) → tìm lại theo ma_dong
+    if (!op.md || op.type !== 'row' || !op.check || ['BAN', 'NHAP', 'XUAT'].indexOf(op.sheet) === -1) return;
+    const sh = getSheet_(op.sheet), hd = sh.getRange(op.hr || 1, 1, 1, sh.getLastColumn()).getValues()[0], cc = headerMap_(hd);
+    const r = rowLocate_(sh, cc, hd.length, op.row, op.md, rowCheckOk_(cc, op.check));
+    if (r) op.row = r;
+  });
   last.ops.forEach(op => { (ownRows[op.sheet] = ownRows[op.sheet] || {})[op.row] = true; });
   last.ops.forEach(op => {
     const sheet = getSheet_(op.sheet);
@@ -1900,7 +1941,7 @@ const BAN_WRITE_COLS = ['Ngày', 'product_code', 'product_color', 'Giá', 'item_
 /** Lưu gọn thao tác của 1 phiếu bán để huỷ được: BAN [hàng, mã, size, sl, kho, chủ] · KYGUI [hàng, trước, sau]. */
 function saleRecordOps_(props, ticket, seller, ops, hd) {
   const rec = { t: Date.now(), s: String(seller || '').toLowerCase(), hd: hd ? 1 : 0,
-    b: ops.filter(o => o.sheet === 'BAN').map(o => [o.row, o.check.product_code, normSize_(o.check.item_size), o.check.item_quantity, o.check.KHO]),
+    b: ops.filter(o => o.sheet === 'BAN').map(o => [o.row, o.check.product_code, normSize_(o.check.item_size), o.check.item_quantity, o.check.KHO, o.md || '']),
     k: ops.filter(o => o.type === 'kygui').map(o => [o.row, o.before, o.after, 0, o.sheet, o.col]) };
   try { props.setProperty('saleops_' + ticket, JSON.stringify(rec)); } catch (err) { console.error('Không lưu được thao tác phiếu ' + ticket + ': ' + err); }
   const cutoff = Date.now() - SALE_UNDO_KEEP_MS;
@@ -1939,10 +1980,10 @@ function saleUndo_(body, dryRun) {
     const bc = headerMap_(bh);
     const problems = [];
     rec.b.forEach(x => {
-      const vals = ban.getRange(x[0], 1, 1, bh.length).getValues()[0];
-      const same = String(vals[bc.product_code] || '').trim().toUpperCase() === x[1] && normSize_(vals[bc.item_size]) === x[2] &&
+      const same = vals => String(vals[bc.product_code] || '').trim().toUpperCase() === x[1] && normSize_(vals[bc.item_size]) === x[2] &&
         Number(vals[bc.item_quantity]) === Number(x[3]) && String(vals[bc.KHO] || '').trim() === x[4];
-      if (!same) problems.push('BAN dòng ' + x[0] + ' đã đổi');
+      const r = rowLocate_(ban, bc, bh.length, x[0], x[5], same); // 04/11: dòng đổi chỗ → tìm lại theo ma_dong
+      if (!r) problems.push('BAN dòng ' + x[0] + ' đã đổi'); else x[0] = r;
     });
     const kyCell = x => { const sh = getSheet_(x[4] || KYGUI_TAB); const hc = headerMap_(sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]); return sh.getRange(x[0], hc[x[5] || 'so_luong'] + 1); };
     rec.k.forEach(x => { const cur = Number(kyCell(x).getValue()) || 0; if (cur !== x[2]) problems.push('Ký gửi ' + (x[4] || 'KYGUI') + ' dòng ' + x[0] + ' đã có giao dịch khác (' + cur + ', lúc bán ' + x[2] + ')'); });
@@ -5433,7 +5474,7 @@ function appendByHeader_(sheetName, values, formulaBuilder, check, optional) {
     if (typeof v === 'string' && v.charAt(0) === '=') cell.setFormula(v);
     else cell.setValue(v);
   });
-  return { type: 'row', sheet: sheetName, row, written: Object.keys(all), check };
+  return { type: 'row', sheet: sheetName, row, written: Object.keys(all), check, md: all.ma_dong || '' };
 }
 
 // =====================================================================
