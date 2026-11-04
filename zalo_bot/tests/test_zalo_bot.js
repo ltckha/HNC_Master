@@ -1501,6 +1501,8 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
     eq('Nhập hàng: 4 khi chưa có phiếu → hỏi số phiếu, chưa gửi', [/Gõ số phiếu/.test(ctx.handleText_('4', false, 'chu1', 'Chủ')), web.length - w1], [true, 0]);
     eq('Nhập hàng: gõ chữ lạ → hỏi lại', /Gõ số phiếu nhập/.test(ctx.handleText_('abc', false, 'chu1', 'Chủ')), true);
     const r2 = ctx.handleText_('nh 7', false, 'chu1', 'Chủ');
+    delete PROPS.datncc_chu1; PROPS.datncc_phieu_chu1 = 'NH-3'; const w2 = web.length; for (let i = 0; i < 11; i++) img('chu1', 'm' + i);
+    eq('Nhập hàng: 4 với 11 ảnh → báo tối đa 10, không gửi', [/tối đa 10 ảnh/.test(ctx.handleText_('4', false, 'chu1', 'Chủ')), web.length - w2], [true, 0]);
     eq('Nhập hàng: gõ "nh 7" → gửi vào NH-7', [web[web.length - 1].b.ck_phieu, /vào NH-7/.test(r2)], ['NH-7', true]); }
   delete PROPS.datncc_chu1; delete PROPS.ask_chu1; img('chu1', 'b1');
   eq('Đặt NCC: 3 → link app ảnh phiếu, bỏ lô', [/Nhập từ phiếu/.test(ctx.handleText_('3', false, 'chu1', 'Chủ')), PROPS.datncc_chu1 === undefined], [true, true]);

@@ -2377,8 +2377,11 @@ function datNccPick_(n, chatId, d, dryRun) {
 }
 
 /** Gửi lô làm ảnh chuyển khoản của phiếu `ph` (che 'ck', ck_phieu). */
+const DAT_NCC_CK_MAX = 10; // web nhận tối đa 10 ảnh chuyển khoản mỗi lô (c035ad65)
 function datNccCk_(chatId, lo, ph, dryRun) {
   navClearAsk_(chatId);
+  const soAnh = lo.items.filter(x => x.loai === 'anh').length;
+  if (soAnh > DAT_NCC_CK_MAX) { datNccClear_(chatId); return '⚠️ Ảnh chuyển khoản tối đa ' + DAT_NCC_CK_MAX + ' ảnh mỗi lần, lô này có ' + soAnh + ' ảnh — gửi lại thành nhiều lần.\nNhắn số: 9 Menu'; }
   if (dryRun) return '🧪 CHẠY THỬ — chưa gửi web ' + lo.items.length + ' ảnh chuyển khoản vào ' + ph + '\nNhắn số: 9 Menu';
   lo.chon = 4; lo.ck_phieu = ph; lo.t = Date.now();
   datNccSave_(chatId, lo);
