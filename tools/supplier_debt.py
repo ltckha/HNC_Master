@@ -5,6 +5,7 @@
   trả gắn HĐ tính cho hộ của HĐ (hộ kia trả thay → Bù trừ 2 hộ trên web). Còn nợ từng hộ = phải trả − đã trả của hộ đó.
 - Bỏ mọi phiếu ở trạng thái nhap (theo mảng phieu, dù act đã lọc sẵn).
 - Còn nợ = nợ đầu kỳ + tiền hàng − đã trả. Tên NCC so khớp không dấu / không hoa thường / gộp khoảng trắng. Xếp còn nợ giảm dần rồi theo tên.
+- 05/11 (web chu_ncc_ten_phu): tên phụ (cn.ten_phu [{khoa, ncc}], vd tên công ty đầy đủ / "ĐẠI PHONG") gộp vào NCC chính, dòng hiện tên chính.
 """
 import re
 import unicodedata
@@ -31,8 +32,11 @@ def cong_no(cn, phieu_quy):
     """Như web congNo (04/11 thuế + hộ, d6181484): mỗi phiếu × hộ — hàng = Σ nhận × giá nhập (theo kho) − trả NCC + chiết khấu / phí / thuế HĐ (theo hộ mua);
     HĐ = Σ tong_tt (hd + hd_cho, theo hộ mua); phải trả = max(hàng, HĐ). Đã trả: PC gắn HĐ (pc_hd) tính cho hộ của HĐ, còn lại hộ của quỹ."""
     by = {}
+    chinh = {ncc_key(x['khoa']): x['ncc'] for x in cn.get('ten_phu') or [] if x.get('khoa') and x.get('ncc')}
+    chinh.update({ncc_key(t): t for t in set(chinh.values())})
 
     def get(ten):
+        ten = chinh.get(ncc_key(ten), ten)
         k = ncc_key(ten)
         if k not in by:
             by[k] = {'ncc': ten, 'dau_ky': 0, 'tien_hang': 0, 'da_tra': 0, 'ho': {h: {'phai': 0, 'tra': 0} for h in HO}}
