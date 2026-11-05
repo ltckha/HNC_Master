@@ -49,5 +49,16 @@ w2 = ['Yen NCC', 0, 2200000 + 540000, 1300000, 2740000 - 1300000, 540000 - 30000
 if r2 != w2:
     ok = False
     print(f'❌ công nợ theo hộ\n   got:  {r2}\n   want: {w2}')
-print('✅ 2/2 ca đạt' if ok else '❌')
+# 05/11 (web chu_ncc_ten_phu): phiếu tên ngắn + phiếu / NCC tên đầy đủ + PC tên phụ → 1 dòng tên chính
+CN3 = {'ncc': [{'ten': 'CÔNG TY TNHH THƯƠNG MẠI TỔNG HỢP TUẤN PHONG', 'no_dau': 100000}],
+       'ten_phu': [{'khoa': 'dai phong', 'ncc': 'Tuấn Phong'}, {'khoa': 'cong ty tnhh thuong mai tong hop tuan phong', 'ncc': 'Tuấn Phong'}],
+       'phieu': [{'phieu': 7, 'ncc': 'CÔNG TY TNHH THƯƠNG MẠI TỔNG HỢP TUẤN PHONG', 'trang_thai': 'xong'}, {'phieu': 8, 'ncc': 'tuan phong', 'trang_thai': 'xong'}],
+       'nhan': [{'phieu': 7, 'kho': '15E', 'sl': 1, 'gia_nhap': 400000, 'huy': 0}, {'phieu': 8, 'kho': 'Y3C', 'sl': 2, 'gia_nhap': 100000, 'huy': 0}],
+       'tra_ncc': [], 'hd': []}
+r3 = s.xlsx_rows(s.cong_no(CN3, [{'loai': 'PC', 'ncc': 'ĐẠI PHONG', 'so_tien': 250000, 'ho': '15E', 'huy_luc': None}]))
+w3 = [s.COT, ['Tuấn Phong', 100000, 600000, 250000, 450000, 150000, 200000]]
+if r3 != w3:
+    ok = False
+    print(f'❌ tên phụ NCC\n   got:  {r3}\n   want: {w3}')
+print('✅ 3/3 ca đạt' if ok else '❌')
 sys.exit(0 if ok else 1)
