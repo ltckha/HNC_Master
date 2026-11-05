@@ -33,6 +33,27 @@ def mac_dinh(nganh):
     return out
 
 
+GIAY_DEP_DVT = re.compile(r'giày|dép|sandal|bốt|sapo|guốc')
+
+
+def dvt_da_so(cap):
+    """[(ngành, ĐVT), …] của SANPHAM → {ngành chuẩn hoá: ĐVT chiếm đa số} (05/11, như web)."""
+    dem = {}
+    for nganh, dvt in cap:
+        ng, d = _n(nganh), str(dvt or '').strip()
+        if ng and d:
+            dem.setdefault(ng, Counter())[d] += 1
+    return {ng: c.most_common(1)[0][0] for ng, c in dem.items()}
+
+
+def don_vi_tinh(nganh, ghi_ro='', da_so=None):
+    """ĐVT mã mới: ghi rõ thì giữ → ĐVT đa số các mã cùng ngành → ngành giày / dép / sandal / bốt / sapo / guốc "Đôi", còn lại "Cái"."""
+    if str(ghi_ro or '').strip():
+        return str(ghi_ro).strip()
+    ng = _n(nganh)
+    return (da_so or {}).get(ng) or ('Đôi' if GIAY_DEP_DVT.search(ng) else 'Cái')
+
+
 def main():
     import gspread
     from tools.split_product_columns import _mo
