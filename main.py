@@ -1981,13 +1981,18 @@ def process_export_task(choice, loader):
 
     # ==================== TASK 1: WEBSITE PRODUCT IMPORT ====================
     if choice == 1:
+        from tools.category_defaults import don_vi_tinh, dvt_da_so
+        df_sp_dvt, _ = loader.load_sheet('SANPHAM')
+        h_dvt, map_sp_dvt = DynamicHeaderScanner.scan_data_headers(df_sp_dvt)
+        i_ng, i_dv = DynamicHeaderScanner.get_col_idx(map_sp_dvt, 'Tên Ngành Hàng'), DynamicHeaderScanner.get_col_idx(map_sp_dvt, 'product_unit', 'ĐVT')
+        dvt_nganh = dvt_da_so(zip(df_sp_dvt.iloc[h_dvt + 1:, i_ng].fillna(''), df_sp_dvt.iloc[h_dvt + 1:, i_dv].fillna(''))) if h_dvt is not None and i_ng is not None and i_dv is not None else {}
         out_rows = []
         for rec in pending_records:
             pcode = str(rec.get('product_code', '')).strip()
             pname = str(rec.get('product_name') or rec.get('CON_NAME') or '').strip()
             raw_price = rec.get('product_price', 0)
             pprice = int(round(parse_number(raw_price)))
-            punit = str(rec.get('product_unit') or 'Đôi').strip()
+            punit = don_vi_tinh(rec.get('Tên Ngành Hàng'), rec.get('product_unit'), dvt_nganh)
             porigin = str(rec.get('product_origin') or 'Việt Nam').strip()
             pcolor = str(rec.get('product_color') or '').strip()
             pcat = str(rec.get('product_category_id') or '').strip()
@@ -3730,7 +3735,6 @@ Hãy trả về duy nhất 1 JSON Array chứa các object sản phẩm có đ�
     products = []
     for data in raw_products:
         data.setdefault('brand', 'Hải Nancy')
-        data.setdefault('unit', 'Đôi')
         data.setdefault('origin', 'Việt Nam')
         data.setdefault('purchase_price', 0)
         data.setdefault('product_price', 0)
@@ -3964,7 +3968,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     num_sp_cols = len(df_sp.columns)
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
     from tools.product_dictionary import COT_MOI
-    from tools.category_defaults import mac_dinh as category_defaults
+    from tools.category_defaults import mac_dinh as category_defaults, don_vi_tinh, dvt_da_so
     COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # chép cả do_om / chon_size (cùng khuôn); mau_phoi không chép (theo màu). Mẫu mới hẳn: để người nhập chọn (29/10)
     mau_cha = {}
     if 'product_code' in head_sp:
@@ -3999,6 +4003,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     idx_name = DynamicHeaderScanner.get_col_idx(map_sp, 'product_name', 'Tên sản phẩm')
     idx_price = DynamicHeaderScanner.get_col_idx(map_sp, 'product_price', 'Giá bán')
     idx_unit = DynamicHeaderScanner.get_col_idx(map_sp, 'product_unit', 'ĐVT')
+    dvt_nganh = dvt_da_so((r[idx_cat], r[idx_unit]) for r in df_sp.iloc[var_idx_sp + 1:].fillna('').values) if idx_cat is not None and idx_unit is not None else {}
     idx_origin = DynamicHeaderScanner.get_col_idx(map_sp, 'product_origin', 'Xuất xứ')
     idx_color = DynamicHeaderScanner.get_col_idx(map_sp, 'product_color', 'Màu sắc')
     idx_cat_id = DynamicHeaderScanner.get_col_idx(map_sp, 'product_category_id', 'Mã danh mục')
@@ -4079,7 +4084,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_code is not None: row_values[idx_code] = data.get('product_code', '')
             if idx_name is not None: row_values[idx_name] = f'={c_con_name}{cur_sp_row}'
             if idx_price is not None: row_values[idx_price] = data.get('product_price', 0)
-            if idx_unit is not None: row_values[idx_unit] = data.get('unit', 'Đôi')
+            if idx_unit is not None: row_values[idx_unit] = don_vi_tinh(data.get('category_name'), data.get('unit'), dvt_nganh)  # 05/11: ĐVT đa số cùng ngành
             if idx_origin is not None: row_values[idx_origin] = data.get('origin', 'Việt Nam')
             if idx_color is not None: row_values[idx_color] = data.get('product_color', '')
             if idx_cat_id is not None: row_values[idx_cat_id] = f'=index(SUB!$B$2:$B$126;match({c_cat}{cur_sp_row};SUB!$A$2:$A$126;0);1)'
