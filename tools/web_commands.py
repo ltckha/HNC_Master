@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import requests
 
 CO_NHAP_COLS = ('misa_stock', 'web_label', 'kho_sync', 'web_stock')
-THUOC_TINH = ('Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Giới tính', 'Size Plus', 'Size', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:',
+THUOC_TINH = ('Tên Ngành Hàng', 'Đặc điểm', 'Thương hiệu', 'Giới tính', 'Size', 'Chất liệu', 'Nhấn mạnh', 'Chất liệu quai:',
               'Chất liệu đế:', 'Lót trong:', 'Mặt lót đế:', 'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:')
 # Bộ chuẩn SANPHAM 29/10: 15 cột mới (web SP_MOI_COT, beta 6c58bba — bản chính chờ anh "Lên")
 SP_MOI_COT = ('gioi_tinh', 'chat_lieu', 'kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'cao_got_cm', 'tang_cao_cm', 'chat_lieu_de',
