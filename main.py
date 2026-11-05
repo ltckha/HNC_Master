@@ -3984,7 +3984,6 @@ def batch_commit_ingestion(loader, confirmed_products):
     idx_feat = DynamicHeaderScanner.get_col_idx(map_sp, 'Đặc điểm', 'feature')
     idx_brand = DynamicHeaderScanner.get_col_idx(map_sp, 'Thương hiệu', 'brand')
     idx_gender = DynamicHeaderScanner.get_col_idx(map_sp, 'Giới tính', 'gender')
-    idx_sizeplus = DynamicHeaderScanner.get_col_idx(map_sp, 'Size Plus', 'size_plus')
     idx_size = DynamicHeaderScanner.get_col_idx(map_sp, 'Size', 'Kích thước')
     idx_mat = DynamicHeaderScanner.get_col_idx(map_sp, 'Chất liệu', 'material')
     idx_hl = DynamicHeaderScanner.get_col_idx(map_sp, 'Nhấn mạnh', 'highlight')
@@ -4012,7 +4011,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     idx_inv = DynamicHeaderScanner.get_col_idx(map_sp, 'invoice_price', 'Đơn giá')
     idx_sup = DynamicHeaderScanner.get_col_idx(map_sp, 'supplier', 'Nhà cung cấp')
 
-    can = {'Tên Ngành Hàng': idx_cat, 'Đặc điểm': idx_feat, 'Thương hiệu': idx_brand, 'Giới tính': idx_gender, 'Size Plus': idx_sizeplus,
+    can = {'Tên Ngành Hàng': idx_cat, 'Đặc điểm': idx_feat, 'Thương hiệu': idx_brand, 'Giới tính': idx_gender,
            'Size': idx_size, 'Chất liệu': idx_mat, 'Nhấn mạnh': idx_hl, 'Chất liệu quai:': idx_strap, 'Chất liệu đế:': idx_sole,
            'Lót trong:': idx_lining, 'Mặt lót đế:': idx_insole, 'Dáng giày mũi:': idx_toe, 'Phần dưới giày:': idx_bottom,
            'Kết hợp trang phục:': idx_outfit, 'Sử dụng:': idx_usage, 'Bonus:': idx_bonus, 'CON_NAME': idx_con_name, 'CON_DES': idx_con_des,
@@ -4035,7 +4034,6 @@ def batch_commit_ingestion(loader, confirmed_products):
     c_feat = col_to_letter(idx_feat) if idx_feat is not None else 'C'
     c_brand = col_to_letter(idx_brand) if idx_brand is not None else 'D'
     c_gender = col_to_letter(idx_gender) if idx_gender is not None else 'E'
-    c_sizeplus = col_to_letter(idx_sizeplus) if idx_sizeplus is not None else 'F'
     c_size = col_to_letter(idx_size) if idx_size is not None else 'G'
     c_mat = col_to_letter(idx_mat) if idx_mat is not None else 'H'
     c_hl = col_to_letter(idx_hl) if idx_hl is not None else 'I'
@@ -4065,8 +4063,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_feat is not None: row_values[idx_feat] = data.get('feature', '')
             if idx_brand is not None: row_values[idx_brand] = data.get('brand', 'Hải Nancy')
             if idx_gender is not None: row_values[idx_gender] = f'=IF(REGEXMATCH({c_cat}{cur_sp_row}; "nam"); "male"; "female")'
-            if idx_sizeplus is not None: row_values[idx_sizeplus] = ""
-            if idx_size is not None: row_values[idx_size] = f'=IF({c_unit}{cur_sp_row}="Đôi"; CONCATENATE(if({c_gender}{cur_sp_row}="male";"38,39,40,41,42,43";if({c_gender}{cur_sp_row}="female";"35,36,37,38,39,40";""));if({c_sizeplus}{cur_sp_row}="";"";",");{c_sizeplus}{cur_sp_row});"")'
+            if idx_size is not None: row_values[idx_size] = f'=IF({c_unit}{cur_sp_row}="Đôi"; if({c_gender}{cur_sp_row}="male";"38,39,40,41,42,43";if({c_gender}{cur_sp_row}="female";"35,36,37,38,39,40";""));"")'  # 05/11 bỏ Size Plus (anh Kha): big size web tính từ Nhấn mạnh / tồn size ≥44
             if idx_mat is not None: row_values[idx_mat] = data.get('material', 'da bò')
             if idx_hl is not None: row_values[idx_hl] = data.get('highlight', 'cao cấp')
             if idx_strap is not None: row_values[idx_strap] = data.get('strap_material', 'da bò cao cấp')
