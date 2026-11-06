@@ -60,5 +60,16 @@ w3 = [s.COT, ['Tuấn Phong', 100000, 600000, 250000, 450000, 150000, 200000]]
 if r3 != w3:
     ok = False
     print(f'❌ tên phụ NCC\n   got:  {r3}\n   want: {w3}')
-print('✅ 3/3 ca đạt' if ok else '❌')
+# 06/11 (web 0fecb344): 2 sổ — 'hd' Sổ NCC = chỉ HĐ có thuế + đầu kỳ MISA · 'thuc' Công nợ NCC = nhận × giá nhập − trả NCC, không HĐ / thuế / đầu kỳ
+for cach, cn, pq, w in [
+        ('thuc', CN, PHIEU, ['Chú Dũng', 0, 3000000 - 300000 + 100000, 500000, 2300000, 2300000, 0]),
+        ('hd', CN, PHIEU, ['Chú Dũng', 1000000, 0, 500000, 500000, -500000, 0]),
+        ('thuc', CN2, PQ2, ['Yen NCC', 0, 2500000, 1300000, 1200000, 200000, 1000000]),
+        ('hd', CN2, PQ2, ['Yen NCC', 0, 2740000, 1300000, 1440000, 240000, 1200000])]:
+    r = s.xlsx_rows(s.cong_no(cn, pq, cach), cach)
+    got = next(x for x in r[1:] if x[0] == w[0])
+    if got != w or r[0][2] != s.PHAI[cach]:
+        ok = False
+        print(f'❌ sổ {cach} {w[0]}\n   got:  {got} {r[0][2]}\n   want: {w}')
+print('✅ 7/7 ca đạt' if ok else '❌')
 sys.exit(0 if ok else 1)
