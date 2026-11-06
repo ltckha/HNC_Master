@@ -23,6 +23,41 @@ def ncc_key(t):
     return re.sub(r'\s+', ' ', s.lower()).strip()
 
 
+def khoa_ten(t):
+    """Như web khoaTen: không dấu, chữ thường, bỏ ký tự lạ, gộp khoảng trắng (khoá bảng gộp tên NCC chu_ncc_ten_phu)."""
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]+', ' ', ncc_key(t))).strip()[:80]
+
+
+def ncc_chuan_fn(ten_phu):
+    """Như web nccTen (06/11, 14e418c2): tên NCC chuẩn sau gộp tên phụ (tên công ty dài → "Tuấn Phong"), đi chuỗi tối đa 4 bước, chặn vòng."""
+    m = {khoa_ten(x['khoa']): x['ncc'] for x in ten_phu or [] if x.get('khoa') and x.get('ncc')}
+
+    def chuan(t):
+        n = str(t or '').strip()
+        for _ in range(4):
+            r = m.get(khoa_ten(n))
+            if not r or khoa_ten(r) == khoa_ten(n):
+                break
+            n = r
+        return n
+    return chuan
+
+
+def ncc_theo_phieu(cn):
+    """{số phiếu NH: tên NCC} từ act cong_no_ds (phieu + nhan) — cho dòng NHAP có ma_dong "NH<số>-<lần>#…" mà mã chưa có NCC ở SANPHAM."""
+    out = {}
+    for x in (cn.get('nhan') or []) + (cn.get('phieu') or []):
+        if x.get('phieu') is not None and str(x.get('ncc') or '').strip():
+            out[int(x['phieu'])] = str(x['ncc']).strip()
+    return out
+
+
+def phieu_cua_dong(ma_dong):
+    """ma_dong web "NH10-1#2" → 10; không đúng dạng → None."""
+    m = re.match(r'\s*NH-?(\d+)-', str(ma_dong or ''), re.I)
+    return int(m.group(1)) if m else None
+
+
 def _round(x):
     return int(x + 0.5) if x >= 0 else -int(-x + 0.5)  # như Math.round (nửa lên)
 
@@ -35,11 +70,10 @@ def cong_no(cn, phieu_quy, cach='max'):
     """Như web congNo (04/11 thuế + hộ, d6181484): mỗi phiếu × hộ — hàng = Σ nhận × giá nhập (theo kho) − trả NCC + chiết khấu / phí / thuế HĐ (theo hộ mua);
     HĐ = Σ tong_tt (hd + hd_cho, theo hộ mua); phải trả = max(hàng, HĐ). Đã trả: PC gắn HĐ (pc_hd) tính cho hộ của HĐ, còn lại hộ của quỹ."""
     by = {}
-    chinh = {ncc_key(x['khoa']): x['ncc'] for x in cn.get('ten_phu') or [] if x.get('khoa') and x.get('ncc')}
-    chinh.update({ncc_key(t): t for t in set(chinh.values())})
+    chuan = ncc_chuan_fn(cn.get('ten_phu'))
 
     def get(ten):
-        ten = chinh.get(ncc_key(ten), ten)
+        ten = chuan(ten)
         k = ncc_key(ten)
         if k not in by:
             by[k] = {'ncc': ten, 'dau_ky': 0, 'tien_hang': 0, 'da_tra': 0, 'ho': {h: {'phai': 0, 'tra': 0} for h in HO}}

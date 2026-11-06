@@ -71,5 +71,15 @@ for cach, cn, pq, w in [
     if got != w or r[0][2] != s.PHAI[cach]:
         ok = False
         print(f'❌ sổ {cach} {w[0]}\n   got:  {got} {r[0][2]}\n   want: {w}')
-print('✅ 7/7 ca đạt' if ok else '❌')
+# MISA nhập kho (06/11, như web 14e418c2): tên công ty dài / chuỗi tên phụ → tên ngắn; NCC theo phiếu NH khi mã chưa có NCC
+ch = s.ncc_chuan_fn([{'khoa': 'cong ty tnhh thuong mai tong hop tuan phong', 'ncc': 'Đại Phong'}, {'khoa': 'dai phong', 'ncc': 'Tuấn Phong'},
+                     {'khoa': 'tuan phong', 'ncc': 'Tuấn Phong'}])
+tp = s.ncc_theo_phieu({'phieu': [{'phieu': 10, 'ncc': 'CÔNG TY TNHH THƯƠNG MẠI TỔNG HỢP TUẤN PHONG'}], 'nhan': [{'phieu': 11, 'ncc': 'Chú Dũng'}]})
+for got, want in [(ch('CÔNG TY TNHH THƯƠNG MẠI TỔNG HỢP TUẤN PHONG'), 'Tuấn Phong'), (ch('Công ty TNHH Thương mại, Tổng hợp Tuấn Phong'), 'Tuấn Phong'),
+                  (ch('Chú Dũng'), 'Chú Dũng'), (s.phieu_cua_dong('NH10-1#2'), 10), (s.phieu_cua_dong('abc'), None),
+                  (tp.get(s.phieu_cua_dong('NH11-2#1')), 'Chú Dũng'), (ch(tp.get(10)), 'Tuấn Phong')]:
+    if got != want:
+        ok = False
+        print(f'❌ gộp tên / phiếu: {got!r} ≠ {want!r}')
+print('✅ 8/8 ca đạt' if ok else '❌')
 sys.exit(0 if ok else 1)

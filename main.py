@@ -2722,6 +2722,19 @@ def process_export_task(choice, loader):
         labels = misa_labels()
         if labels is None:
             return
+        # 06/11 (như web 14e418c2): NCC dò qua bảng gộp tên (tên công ty dài → tên ngắn ở SUB); mã web tạo chưa có NCC ở SANPHAM → NCC của phiếu NH (ma_dong)
+        ncc_chuan, ncc_phieu = (lambda t: str(t or '').strip()), {}
+        try:
+            from tools import cash_book, supplier_debt
+            cn, _ = cash_book.load(EXPORT_DIR, act='cong_no_ds', need='ncc')
+            ncc_chuan, ncc_phieu = supplier_debt.ncc_chuan_fn(cn.get('ten_phu')), supplier_debt.ncc_theo_phieu(cn)
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ Chưa đọc được bảng gộp tên NCC trên web ({e}) — chỉ khớp tên NCC đúng như SUB.")
+        ncc_ct = {}  # số chứng từ → NCC của dòng khác cùng phiếu (dự phòng khi dòng không có ma_dong)
+        for rec in pending_records:
+            t = str(product_map.get(str(rec.get('product_code', '')).strip(), {}).get('supplier', '') or '').strip()
+            if t:
+                ncc_ct.setdefault(str(rec.get('Số chứng từ (*)') or '').strip().upper(), t)
 
         for rel_idx, rec in zip(pending_row_indices, pending_records):
             pcode = str(rec.get('product_code', '')).strip()
@@ -2734,11 +2747,11 @@ def process_export_task(choice, loader):
                 continue
 
             sp_info = product_map.get(pcode, {})
-            sup_name = sp_info.get('supplier', '')
-            sup_info = supplier_map.get(sup_name.lower(), {}) if sup_name else {}
-
             doc_date = str(rec.get('Ngày chứng từ (*)') or rec.get('Ngày') or '').strip()
             doc_no = str(rec.get('Số chứng từ (*)') or '').strip()
+            sup_name = str(sp_info.get('supplier', '') or '').strip() or ncc_phieu.get(supplier_debt.phieu_cua_dong(rec.get('ma_dong')) if ncc_phieu else None, '') \
+                or ncc_ct.get(doc_no.upper(), '')
+            sup_info = (supplier_map.get(sup_name.lower()) or supplier_map.get(ncc_chuan(sup_name).strip().lower()) or {}) if sup_name else {}
 
             unit = sp_info.get('unit', '')
             # Giá theo lô (anh Kha 17/10, giống bot): don_gia_hd → don_gia_phieu → giá theo mã (invoice_price, rồi purchase_price) = "giá cũ"

@@ -1,6 +1,6 @@
 """So file MISA "Nhập kho mua hàng" giữa HNC và web (K12, 20/10) — CHỈ ĐỌC Sheet.
 Dựng 22 cột từng dòng NHAP của 1 phiếu theo luật chung (LuatKho.giaMisa + misaNhapDong — khớp bot misaStockExport_ và
-main.py task 8, ca mẫu 74/74), lấy NCC qua SANPHAM.supplier → bảng NCC ở SUB. Bỏ qua cờ misa_stock (để so được phiếu đã xuất).
+main.py task 8, ca mẫu 74/74), lấy NCC qua SANPHAM.supplier (trống → NCC của phiếu NH theo ma_dong) → bảng gộp tên → bảng NCC ở SUB. Bỏ qua cờ misa_stock (để so được phiếu đã xuất).
   venv/bin/python tools/compare_misa_receipts.py NK000025 15E [--sheet <id>] [--so <file web .xlsx|.json>]
 Mặc định Sheet bản thử. --so: file web xuất (xlsx mẫu MISA từ dòng 9, hoặc JSON [{"1":…,"22":…}]) → so từng ô.
 """
@@ -12,6 +12,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import gspread  # noqa: E402
 from tools.stock_rules_node import goi  # noqa: E402
+from tools import cash_book, supplier_debt  # noqa: E402
 
 TEST_ID = '1QwH7Y1A45Pb9S0JbfDSkrP-VeUmD_cA6FsKdI4Gmxcw'
 KHO_MISA = {'15E': '15ETBH', 'Y3C': '3CTBH'}
@@ -27,6 +28,17 @@ def rows_of(ws, header_row=1):
     return [dict(zip(h, r)) for r in v[header_row:]], h
 
 
+def ncc_web():
+    """Bảng gộp tên NCC + NCC theo phiếu NH từ act cong_no_ds (như main.py task 8); web lỗi thì chỉ khớp tên thẳng."""
+    try:
+        from hnc_paths import find_system_dir
+        cn, _ = cash_book.load(os.path.join(find_system_dir(), 'HNC_Exported_Files'), act='cong_no_ds', need='ncc')
+        return supplier_debt.ncc_chuan_fn(cn.get('ten_phu')), supplier_debt.ncc_theo_phieu(cn)
+    except Exception as e:  # noqa: BLE001
+        print(f'⚠️ Không đọc được bảng gộp tên NCC: {e}')
+        return (lambda t: t), {}
+
+
 def dung(so_ct, kho, sheet_id):
     sh = gspread.service_account(filename=os.path.join(ROOT, 'credentials.json')).open_by_key(sheet_id)
     nh, _ = rows_of(sh.worksheet('NHAP'))
@@ -34,6 +46,7 @@ def dung(so_ct, kho, sheet_id):
     sub, _ = rows_of(sh.worksheet('SUB'))
     prod = {r['product_code'].strip().upper(): r for r in sp if r.get('product_code', '').strip()}
     sups = {r['supplier'].strip().lower(): r for r in sub if r.get('supplier', '').strip()}
+    chuan, theo_phieu = ncc_web()
     out = []
     for i, r in enumerate(nh, start=2):
         if r.get('Số chứng từ (*)', '').strip().upper() != so_ct.upper() or goi('khoChuan', r.get('KHO', '')) != kho:
@@ -42,7 +55,8 @@ def dung(so_ct, kho, sheet_id):
         p = prod.get(code, {})
         g = goi('giaMisa', {'don_gia_hd': r.get('don_gia_hd'), 'don_gia_phieu': r.get('don_gia_phieu'), 'invoice_price': p.get('invoice_price'),
                             'purchase_price': p.get('purchase_price'), 'so_hd': r.get('so_hd')})
-        s = sups.get(p.get('supplier', '').strip().lower(), {})
+        ten = p.get('supplier', '').strip() or theo_phieu.get(supplier_debt.phieu_cua_dong(r.get('ma_dong')), '')  # như main.py task 8 (06/11)
+        s = (sups.get(ten.lower()) or sups.get(chuan(ten).strip().lower()) or {}) if ten else {}
         d = goi('misaNhapDong', {'so_ct': r['Số chứng từ (*)'].strip(), 'ngay': r['Ngày chứng từ (*)'].strip()[:10],
                                  'sku': code + goi('chuanSize', r.get('item_size')), 'kho_misa': KHO_MISA.get(kho, ''), 'dvt': p.get('product_unit', ''),
                                  'sl': float(r.get('Số lượng (*)') or 0), 'don_gia': g['gia'], 'ncc_ma': s.get('Mã đối tượng', ''), 'ncc_ten': s.get('Tên đối tượng', ''),
