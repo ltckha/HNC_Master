@@ -4376,7 +4376,7 @@ def print_submenu_misa():
   [2] 📥 Tải file nhập kho (MISA: Nghiệp vụ khác › Nhập kho › Thêm mới ▾ › Nhập khẩu)
        tách Hộ Hải Nancy (tiệm 15E) / Hộ Yen Leather (tiệm 3C), giá theo hoá đơn mua hàng
   [3] 💵 Xuất sổ quỹ theo tháng (dự phòng web Sổ quỹ: tiền mặt từng tiệm + tài khoản từng hộ)
-  [4] 🧾 Xuất công nợ nhà cung cấp (dự phòng web Sổ quỹ › Công nợ NCC)
+  [4] 🧾 Xuất công nợ nhà cung cấp (dự phòng web Nhập hàng › Công nợ NCC)
   [5] 🛒 Tải file đơn bán (dự phòng web Đơn bán MISA; bỏ dòng Không xuất MISA)
   [6] 📒 Sổ thuế dự phòng (doanh thu từng hộ × tháng + file S1a, như web Sổ thuế)
   -----------------------------------------------------------------
