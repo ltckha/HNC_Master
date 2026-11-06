@@ -1,11 +1,11 @@
-"""Công nợ nhà cung cấp dự phòng trên Mac (luật 15, GĐ1 thay MISA, 03/11) — ra CÙNG số với web Sổ quỹ › Công nợ NCC (supplier_orders.ts congNo):
+"""Công nợ nhà cung cấp dự phòng trên Mac (luật 15, GĐ1 thay MISA, 03/11) — ra CÙNG số với web Nhập hàng › Công nợ NCC (supplier_orders.ts congNo):
 - Dữ liệu gốc đọc act cong_no_ds (khoá Mac, bản sao như sổ quỹ): ncc (nợ đầu kỳ), nhan (lần nhận, huy), tra_ncc, hd (chiết khấu / phí, bi_thay).
 - Đã trả = phiếu PC có ncc trong so_quy_ds (bỏ phiếu huỷ, kể cả đặt cọc; PT không tính).
 - 04/11 (web d6181484): tính riêng phiếu × hộ (kho nhận / hộ mua trên HĐ theo MST), phải trả = max(tiền hàng + thuế, tổng HĐ có thuế), làm tròn theo phiếu × hộ;
   trả gắn HĐ tính cho hộ của HĐ (hộ kia trả thay → Bù trừ 2 hộ trên web). Còn nợ từng hộ = phải trả − đã trả của hộ đó.
 - Bỏ mọi phiếu ở trạng thái nhap (theo mảng phieu, dù act đã lọc sẵn).
 - 06/11 (web 0fecb344, 2 sổ): cach='hd' Sổ NCC = chỉ tổng HĐ có thuế + nợ đầu kỳ MISA (khớp MISA); cach='thuc' Công nợ NCC = nhận × giá nhập − trả NCC
-  (không cộng HĐ / thuế, không đầu kỳ); cach='max' (cũ) còn dùng cho Trả tiền phiếu trên web. Đã trả trừ ở cả 3.
+  + thuế GTGT HĐ (06/11 f8491339, chỉ phiếu đã nhập kho; không cộng chiết khấu / phí, không đầu kỳ); cach='max' (cũ) còn dùng cho Trả tiền phiếu trên web. Đã trả trừ ở cả 3.
 - Còn nợ = nợ đầu kỳ + tiền hàng − đã trả. Tên NCC so khớp không dấu / không hoa thường / gộp khoảng trắng. Xếp còn nợ giảm dần rồi theo tên.
 - 05/11 (web chu_ncc_ten_phu): tên phụ (cn.ten_phu [{khoa, ncc}], vd tên công ty đầy đủ / "ĐẠI PHONG") gộp vào NCC chính, dòng hiện tên chính.
 """
@@ -50,7 +50,7 @@ def cong_no(cn, phieu_quy, cach='max'):
         o[h] += v
 
     nhap = {p['phieu'] for p in cn.get('phieu', []) if p.get('trang_thai') == 'nhap'}
-    hang, hang_t, hd_t, hd_ho, co_nhan = {}, {}, {}, {}, {}
+    hang, hang_t, hd_t, hd_ho, co_nhan, thue = {}, {}, {}, {}, {}, {}
     for n in (x for x in cn.get('nhan', []) if x['phieu'] not in nhap and not x.get('huy')):
         v = (n['sl'] or 0) * (n['gia_nhap'] or 0)
         cong(hang, n['phieu'], _ho(n.get('kho')), v)
@@ -65,6 +65,7 @@ def cong_no(cn, phieu_quy, cach='max'):
         hd_ho[(h['phieu'], h['so_hd'])] = ho
         cong(hd_t, h['phieu'], ho, h.get('tong_tt') or 0)
         cong(hang, h['phieu'], ho, (h['chiet_khau'] or 0) + (h['phi'] or 0) + (h.get('tien_thue') or 0))
+        cong(thue, h['phieu'], ho, h.get('tien_thue') or 0)
     co = {p for p, o in co_nhan.items() if any(o.values())}  # web: phiếu có ít nhất 1 nhóm (phiếu, kho) nhận có tiền
     for h in (x for x in cn.get('hd_cho', []) if x['phieu'] not in nhap):
         ho = _ho(h.get('ho'))
@@ -72,6 +73,11 @@ def cong_no(cn, phieu_quy, cach='max'):
         cong(hd_t, h['phieu'], ho, h.get('tong_tt') or 0)
         if h['phieu'] in co:
             cong(hang, h['phieu'], ho, h.get('tien_thue') or 0)
+            cong(thue, h['phieu'], ho, h.get('tien_thue') or 0)
+    for p0, v in thue.items():  # 'thuc': thuế GTGT HĐ chỉ cho phiếu đã nhập kho
+        if p0 in co:
+            for h in HO:
+                cong(hang_t, p0, h, v[h])
     tra_p = {}
     for p in phieu_quy:  # web: phiếu chi trước (tên hiện theo lần gặp đầu)
         if p.get('loai') == 'PC' and p.get('ncc') and not p.get('huy_luc'):
