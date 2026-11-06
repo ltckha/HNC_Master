@@ -4859,7 +4859,7 @@ def export_misa_orders(url=None):
 
 
 def export_supplier_debt():
-    """[4][4] Công nợ NCC dự phòng (GĐ1 thay MISA, 03/11, luật 15): cùng số / cùng file Excel như web — tools/supplier_debt.py."""
+    """[4][4] Công nợ NCC dự phòng (GĐ1 thay MISA, 03/11, luật 15): cùng số / cùng file Excel như web — tools/supplier_debt.py; từ 06/11 ra 2 sổ."""
     from tools import cash_book, supplier_debt
     try:
         cn, g1 = cash_book.load(EXPORT_DIR, act='cong_no_ds', need='ncc')
@@ -4870,15 +4870,17 @@ def export_supplier_debt():
     for g in (g1, g2):
         if g:
             print(g)
-    ds = supplier_debt.cong_no(cn, sq.get('phieu', []))
-    path = os.path.join(EXPORT_DIR, f"Cong_no_NCC_{cash_book.homnay()}.xlsx")
-    cash_book.write_xlsx(path, supplier_debt.xlsx_rows(ds), widths=(36, 14, 22, 14, 14, 16, 16))
-    tong = sum(o['con'] for o in ds)
-    print(f"✅ Công nợ NCC: tổng còn nợ {tong:,.0f}đ · {sum(1 for o in ds if o['con'])} nhà cung cấp còn nợ".replace(',', '.'))
-    for o in ds[:10]:
-        if o['con']:
-            print(f"   {o['ncc']}: {o['con']:,.0f}đ".replace(',', '.'))
-    print(f"   {path}")
+    # 06/11 (web 0fecb344): 2 sổ — Công nợ NCC (thực tế, cùng file Excel web) + Sổ NCC (chỉ hoá đơn + đầu kỳ MISA, khớp MISA)
+    for cach, ten, file in (('thuc', 'Công nợ NCC (thực tế)', 'Cong_no_NCC'), ('hd', 'Sổ NCC (hoá đơn + đầu kỳ MISA)', 'So_NCC')):
+        ds = supplier_debt.cong_no(cn, sq.get('phieu', []), cach)
+        path = os.path.join(EXPORT_DIR, f"{file}_{cash_book.homnay()}.xlsx")
+        cash_book.write_xlsx(path, supplier_debt.xlsx_rows(ds, cach), widths=(36, 14, 22, 14, 14, 16, 16))
+        tong = sum(o['con'] for o in ds)
+        print(f"✅ {ten}: tổng còn nợ {tong:,.0f}đ · {sum(1 for o in ds if o['con'])} nhà cung cấp còn nợ".replace(',', '.'))
+        for o in ds[:10]:
+            if o['con']:
+                print(f"   {o['ncc']}: {o['con']:,.0f}đ".replace(',', '.'))
+        print(f"   {path}")
 
 
 def handle_submenu_media(loader):
