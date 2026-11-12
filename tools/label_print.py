@@ -28,7 +28,9 @@ MODEL = 'QL-700'
 KHOS = ('15E', 'Y3C')
 SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
 CAT = 'cuoi_dot'  # 'cuoi_dot' = in liền cả đợt, cắt 1 lần ở cuối (anh Kha 18/10, như P-touch) · 'moi_tem' = cắt từng tem
-BATCH_MAX = 10    # mỗi nhóm 10 tem 1 lệnh, cắt cuối nhóm, chờ máy in xong mới gửi nhóm kế (12/11: gửi 30 tem 1 lệnh máy dừng ở tem ~19)
+BATCH_MAX = 255   # máy chỉ đếm "cắt sau N tem" tới 255 → mã có hơn 255 tem thì chia
+# Mỗi dòng tem (1 mã, F6 tờ) = 1 nhóm: 1 lệnh, cắt cuối nhóm, chờ máy in xong mới gửi nhóm kế
+# (anh Kha 12/11: gửi 30 tem 1 lệnh máy dừng ở tem ~19; cắt theo từng mã)
 WAIT_BASE_S, WAIT_PER_TEM_S = 15, 4  # thời gian chờ tối đa 1 nhóm: 15 giây + 4 giây / tem
 STATUS_REQ = b'\x1b\x69\x53'  # ESC i S: hỏi trạng thái máy
 MAX_AGE_MIN = 30  # lệnh cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
@@ -96,13 +98,15 @@ def find_printer():
 
 def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
     """In các dòng tem (mỗi dòng in F6 tờ). mau = mẫu tem (mặc định label_render.MAU_MAC_DINH). dry → chỉ lưu PNG. Trả {ok, so_tem, loi}."""
-    images, names, codes = [], [], []
+    images, names, codes, groups = [], [], [], []
     for r in records:
         try:
             n = max(1, int(float(r.get('F6') or 1)))
         except ValueError:
             n = 1
         img = label_render.render_label(r, kho, mau)
+        for k in range(0, n, BATCH_MAX):
+            groups.append((len(images) + k, len(images) + min(n, k + BATCH_MAX)))
         images.extend([img] * n)
         names.extend([str(r.get('Code128') or 'tem').replace('/', '-')] * n)
         codes.extend([str(r.get('Code128') or '').strip()] * n)
@@ -129,8 +133,8 @@ def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
     except Exception as e:
         return {'ok': False, 'so_tem': total, 'loi': f'không mở được máy in: {e}'}
     try:
-        for k in range(0, total, BATCH_MAX):
-            part = images[k:k + BATCH_MAX]
+        for a, b in groups:
+            part = images[a:b]
             qlr = batch_raster(MODEL, len(part), CAT == 'moi_tem')
             instructions = convert(qlr=qlr, images=part, label=label_render.LABEL_ID, rotate='0', threshold=70.0,
                                    dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
