@@ -28,7 +28,9 @@ MODEL = 'QL-700'
 KHOS = ('15E', 'Y3C')
 SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
 CAT = 'cuoi_dot'  # 'cuoi_dot' = in liền cả đợt, cắt 1 lần ở cuối (anh Kha 18/10, như P-touch) · 'moi_tem' = cắt từng tem
-BATCH_MAX = 255   # máy chỉ đếm "cắt sau N tem" tới 255 → đợt dài hơn thì chia
+BATCH_MAX = 10    # mỗi nhóm 10 tem 1 lệnh, cắt cuối nhóm, chờ máy in xong mới gửi nhóm kế (12/11: gửi 30 tem 1 lệnh máy dừng ở tem ~19)
+WAIT_BASE_S, WAIT_PER_TEM_S = 15, 4  # thời gian chờ tối đa 1 nhóm: 15 giây + 4 giây / tem
+STATUS_REQ = b'\x1b\x69\x53'  # ESC i S: hỏi trạng thái máy
 MAX_AGE_MIN = 30  # lệnh cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
 ERR_HINT = 'Không thấy máy in QL-700: kiểm đèn nguồn sáng xanh, dây USB cắm vào Mac mini, đèn Editor Lite tắt.'
 
@@ -51,6 +53,39 @@ def batch_raster(model, n, cut_each):
     return _Batch(model)
 
 
+def wait_done(printer, timeout):
+    """Chờ máy in xong 1 nhóm. Trả '' nếu xong, chuỗi lỗi nếu máy báo lỗi / quá giờ.
+    Xong = máy báo 'in xong', hoặc (QL-700 hay không báo) im lặng rồi hỏi trạng thái thấy đang chờ nhận + không lỗi."""
+    from brother_ql.reader import interpret_response
+    start = last_msg = time.time()
+    asked = 0.0
+    printing_seen = False
+    while time.time() - start < timeout:
+        data = printer.read()
+        if not data:
+            now = time.time()
+            if now - last_msg > 2 and now - asked > 2:  # im 2 giây → hỏi trạng thái
+                printer.write(STATUS_REQ)
+                asked = now
+            time.sleep(0.05)
+            continue
+        try:
+            r = interpret_response(data)
+        except ValueError:
+            continue
+        last_msg = time.time()
+        if r['errors']:
+            return 'máy in báo: ' + ', '.join(r['errors'])
+        if r['status_type'] == 'Printing completed':
+            return ''
+        if r['phase_type'] == 'Printing state':
+            printing_seen = True
+        elif r['phase_type'] == 'Waiting to receive' and (printing_seen or r['status_type'] == 'Reply to status request') \
+                and time.time() - start > 1:
+            return ''
+    return f'máy in không báo xong sau {int(timeout)} giây'
+
+
 def find_printer():
     """Địa chỉ USB của QL-700 (brother_ql + pyusb). None nếu không thấy."""
     from brother_ql.backends.helpers import discover
@@ -61,7 +96,7 @@ def find_printer():
 
 def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
     """In các dòng tem (mỗi dòng in F6 tờ). mau = mẫu tem (mặc định label_render.MAU_MAC_DINH). dry → chỉ lưu PNG. Trả {ok, so_tem, loi}."""
-    images, names = [], []
+    images, names, codes = [], [], []
     for r in records:
         try:
             n = max(1, int(float(r.get('F6') or 1)))
@@ -70,6 +105,7 @@ def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
         img = label_render.render_label(r, kho, mau)
         images.extend([img] * n)
         names.extend([str(r.get('Code128') or 'tem').replace('/', '-')] * n)
+        codes.extend([str(r.get('Code128') or '').strip()] * n)
     if not images:
         return {'ok': False, 'so_tem': 0, 'loi': 'không có tem nào'}
     if dry:
@@ -86,21 +122,34 @@ def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
     ident = find_printer()
     if not ident:
         return {'ok': False, 'so_tem': len(images), 'loi': ERR_HINT}
-    done = 0
-    for k in range(0, len(images), BATCH_MAX):
-        part = images[k:k + BATCH_MAX]
-        qlr = batch_raster(MODEL, len(part), CAT == 'moi_tem')
-        instructions = convert(qlr=qlr, images=part, label=label_render.LABEL_ID, rotate='0', threshold=70.0,
-                               dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
+    from brother_ql.backends.helpers import backend_factory
+    total, done = len(images), 0
+    try:
+        printer = backend_factory('pyusb')['backend_class'](ident)
+    except Exception as e:
+        return {'ok': False, 'so_tem': total, 'loi': f'không mở được máy in: {e}'}
+    try:
+        for k in range(0, total, BATCH_MAX):
+            part = images[k:k + BATCH_MAX]
+            qlr = batch_raster(MODEL, len(part), CAT == 'moi_tem')
+            instructions = convert(qlr=qlr, images=part, label=label_render.LABEL_ID, rotate='0', threshold=70.0,
+                                   dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
+            try:
+                printer.write(instructions)
+                loi = wait_done(printer, WAIT_BASE_S + WAIT_PER_TEM_S * len(part))
+            except Exception as e:  # mất kết nối giữa chừng
+                loi = f'lỗi gửi tới máy in: {e}'
+            if loi:
+                # mã đã in đủ mọi tờ → đánh dấu Done, bấm In tem lại chỉ in phần còn lại
+                da_in = {c.upper() for c in codes[:done]} - {c.upper() for c in codes[done:]}
+                return {'ok': False, 'so_tem': total, 'da_gui': True, 'so_tem_da_in': done, 'ma_da_in': sorted(da_in),
+                        'loi': f'{loi} · đã in xong {done}/{total} tem, in tiếp từ tem {done + 1}'}
+            done += len(part)
+    finally:
         try:
-            st = send(instructions=instructions, printer_identifier=ident, backend_identifier='pyusb', blocking=True)
-        except Exception as e:  # mất kết nối giữa chừng
-            return {'ok': False, 'so_tem': len(images), 'da_gui': done > 0, 'so_tem_da_in': done, 'loi': f'lỗi gửi tới máy in: {e}'}
-        # QL-700 không phải lúc nào cũng báo "in xong" trong 10 giây → chỉ coi là lỗi khi máy báo lỗi thật (hết giấy, kẹt…)
-        errs = (st.get('printer_state') or {}).get('errors') or []
-        if errs:
-            return {'ok': False, 'so_tem': len(images), 'da_gui': True, 'so_tem_da_in': done, 'loi': 'máy in báo: ' + ', '.join(errs)}
-        done += len(part)
+            printer.dispose()
+        except Exception:
+            pass
     return {'ok': True, 'so_tem': len(images), 'da_gui': True, 'so_tem_da_in': done, 'loi': ''}
 
 
@@ -194,11 +243,13 @@ def process_job(lenh_txt, dry=False):
     result = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': kho, 'yeu_cau_luc': req.get('luc', ''), 'in_bu': bool(req.get('in_bu')),
               'so_chung_tu': req.get('so_chung_tu', ''), 'ngay': req.get('ngay', ''), 'so_tem': res['so_tem'],
               'so_tem_da_in': res.get('so_tem_da_in', res['so_tem'] if res['ok'] else 0), 'ok': res['ok'], 'loi': res['loi'], 'dong_da_danh_dau': []}
-    if res['ok'] and not dry and req.get('dong'):
+    done_codes = {r.get('Code128', '').strip().upper() for r in records} if res['ok'] else set(res.get('ma_da_in') or [])
+    done_codes.discard('')
+    if done_codes and not dry and req.get('dong'):
         try:
-            result['dong_da_danh_dau'] = mark_done([int(x) for x in req['dong']], {r.get('Code128', '').strip().upper() for r in records})
+            result['dong_da_danh_dau'] = mark_done([int(x) for x in req['dong']], done_codes)
         except Exception as e:
-            result['loi'] = f'in xong nhưng chưa đánh dấu được trên Sheet: {e}'
+            result['loi'] = ((result['loi'] + ' · ') if result['loi'] else 'in xong ') + f'nhưng chưa đánh dấu được trên Sheet: {e}'
     keep = not expired and not res['ok'] and not res.get('da_gui')  # chưa tới máy in → thử lại lần sau
     print(json.dumps(result, ensure_ascii=False), flush=True)
     return result, keep
