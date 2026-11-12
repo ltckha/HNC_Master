@@ -4962,6 +4962,19 @@ function labelSelect_(body) {
   if (chonList) chonList.forEach(x => { const n = Math.max(0, Math.round(Number(x && x.so_tem) || 0)); if (n > 0) soTemOf[Number(x.dong)] = n; });
   const rowsWanted = chonList ? Object.keys(soTemOf).map(Number) : (Array.isArray(body.dong) ? body.dong.map(Number) : null);
   if (chonList && !rowsWanted.length) return { error: 'chon không có dòng nào so_tem > 0' };
+  // dong_web:[{dong, ma_hang, size, so_tem}] (web gửi từ sổ nhập D1, anh Kha 12/11 — Sheet chỉ chép 1 chiều web → Sheet):
+  // dựng tem từ đây, không đọc / chờ dòng NHAP trên Sheet. Tên, màu, giá vẫn từ SANPHAM (labelRecord_); chon vẫn áp theo dong.
+  // Không có dong_web → đọc NHAP như cũ (đường dự phòng, luật 15).
+  if (Array.isArray(body.dong_web) && body.dong_web.length) {
+    const rows = [];
+    body.dong_web.forEach(x => {
+      const dong = Number(x && x.dong), code = String(x && x.ma_hang || '').trim().toUpperCase();
+      if (!code || !(dong > 0)) return;
+      if (chonList && !soTemOf[dong]) return;
+      rows.push({ row: dong, code, size: normSize_(x.size), color: '', qty: soTemOf[dong] || Math.round(Number(x.so_tem) || 0) || 1, da_in: false });
+    });
+    return { kho, rows, web: true };
+  }
   if (!so && !ngay && !rowsWanted) return { error: 'cần so_chung_tu, ngay (dd/mm/yyyy), dong hoặc chon' };
   const nh = sheetValues_('NHAP');
   const c = headerMap_(nh[0]);

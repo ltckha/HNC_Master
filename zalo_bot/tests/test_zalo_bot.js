@@ -1032,6 +1032,16 @@ eq('in_tem chon: so_tem tuỳ chỉnh + ten/mau/size/gia', [lr.ok, lr.so_tem, lr
 lr = it({ ngay: '16/10/2026', kho: '15E', chon: [{ dong: lbN - 2, so_tem: 0 }, { dong: lbN, so_tem: 2 }] });
 const flag2 = lenhOf('15E');
 eq('in_tem chon: so_tem 0 bỏ dòng, lệnh chỉ có dòng in', [lr.so_dong, flag2.dong, flag2.so_tem, flag2.tem.map(t => t[6])], [1, [lbN], 2, ['TH2040N41']]);
+{ // dong_web (12/11): dựng tem từ dòng web gửi, không đọc NHAP; chon áp theo dong; Mac đánh dấu theo dong
+  const nhapCu = DATA.NHAP; DATA.NHAP = [nhapCu[0]]; // NHAP trống: chưa chép lên Sheet
+  const dw = [{ dong: 900, ma_hang: 'th2040d', size: '40.0', so_tem: 2 }, { dong: 901, ma_hang: 'TH2040N', size: '41', so_tem: 3 }];
+  let w = it({ so_chung_tu: 'NK000999', kho: '15E', dong_web: dw }, true);
+  eq('in_tem dong_web chạy thử: không cần NHAP, số tem theo web, màu / giá từ SANPHAM', [w.ok, w.so_dong, w.so_tem, w.rows.map(r => r.ma_hang), w.rows[0].dong], [true, 2, 5, ['TH2040D40', 'TH2040N41'], 900]);
+  w = it({ so_chung_tu: 'NK000999', kho: '15E', dong_web: dw, chon: [{ dong: 900, so_tem: 0 }, { dong: 901, so_tem: 4 }] }, false);
+  const lw = lenhOf('15E');
+  eq('in_tem dong_web + chon: chỉ dòng chọn, lệnh Mac có dong để đánh dấu', [w.ok, lw.dong, lw.so_tem, lw.tem.map(x => x[lw.cot.indexOf('Code128')])], [true, [901], 4, ['TH2040N41']]);
+  DATA.NHAP = nhapCu;
+}
 // in_bu
 const ib = (b, dry) => ctx.handleStock_(Object.assign({ action: 'in_bu', seller: 'nv@hn.vn', kho: 'Y3C' }, b), !!dry);
 let bu = ib({ items: [{ ma_hang: 'th2040d40', so_tem: 2 }, { ma_hang: 'KHONGCO40', so_tem: 1 }] });
