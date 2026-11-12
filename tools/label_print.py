@@ -30,6 +30,7 @@ SHEET_ID = '1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0'
 CAT = 'cuoi_dot'  # 'cuoi_dot' = in liền cả đợt, cắt 1 lần ở cuối (anh Kha 18/10, như P-touch) · 'moi_tem' = cắt từng tem
 BATCH_MAX = 10    # gửi mỗi lần ≤10 tem, chờ máy in xong mới gửi nhóm kế; chỉ nhóm cuối cắt → cả đợt cắt 1 lần ở cuối
 # (12/11: gửi 30 tem 1 lệnh quá 15 giây write_timeout của pyusb, máy dừng ở tem ~19; anh Kha bỏ cắt theo mã vì phiền)
+WRITE_TIMEOUT_MS = 60000  # chờ ghi USB tối đa 60 giây (thư viện mặc định 15 giây; anh Kha 12/11)
 WAIT_BASE_S, WAIT_PER_TEM_S = 15, 4  # thời gian chờ tối đa 1 nhóm: 15 giây + 4 giây / tem
 STATUS_REQ = b'\x1b\x69\x53'  # ESC i S: hỏi trạng thái máy
 MAX_AGE_MIN = 30  # lệnh cũ hơn thì bỏ, không để máy in vừa bật lên in tem của sáng nay
@@ -127,6 +128,7 @@ def print_records(records, kho, dry=False, mau=None, out_dir='/tmp'):
     total, done = len(images), 0
     try:
         printer = backend_factory('pyusb')['backend_class'](ident)
+        printer.write_timeout = WRITE_TIMEOUT_MS  # thư viện đặt 15000 ms trong __init__; _write đọc lại mỗi lần ghi
     except Exception as e:
         return {'ok': False, 'so_tem': total, 'loi': f'không mở được máy in: {e}'}
     try:
