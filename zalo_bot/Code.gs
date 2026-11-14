@@ -752,6 +752,7 @@ function navHandle_(text, chatId, dryRun) {
   if (t === 'menu' || t === 'm') return { text: navMenu_(chatId) };
   if (/^(du\s*phong|dự\s*phòng)$/.test(t)) return { text: (zaloGhiSo_() ? DU_PHONG_TEXT : DU_PHONG_GON_TEXT) + '\nNhắn số: 9 Menu' };
   if (/^(che\s*do|chế\s*độ)$/.test(t)) return navCheDo_(chatId);
+  if (/^(khoa|khoá)\s*sheet$/.test(t)) return navKhoaSheet_(chatId);
   if (/^(thu\s*web|thử\s*web)$/.test(t)) return navThuWeb_(chatId);
   if (!/^\d$/.test(t)) {
     const a = navGetAsk_(chatId);
@@ -782,6 +783,7 @@ function navHandle_(text, chatId, dryRun) {
     case 'huy6': return navCancelPick_(n, chatId, a.d, dryRun);
     case 'web': return navWebPick_(n, chatId, a.d, dryRun);
     case 'chedo': return navCheDoPick_(n, chatId, a.d, dryRun);
+    case 'khoasheet': return navKhoaSheetPick_(n, chatId, a.d, dryRun);
     case 'undo1':
       if (n !== 1) return { text: navMenu_(chatId) };
       navClearAsk_(chatId);
@@ -1763,6 +1765,33 @@ function metaSet_(pairs) {
 }
 
 /** Lệnh Zalo "che do" (Chủ): xem / đổi chế độ sổ gốc — menu số, nhắn 2 lần trong 10 phút mới đổi (luật 14). */
+/** Lệnh Zalo "khoa sheet" (Chủ, 14/11): bật / tắt công tắc DU_PHONG_CONG (khoá ghi Sheet khi web không Dự phòng) — trang cài đặt
+ *  Apps Script chỉ đọc khi quá 50 thuộc tính. Nhắn số 2 lần trong 10 phút mới đổi (luật 14). */
+function navKhoaSheet_(chatId) {
+  if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ đổi khoá ghi Sheet.\nNhắn số: 9 Menu' };
+  navSetAsk_(chatId, 'khoasheet', {});
+  const on = PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') === '1';
+  const d = on ? webDuPhong_() : {};
+  return { text: '🔐 Khoá ghi Sheet: ' + (on ? 'BẬT (' + (d.loi ? 'web không trả lời → theo META' : d.du_phong ? 'web đang Dự phòng → bot được ghi' : 'web là sổ gốc → bot không ghi Sheet') + ')' : 'TẮT (bot ghi theo META như cũ)') +
+    '\nNhắn số: 1 Bật · 2 Tắt · 0 Để sau' };
+}
+
+function navKhoaSheetPick_(n, chatId, d, dryRun) {
+  if (n !== 1 && n !== 2) { navClearAsk_(chatId); return { text: navMenu_(chatId) }; }
+  const ten = n === 1 ? 'BẬT khoá ghi Sheet' : 'TẮT khoá ghi Sheet';
+  if (!(d.pending === n && Date.now() - (d.pt || 0) <= UNDO_SECONDS * 1000)) {
+    navSetAsk_(chatId, 'khoasheet', { pending: n, pt: Date.now() });
+    return { text: '⚠️ ' + ten + ' — nhắn ' + n + ' lần nữa (trong 10 phút) để đổi · ' + NAV_FOOT };
+  }
+  navClearAsk_(chatId);
+  if (dryRun) return { text: '🧪 CHẠY THỬ — sẽ ' + ten };
+  const props = PropertiesService.getScriptProperties();
+  if (n === 1) props.setProperty('DU_PHONG_CONG', '1'); else props.deleteProperty('DU_PHONG_CONG');
+  CacheService.getScriptCache().remove('du_phong'); delete MEMO.__duPhong;
+  console.log('khoa sheet ' + (n === 1 ? 'bat' : 'tat') + ' bởi ' + (CTX.seller || chatId));
+  return { text: '✅ Đã ' + ten + '.\nNhắn số: 9 Menu' };
+}
+
 function navCheDo_(chatId) {
   if (!navIsOwner_(chatId)) return { text: '🔒 Chỉ Chủ đổi chế độ sổ gốc.\nNhắn số: 9 Menu' };
   navSetAsk_(chatId, 'chedo', {});

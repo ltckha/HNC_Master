@@ -1622,5 +1622,14 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
   delete PROPS.DU_PHONG_CONG;
   eq('công tắc tắt: META như cũ (chưa có → master)', mode([200, { du_phong: false }]), ['master', 'master', 'master']);
   ctx.UrlFetchApp.fetch = f0; DATA.META = meta0; delete PROPS.SYNC_HINT_URL; delete PROPS.BOT_CALLBACK_KEY; delete CACHE.du_phong; vm.runInContext('MEMO={};', ctx); }
+{ // 14/11 lệnh Zalo "khoa sheet" (Chủ): bật / tắt DU_PHONG_CONG, nhắn số 2 lần
+  const o = PROPS.OWNER_CHAT_ID, z1 = (t, c) => ctx.handleText_(t, false, c || o, 'Chủ'); delete PROPS.DU_PHONG_CONG;
+  eq('khoa sheet: nhân viên bị chặn', /Chỉ Chủ/.test(z1('khoa sheet', 'NV9')), true);
+  eq('khoa sheet: hiện TẮT + menu số', /TẮT[\s\S]*1 Bật · 2 Tắt/.test(z1('khoa sheet')), true);
+  eq('khoa sheet 1 lần → hỏi lại, chưa bật', [/nhắn 1 lần nữa/.test(z1('1')), PROPS.DU_PHONG_CONG], [true, undefined]);
+  eq('khoa sheet 1 lần 2 → bật', [/Đã BẬT/.test(z1('1')), PROPS.DU_PHONG_CONG], [true, '1']);
+  z1('khoa sheet'); z1('2'); z1('2');
+  eq('khoa sheet 2 hai lần → tắt', PROPS.DU_PHONG_CONG, undefined);
+  delete PROPS['ask_' + o]; }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);
