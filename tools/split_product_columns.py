@@ -22,6 +22,7 @@ from google.oauth2.service_account import Credentials
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 from tools.product_dictionary import COT_MOI, GOP, SO_TU, OUT, SHEET_ID, chuan, so_dep  # noqa: E402
 
 SUA_CHU = [('Hải nancy', 'Hải Nancy'), ('TÚi', 'Túi')]  # chữ sai đã gặp (Phân tích rà 29/10)

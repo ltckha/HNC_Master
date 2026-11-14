@@ -1585,6 +1585,22 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
   mode([200, { du_phong: true }]);
   eq('cổng Dự phòng: in_tem qua bot như cũ', ctx.handleStock_({ action: 'in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, true).ok, true);
   mode([200, { du_phong: false }]);
+  { // 14/11 anh Kha: "zalo và sheet bây giờ chỉ cho hướng chạy dự phòng" → khoaGhi_ chặn mọi lệnh ghi ở mọi cửa
+    const w0 = WRITES.length;
+    const sp = JSON.parse(ctx.doPost({ parameter: { sale_key: PROPS.SALE_KEY }, postData: { contents: JSON.stringify({ ticket_id: 'K1', channel: 'shopee', lines: [{ code: 'TH2040D', size: '40', qty: 1, price: 1, warehouse: '15E' }] }) } }).t);
+    const nh = ctx.handleStock_({ action: 'nhap', seller: 'nv@hn.vn', ticket_id: 'K2', lines: [{ code: 'TH2040D', size: '40', qty: 1, warehouse: '15E' }] }, false);
+    const tm = ctx.handleStock_({ action: 'tao_ma', seller: 'nv@hn.vn', ma: 'ZZ1D' }, false);
+    const ms = ctx.handleStock_({ action: 'xuat_misa', seller: 'ltckha@gmail.com', loai: 'danh_muc' }, false);
+    const hds = ctx.handleStock_({ action: 'hoa_don', seller: 'ltckha@gmail.com', che_do: 'ds' }, true);
+    const kq = ctx.handleStock_({ action: 'kq_in_tem', kho: '15E' }, false);
+    eq('khoá ghi: đơn sàn (sale_key), nhập, tạo mã, xuất MISA bị chặn kèm link; hoá đơn ds + kq_in_tem (chỉ đọc) vẫn chạy; không ghi Sheet',
+      [sp.ok, /admin\/app#ban/.test(sp.error), nh.ok, nh.khoa_ghi, tm.khoa_ghi, /admin\/xuat/.test(ms.error), hds.ok !== false && !hds.khoa_ghi, kq.ok, WRITES.length - w0],
+      [false, true, false, true, true, true, true, true, 0]);
+    DATA.META = [DATA.META[0], ['che_do_kho', 'master', '']]; mode([500, {}]);
+    eq('khoá ghi: web sập + Chủ mở 1 sổ (che do) → mở khoá chung, sổ đó qua cổng riêng', vm.runInContext('khoaGhi_()', ctx), false);
+    DATA.META = [DATA.META[0]]; mode([200, { du_phong: false }]);
+  }
+  mode([200, { du_phong: false }]);
   delete PROPS.DU_PHONG_CONG;
   eq('công tắc tắt: META như cũ (chưa có → master)', mode([200, { du_phong: false }]), ['master', 'master', 'master']);
   ctx.UrlFetchApp.fetch = f0; DATA.META = meta0; delete PROPS.SYNC_HINT_URL; delete PROPS.BOT_CALLBACK_KEY; delete CACHE.du_phong; vm.runInContext('MEMO={};', ctx); }

@@ -20,6 +20,7 @@ from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import label_render  # noqa: E402
 import health_log  # noqa: E402

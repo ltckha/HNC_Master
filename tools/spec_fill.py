@@ -35,6 +35,7 @@ SHEET_ID = "1U0b6_aVJJ93i5-V1RV1jUsQ9dhLYCY9BcJMI7R6J2C0"  # HNC_Control_Center
 SANPHAM_HEADER_ROW = 2  # luật 4: SANPHAM để tên cột kỹ thuật ở hàng 2
 MEDIA_DIR = "/Volumes/Media/HNC_Master"
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 from hnc_paths import find_system_dir  # noqa: E402  (đường dẫn Drive khai 1 chỗ)
 from tools import gemini_models  # noqa: E402  (thứ tự mô hình chung)
 EXPORT_DIR = os.path.join(find_system_dir(), "HNC_Exported_Files")

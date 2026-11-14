@@ -12,6 +12,7 @@ from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 from tools.split_product_columns import _mo  # noqa: E402
 from tools.product_dictionary import OUT, SHEET_ID  # noqa: E402
 

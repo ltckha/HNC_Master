@@ -12,6 +12,7 @@ from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 BANG = json.load(open(os.path.join(ROOT, 'shared', 'data_contract.json'), encoding='utf-8'))['mac_dinh_theo_nganh']
 
 

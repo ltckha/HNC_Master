@@ -47,6 +47,8 @@ try:
     HAS_GSPREAD = True
 except ImportError:
     HAS_GSPREAD = False
+if HAS_GSPREAD:
+    from tools import sheet_guard  # noqa: F401 — khoá ghi Sheet khi không Dự phòng (14/11, cùng luật bot khoaGhi_)
 
 # Dotenv & Gemini Multimodal AI Setup
 try:

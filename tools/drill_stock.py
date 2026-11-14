@@ -14,6 +14,7 @@ TEST_ID = '1QwH7Y1A45Pb9S0JbfDSkrP-VeUmD_cA6FsKdI4Gmxcw'
 os.environ['HNC_SHEET_ID'] = TEST_ID
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 import main  # noqa: E402
 from tools.stock_rules_node import goi  # noqa: E402
 

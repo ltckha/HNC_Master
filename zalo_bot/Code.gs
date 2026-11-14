@@ -216,6 +216,7 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
       const goc = zaloGhiSoLink_(text, cmdLines); // gọn bot 29/10: lệnh ghi sổ → link màn app
       if (goc) return { reply: goc, syncTabs: [] };
       const isWriteCmd = cmdLines.length || [ACTIONS.SELL, ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.UNDO].indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
+      if (isWriteCmd && khoaGhi_()) return { reply: khoaGhiText_('/admin/app') + '\nNhắn số: 9 Menu', syncTabs: [] };
       if (isWriteCmd && !dryRun) { const blk = choChepBlock_(); if (blk) return { reply: '⏳ ' + blk + '\nNhắn số: 9 Menu', syncTabs: [] }; }
       const STOCK_ZALO = [ACTIONS.IN, ACTIONS.OUT, ACTIONS.TRANSFER, ACTIONS.MOVE_LOC];
       const isStock = cmdLines.length ? cmdLines.some(l => STOCK_ZALO.indexOf(parseMessage_(l, knownCodes_()).action) !== -1) : STOCK_ZALO.indexOf(parseMessage_(text, knownCodes_()).action) !== -1;
@@ -1522,7 +1523,8 @@ function handleSaleRequest_(e) {
     } else {
       const body = docBody_(e);
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
-      out = body.action === 'huy_ban' ? saleUndo_(body, dryRun) : handleSale_(body, dryRun);
+      out = khoaGhi_() ? { ok: false, web_mode: true, ticket_id: String(body.ticket_id || ''), error: khoaGhiText_('/admin/app#ban') }
+        : body.action === 'huy_ban' ? saleUndo_(body, dryRun) : handleSale_(body, dryRun);
       if (body.action === 'huy_ban') {
         if (!dryRun && out.ok) { try { queueSyncHint_(['BAN'].concat(out._ky ? ['KHO15E', 'KHOY3C'] : [])); } catch (err) { console.error(err && err.stack ? err.stack : err); } }
         delete out._ky;
@@ -1610,6 +1612,17 @@ function khoaGhiText_(man) {
   return '🌐 Làm trên web: ' + WEB_GOC + (man || '/admin/app') + (d.loi ? '\n⚠️ ' + d.loi + ' — web sập thì Chủ nhắn "che do" → bật Dự phòng.' : '');
 }
 const WEB_GOC = 'https://giayhainancy.vn';
+
+/** 14/11 (anh Kha: "zalo và sheet bây giờ chỉ cho hướng chạy dự phòng"): công tắc DU_PHONG_CONG bật và cả 4 sổ ở Web
+ *  → bot không ghi Sheet ở BẤT KỲ lệnh nào (chỉ còn tin báo Zalo, lệnh xem / link web, "che do"). Chủ mở tay 1 sổ (META master) → mở,
+ *  từng sổ vẫn qua cổng riêng của nó. */
+function khoaGhi_() {
+  if (PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') !== '1') return false;
+  return CHE_DO_SO.every(m => metaMode_(m.key) === 'web');
+}
+// stock_key: lệnh chỉ đọc / không ghi Sheet (Script Property, Drive nháp) vẫn chạy khi khoá
+const STOCK_DOC = ['kq_in_tem', 'doc_phieu', 'ds_nhap', 'xem_nhap', 'bo_nhap'];
+const HD_DOC = ['ds', 'xem', 'tin', 'trang_thai'];
 
 function cheDoKho_() { return metaMode_('che_do_kho'); } // P2: phiếu kho ghi D1
 function cheDoTon_() { return metaMode_('che_do_ton'); } // P3: tồn tính ở D1
@@ -2092,6 +2105,14 @@ function handleStockRequest_(e) {
 function handleStock_(body, dryRun) {
   MEMO = {};
   rowSrcStart_('app', PN_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1 && body.id ? body.id : (body.ticket_id || body.id));
+  // 14/11: khoá ghi Sheet (khoaGhi_) chặn trước mọi lệnh ghi, kể cả chuyển web / tạo mã mới
+  const action0 = String(body.action || '').trim().toLowerCase();
+  if (khoaGhi_() && STOCK_DOC.indexOf(action0) === -1 && !(action0 === 'hoa_don' && HD_DOC.indexOf(String(body.che_do || '').trim()) !== -1)) {
+    const man = { hoa_don: '/admin/nhap-hang', xac_nhan: '/admin/nhap-hang', huy_nhap: '/admin/nhap-hang', xuat_misa: '/admin/xuat', in_tem: '/admin/app#in-tem',
+      in_bu: '/admin/app#in-tem', da_in_tem: '/admin/app#in-tem', bo_sung_sp: '/admin/app#kiem', tao_ma: '/admin/nhap-hang', chuyen_vi_tri: '/admin/app#kho-vi-tri',
+      chuyen_kho: '/admin/app#kho-chuyen', xuat: '/admin/app#kho-tra', tra_hang: '/admin/app#doi-tra' }[action0];
+    return { ok: false, action: action0, ticket_id: String(body.ticket_id || ''), khoa_ghi: true, error: khoaGhiText_(man) };
+  }
   if (KHO_WEB_ACTIONS.indexOf(String(body.action || '').trim().toLowerCase()) !== -1) {
     const g = stockWebGate_({ nguon: 'app_kho', dry_run: !!dryRun, body });
     if (g) return g;
@@ -4407,7 +4428,7 @@ function handleExportRequest_(e) {
     } else {
       const body = docBody_(e);
       const dryRun = String(props.getProperty('DRY_RUN') || '').toLowerCase() === 'true' || body.dry_run === true;
-      out = handleExport_(body, dryRun);
+      out = khoaGhi_() ? { ok: false, khoa_ghi: true, error: khoaGhiText_('/admin/xuat') } : handleExport_(body, dryRun);
       if (!dryRun && out.ok && !out.duplicate && out.written) {
         try { queueSyncHint_([out.kind === 'update' ? 'META' : 'SANPHAM']); } catch (err) { console.error(err && err.stack ? err.stack : err); }
       }

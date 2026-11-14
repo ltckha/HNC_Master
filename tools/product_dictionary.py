@@ -19,6 +19,9 @@ from collections import Counter
 
 import gspread
 from gspread.utils import rowcol_to_a1
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 from google.oauth2.service_account import Credentials
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

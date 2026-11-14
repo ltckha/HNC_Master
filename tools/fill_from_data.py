@@ -6,6 +6,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tools import sheet_guard  # noqa: E402,F401 — khoá ghi Sheet khi không Dự phòng (14/11)
 from tools import attributes_from_name  # noqa: E402
 
 if __name__ == '__main__':
