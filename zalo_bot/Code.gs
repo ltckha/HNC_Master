@@ -1007,12 +1007,11 @@ function navReceiptStep_(n, chatId, d) {
 /** 14/11 (luật anh 20/10: giá nhập / giá HĐ / NCC không bao giờ ra Zalo): hoá đơn mua hàng chỉ trả link web, như "bc". */
 /** 14/11 (Bán hàng chốt cách A: màn Hoá đơn NCC chuyển sang web, web làm gốc từ khi nạp xong): gửi 1 lần (gọi lại an toàn, web ghi đè)
  *  mọi ô Script Property pnx_* / hdon_* / hdkhong_* (nguyên JSON, không lọc) tới POST <gốc>/api/hd-nap, ký như /api/du-phong, lô ≤ 500 khoá.
- *  body.dich = 'beta' (khoá Script Property BETA_BOT_KEY) | 'chinh' (mặc định, khoá bot sẵn có). Chỉ đọc Script Properties, không ghi Sheet. */
+ *  body.dich = 'beta' (khoá Script Property BETA_BOT_KEY nếu có, không thì khoá bot sẵn có) | 'chinh' (mặc định, khoá bot sẵn có). Chỉ đọc Script Properties, không ghi Sheet. */
 function hdNap_(body) {
   const props = PropertiesService.getScriptProperties();
   const dich = String((body && body.dich) || 'chinh').trim() === 'beta' ? 'beta' : 'chinh';
-  const key = dich === 'beta' ? props.getProperty('BETA_BOT_KEY') || '' : '';
-  if (dich === 'beta' && key.length < 16) return { ok: false, action: 'hd_nap', error: 'chưa có Script Property BETA_BOT_KEY (khoá bot của beta)' };
+  const key = dich === 'beta' ? props.getProperty('BETA_BOT_KEY') || '' : ''; // trống → khoá bot sẵn có (beta nhận khoá bot như /api/du-phong)
   const url = (dich === 'beta' ? 'https://beta.giayhainancy.vn' : (webOrigin_() || WEB_GOC)) + '/api/hd-nap';
   const all = props.getProperties(), nhom = { pnx: {}, hdon: {}, hdkhong: {} }, items = [];
   Object.keys(all).sort().forEach(k => {

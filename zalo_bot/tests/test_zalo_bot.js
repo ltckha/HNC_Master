@@ -1608,7 +1608,8 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
       eq('hd_nap: 2 lô ≤500, đủ 600 hdon + pnx + hdkhong, nguyên JSON, ô hỏng bỏ, gốc bản chính, có ký',
         [hn.ok, hn.lo, hn.so, lots.length, lots[0].url, Object.keys(lots[0].b.hdon).length + Object.keys(lots[0].b.pnx).length + Object.keys(lots[0].b.hdkhong).length, lots.some(l => l.b.pnx.PN1 && l.b.pnx.PN1.nk === 'NK1'), !!lots[0].sig],
         [true, 2, { pnx: 1, hdon: 600, hdkhong: 1 }, 2, 'https://beta.example/api/hd-nap', 500, true, true]);
-      eq('hd_nap beta chưa có BETA_BOT_KEY → báo, không gửi', [ctx.handleStock_({ action: 'hd_nap', dich: 'beta' }, false).ok, lots.length], [false, 2]);
+      const hb = ctx.handleStock_({ action: 'hd_nap', dich: 'beta' }, false);
+      eq('hd_nap beta: gửi gốc beta, khoá bot sẵn có khi không có BETA_BOT_KEY', [hb.ok, lots[lots.length - 1].url], [true, 'https://beta.giayhainancy.vn/api/hd-nap']);
       ctx.UrlFetchApp.fetch = f1;
       Object.keys(PROPS).filter(k => /^(pnx|hdon|hdkhong)_/.test(k)).forEach(k => delete PROPS[k]); keep.forEach(([k, v]) => { PROPS[k] = v; });
     }
