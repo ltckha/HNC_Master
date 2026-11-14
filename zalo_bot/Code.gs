@@ -2110,6 +2110,11 @@ function handleStock_(body, dryRun) {
   if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
   if (action === 'xuat_misa') return handleMisaExport_(body, seller, dryRun);
   if (action === 'hoa_don') return invoiceAction_(body, seller, dryRun);
+  // 14/11 (anh Kha chốt): in tem chuyển hẳn sang web (hàng đợi + dựng tem ở web, Mac đọc cổng web). Công tắc DU_PHONG_CONG bật
+  // + sổ kho Web → bot thôi nhận in_tem / in_bu; Dự phòng (hoặc công tắc tắt) → đường bot cũ (in_tem_lenh). Gắn công tắc: sổ kho đã Web từ 21/10.
+  if ((action === 'in_tem' || action === 'in_bu') && PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') === '1' && cheDoKho_() === 'web') {
+    return { ok: false, action, kho_web: true, error: khoaGhiText_('/admin/app#in-tem') };
+  }
   if (action === 'in_tem') return labelPrint_(body, dryRun);
   if (action === 'da_in_tem') return labelDone_(body, seller, dryRun);
   if (action === 'kq_in_tem') return labelResult_(body);
