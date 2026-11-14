@@ -726,7 +726,9 @@ if (dueIds.length) {
 } else eq('4: có phiếu để duyệt', dueIds.length > 0, true);
 const s4 = SENT.length;
 PROPS.SYNC_HINT_URL = 'https://giayhainancy.vn/api/sync-hint';
-eq('nhắc hoá đơn thứ Hai gộp 1 tin + "4 Duyệt từng phiếu"', ctx.invoiceReminderMessages_().length <= 1 && (ctx.invoiceReminderMessages_()[0] || 'Nhắn số: 4').indexOf('Nhắn số: 4') !== -1, true);
+{ const m = ctx.invoiceReminderMessages_(); const s = m[0] || '';
+  eq('nhắc hoá đơn thứ Hai gộp 1 tin, link web, không tên NCC / tiền (luật 20/10)', [m.length <= 1, !s || /admin\/nhap-hang/.test(s), /Tuấn Phong|Chú Dũng|đ\b/.test(s)], [true, true, false]); }
+eq('hoadon (Chủ) trên Zalo → chỉ link web, không NCC', [/admin\/nhap-hang/.test(z('hoadon')), /Tuấn Phong/.test(z('hoadon'))], [true, false]);
 delete PROPS.SYNC_HINT_URL;
 
 // ---- Dự phòng (A1–A5) ----

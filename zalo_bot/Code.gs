@@ -58,7 +58,7 @@ const HELP_TEXT = [
   '📑 Nhiều dòng: mỗi dòng 1 lệnh ban/nhap/xuat (gửi chung 1 tin)',
   '↩️ Huỷ lệnh vừa rồi (10 phút, cả lô): huy',
   '📊 Báo cáo đơn hàng: bc  |  bc hom qua  |  bc 10/10',
-  '🧾 Hoá đơn mua hàng: hoadon  |  hoadon <mã phiếu>  |  hoadon <mã phiếu> da / khong / chua',
+  '🧾 Hoá đơn mua hàng (Chủ): hoadon → link web Nhập hàng',
   '— Kho: YEN/3C = Kho Y3C, TBH/15E = Kho 15E (tiền / hoá đơn theo Hộ 15E / Hộ Y3C)',
   '— Size: 40 | 40/2 | 40x2 | 40.2 | 2 đôi 40 | 38-43',
   '— Hàng không size: x2 | 2 cái | sl 2',
@@ -266,7 +266,7 @@ function runOne_(text, dryRun, chatId) {
     case ACTIONS.HELP: res = { text: (zaloGhiSo_() ? HELP_TEXT : HELP_GON_TEXT) + '\n\nNhắn số: 9 Menu' }; break;
     case ACTIONS.CHECK: res = !p.code && !p.baseCode ? (datNccOn_() && navIsOwner_(chatId) ? { text: datNccText_(chatId, text, dryRun) } : { text: '🤔 Mình chưa hiểu tin này.\n\n' + navMenu_(chatId) }) : doCheck_(p); break;
     case ACTIONS.REPORT: res = doReport_(p); break;
-    case ACTIONS.INVOICE: res = navIsOwner_(chatId) ? doInvoice_(p.text, dryRun) : { text: '🔒 Hoá đơn mua hàng chỉ Chủ xem / ghi.' }; break;
+    case ACTIONS.INVOICE: res = navIsOwner_(chatId) ? { text: hdLinkText_() } : { text: '🔒 Hoá đơn mua hàng chỉ Chủ xem / ghi.' }; break;
     case ACTIONS.UNDO: res = String(text || '').trim().split(/\s+/).length > 1 ? saleLineCancelAsk_(text, chatId) : doUndo_(chatId, dryRun); break;
     case ACTIONS.MOVE_LOC: res = doMoveLocation_(p, dryRun); break;
     case ACTIONS.TRANSFER: res = doTransfer_(p, dryRun); break;
@@ -620,7 +620,7 @@ const DU_PHONG_GON_TEXT = [
 const HELP_GON_TEXT = [
   '📖 BOT KHO HNC',
   '🔎 Kiểm tồn kho: TH2040D 40 (mã + size)  |  TH2040 (mẫu, mọi màu)',
-  '🧾 Hoá đơn mua hàng (Chủ): menu → 2  |  hoadon  |  hoadon <mã phiếu>',
+  '🧾 Hoá đơn mua hàng (Chủ): menu → 2  |  hoadon → link web',
   '📱 Bán / nhập / xuất / chuyển kho / trả hàng / huỷ: làm trên app ' + 'giayhainancy.vn/admin/app',
   '📊 Báo cáo, mã cần bổ sung: xem trên trang quản lý giayhainancy.vn/admin',
 ].join('\n');
@@ -803,11 +803,7 @@ function navMenuPick_(n, chatId, owner) {
       if (!list.length) { navClearAsk_(chatId); return { text: '📄 Không có phiếu nhập kho nào chờ chia.\nNhắn số: 9 Menu' }; }
       return navReceiptShow_(chatId, list.map(x => x.id), 0);
     }
-    case 4: {
-      const list = navDueInvoices_();
-      if (!list.length) { navClearAsk_(chatId); return { text: '🧾 Không còn phiếu nào quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn.\nNhắn số: 9 Menu' }; }
-      return navInvoiceShow_(chatId, list.map(x => x.id), 0);
-    }
+    case 4: navClearAsk_(chatId); return { text: hdLinkText_() };
     case 5: {
       const list = navNeedsInfoCodes_();
       if (!list.length) { navClearAsk_(chatId); return { text: '✅ Không có mã nào cần bổ sung.\nNhắn số: 9 Menu' }; }
@@ -994,7 +990,7 @@ function navReceiptShow_(chatId, ids, i) {
   if (i >= ids.length) { navClearAsk_(chatId); return { text: '✅ Hết phiếu chờ chia.\nNhắn số: 9 Menu' }; }
   const ix = receiptIndex_(ids[i]) || {};
   navSetAsk_(chatId, 'pn', { ids, i });
-  return { text: '📄 Phiếu ' + (i + 1) + '/' + ids.length + ': ' + (ix.ncc || 'chưa rõ NCC') + (ix.so ? ' ' + ix.so : '') + (ix.ngay ? ' · ' + ix.ngay : '') +
+  return { text: '📄 Phiếu ' + (i + 1) + '/' + ids.length + ': ' + ids[i] + (ix.ngay ? ' · ' + ix.ngay : '') + // không ghi NCC ra Zalo (luật 20/10)
     ' · ' + (ix.nd || 0) + ' dòng · ' + (ix.sl || 0) + ' đôi\nNhắn số: 1 Mở app chia size · 0 Để sau · 9 Menu' };
 }
 
@@ -1005,6 +1001,11 @@ function navReceiptStep_(n, chatId, d) {
     return { text: '🔗 Chia size phiếu ' + ids[i] + ': ' + receiptAppLink_(ids[i]) + '\n\n' + next.text };
   }
   return { text: navMenu_(chatId) };
+}
+
+/** 14/11 (luật anh 20/10: giá nhập / giá HĐ / NCC không bao giờ ra Zalo): hoá đơn mua hàng chỉ trả link web, như "bc". */
+function hdLinkText_() {
+  return '🧾 Hoá đơn mua hàng xem / ghi trên web (Nhập hàng › HĐ): ' + (webOrigin_() || 'https://giayhainancy.vn') + '/admin/nhap-hang\nNhắn số: 9 Menu';
 }
 
 function navInvoiceShow_(chatId, ids, i) {
@@ -4932,8 +4933,8 @@ function invoiceAction_(body, nguoi, dryRun) {
     // Đã xuất MISA giá tạm / giá cũ mà HĐ khác → nhắn Chủ sửa trên MISA
     const sua = rows.filter(r => /^Done/.test(r.misa) && /giá tạm|giá cũ/.test(r.misa) && r.moi !== r.gia_da_xuat).map(r => r.ma + (r.size || '') + ' (' + money_(r.moi) + ')');
     if (lech.length || sua.length) {
-      syncAlertOwner_('🧾 HĐ ' + soHd + ' (' + ids.join(', ') + ')' + (lech.length ? '\nLệch giá phiếu: ' + lech.join('; ') : '') +
-        (sua.length ? '\nĐã xuất MISA giá tạm → sửa đơn giá trên MISA: ' + sua.join('; ') : '') + '\nNhắn số: 9 Menu', 'hd_lech');
+      syncAlertOwner_('🧾 HĐ ' + soHd + ' (' + ids.join(', ') + ')' + (lech.length ? '\nLệch giá phiếu: ' + lech.length + ' dòng' : '') + // không ghi giá ra Zalo (luật 20/10)
+        (sua.length ? '\nĐã xuất MISA giá tạm → sửa đơn giá trên MISA: ' + sua.length + ' mã' : '') + '\nXem trên web: ' + (webOrigin_() || 'https://giayhainancy.vn') + '/admin/nhap-hang\nNhắn số: 9 Menu', 'hd_lech');
       out.sua_misa = sua;
       out.bao_chu = true;
     }
@@ -5214,9 +5215,10 @@ function invoiceReminderMessages_() {
   if (!due.length) return [];
   // Gộp 1 tin (anh Kha 17/10): danh sách ngắn; câu nhắn gửi NCC xem khi duyệt từng phiếu (menu 4)
   const lines = ['⏰ ' + due.length + ' phiếu nhập kho quá ' + INVOICE_REMIND_DAYS + ' ngày chưa có hoá đơn mua hàng:'];
-  due.slice(0, 25).forEach(t => lines.push('• ' + t.id + ' · ' + t.supplier + ' · ' + t.qty + ' sp · ' + invoiceAgeDays_(t) + ' ngày'));
+  due.slice(0, 25).forEach(t => lines.push('• ' + t.id + ' · ' + t.qty + ' sp · ' + invoiceAgeDays_(t) + ' ngày')); // không ghi NCC (luật 20/10)
   if (due.length > 25) lines.push('… còn ' + (due.length - 25) + ' phiếu nữa');
-  lines.push('Nhắn số: 4 Duyệt từng phiếu (kèm câu nhắn gửi NCC) · 9 Menu');
+  lines.push('Xem / ghi trên web: ' + (webOrigin_() || 'https://giayhainancy.vn') + '/admin/nhap-hang');
+  lines.push('Nhắn số: 9 Menu');
   return [lines.join('\n')];
 }
 
