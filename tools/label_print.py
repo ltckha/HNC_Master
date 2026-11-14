@@ -271,6 +271,8 @@ def poll_web(dry=False):
     Trả số lệnh đã xử lý; None = web Dự phòng / lỗi / chưa có cổng → chỉ dùng tab in_tem_lenh như cũ."""
     sys.path.insert(0, ROOT)
     from tools import web_commands
+    if web_commands._env('DU_PHONG_CONG') != '1':  # chỉ gọi khi công tắc bật (web xin: tránh 404 tốn hạn mức Worker)
+        return None
     w = web_commands.in_tem('lay')
     if not w.get('ok') or w.get('du_phong'):
         return None

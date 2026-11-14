@@ -131,6 +131,11 @@ data1 = convert(qlr=label_print.batch_raster('QL-700', 4, True), images=imgs, la
 eq('cắt từng tem: ESC i A 1', data1.count(b'\x1biA\x01'), 4)
 
 # Hàng đợi in tem của web (14/11): web giả, máy in giả — không gọi web / máy in thật
+_env0 = web_commands._env
+web_commands._env = lambda n: '' if n == 'DU_PHONG_CONG' else _env0(n)
+WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 6, 'kho': '15E', 'lenh': job()}]}
+eq('công tắc tắt → không gọi hàng đợi web', label_print.poll_web(), None)
+web_commands._env = lambda n: '1' if n == 'DU_PHONG_CONG' else _env0(n)
 mark0, print0 = len(calls['mark']), calls['print']
 label_print.print_records = fake_print(True)
 WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 7, 'kho': '15E', 'lenh': job(dong=('PN-1#2',))}]}
@@ -150,7 +155,12 @@ eq('web lỗi / chưa có cổng → None (dùng tab)', label_print.poll_web(), 
 WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 9, 'kho': '15E', 'lenh': '{hỏng'}]}
 label_print.poll_web()
 eq('web: lệnh hỏng → báo lỗi, không giữ', [WEB['kq'][-1]['ket_qua']['ok'], WEB['kq'][-1]['giu'], 'lệnh in hỏng' in WEB['kq'][-1]['ket_qua']['loi']], [False, False, True])
+WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 10, 'kho': '15E', 'lenh': job(luc=(datetime.now() - timedelta(minutes=45)).strftime('%Y-%m-%d %H:%M:%S'))}]}
+p0 = calls['print']
+label_print.poll_web()
+eq('web: lệnh quá 30 phút → không in, kq ok false giu false (ra khỏi hàng)', [calls['print'] - p0, WEB['kq'][-1]['ket_qua']['ok'], WEB['kq'][-1]['giu']], [0, False, False])
 WEB['lay'] = {'ok': False, 'error': 'test'}
+web_commands._env = _env0
 
 if fails:
     sys.exit(1)
