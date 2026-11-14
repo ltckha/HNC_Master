@@ -191,6 +191,8 @@ def mark_done(rows, codes):
                 vals = got[r]
                 dong.append({'row': r, 'code': vals[ip].strip().upper(), 'ma_dong': (vals[im] if im is not None and im < len(vals) else '').strip(), 'value': stamp})
             w = web_commands.co_nhap('web_label', dong)
+        if w is None and web_commands.che_do(web_commands.meta(ws.spreadsheet), 'che_do_kho') == 'web':
+            raise RuntimeError('sổ kho ở Web — không ghi thẳng web_label vào NHAP; đánh dấu trên web màn In tem')
         if w is None:
             ws.update_cells(cells)
         elif not w.get('ok'):

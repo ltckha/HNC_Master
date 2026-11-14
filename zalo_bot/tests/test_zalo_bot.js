@@ -1419,8 +1419,8 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   // p5b_web tắt → như cũ (không gọi web)
   DATA.META = DATA.META.filter(r => r[0] !== 'p5b_web'); vm.runInContext('MEMO={};', ctx);
   const n1 = sent.length; lbRow[9] = '';
-  ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
-  eq('P5b tắt (chưa có p5b_web) → bot ghi Sheet như cũ, không gọi web', [sent.length - n1, /^Done - /.test(lbRow[9])], [0, true]);
+  const dt = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
+  eq('P5b tắt + sổ kho Web (14/11) → không gọi web, KHÔNG ghi thẳng NHAP, chỉ màn web', [sent.length - n1, /^Done - /.test(lbRow[9]), dt.ok, dt.kho_web], [0, false, false, true]);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
 { // Agent đăng SP 28/10: web ghi CON_DES (chữ) đè công thức dòng cuối → mã mới lấy công thức CON_DES gần nhất phía trên, không chép chữ
   const sp0 = DATA.SANPHAM;
@@ -1557,5 +1557,22 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
 eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 15)', JSON.stringify(vm.runInContext('RECEIPT_MODELS', ctx)), JSON.stringify(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'gemini_models.json'), 'utf8')).models));
 { const py = fs.readFileSync(path.join(__dirname, '..', '..', 'tools', 'returns_exchanges.py'), 'utf8').match(/^PAY_SO = (\{.*\})$/m);
   eq('Cách thu: bot PAY_SO khớp Mac tools/returns_exchanges.py (luật 15)', JSON.stringify(vm.runInContext('PAY_SO', ctx)), JSON.stringify(JSON.parse(py[1].replace(/'/g, '"')))); }
+{ // 14/11 cổng Dự phòng: DU_PHONG_CONG = 1 → hỏi web /api/du-phong; lỗi = khoá; META master (che do) = mở tay
+  const meta0 = DATA.META, f0 = ctx.UrlFetchApp.fetch; let rep = [200, { du_phong: false }], urls = [];
+  DATA.META = [['key', 'value', 'updated_at']]; PROPS.DU_PHONG_CONG = '1'; PROPS.SYNC_HINT_URL = 'https://beta.example/api/sync-hint'; PROPS.BOT_CALLBACK_KEY = 'k'.repeat(20);
+  ctx.UrlFetchApp.fetch = (url, opt) => { if (url.indexOf('/api/du-phong') === -1) return f0(url, opt); urls.push(url); return { getResponseCode: () => rep[0], getContentText: () => JSON.stringify(rep[1]) }; };
+  const mode = (r) => { rep = r; vm.runInContext('MEMO={};', ctx); delete CACHE.du_phong; return vm.runInContext("[metaMode_('che_do'), metaMode_('che_do_kho'), metaMode_('che_do_hh')]", ctx); };
+  eq('cổng: du_phong false → 3 sổ khoá (web), gọi web 1 lần', [mode([200, { du_phong: false }]), urls.length, urls[0]], [['web', 'web', 'web'], 1, 'https://beta.example/api/du-phong']);
+  eq('cổng: du_phong true → mở (master)', mode([200, { du_phong: true, luc: 'x', boi: 'y' }]), ['master', 'master', 'master']);
+  eq('cổng: web lỗi 500 → khoá', mode([500, {}]), ['web', 'web', 'web']);
+  eq('cổng: câu khoá kèm cách bật Dự phòng khi web không trả lời', /web không trả lời[\s\S]*che do/.test(vm.runInContext("khoaGhiText_('/admin/app#in-tem')", ctx)), true);
+  DATA.META.push(['che_do_kho', 'master', '']);
+  eq('cổng: META che_do_kho = master (Chủ nhắn che do) → sổ kho mở dù web lỗi', mode([500, {}]), ['web', 'master', 'web']);
+  DATA.META.pop(); mode([200, { du_phong: false }]);
+  const dn = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
+  eq('cổng khoá: da_in_tem không ghi thẳng web_label NHAP, chỉ đường web', [dn.ok, /admin\/app#in-tem/.test(dn.error)], [false, true]);
+  delete PROPS.DU_PHONG_CONG;
+  eq('công tắc tắt: META như cũ (chưa có → master)', mode([200, { du_phong: false }]), ['master', 'master', 'master']);
+  ctx.UrlFetchApp.fetch = f0; DATA.META = meta0; delete PROPS.SYNC_HINT_URL; delete PROPS.BOT_CALLBACK_KEY; delete CACHE.du_phong; vm.runInContext('MEMO={};', ctx); }
 console.log((fail ? '❌ ' : '✅ ') + (total - fail) + '/' + total + ' ca đạt');
 process.exit(fail ? 1 : 0);

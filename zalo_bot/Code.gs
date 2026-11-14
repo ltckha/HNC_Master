@@ -1560,31 +1560,54 @@ function saleWebGate_(payload) {
   return { ok: false, web_mode: true, error: WEB_MODE_SALE_TEXT };
 }
 
-/** META che_do: 'web' | 'master' (mặc định master; không đọc được META → master). Cùng luật main.py loader.che_do(). */
-function cheDo_() {
+/** META che_do: 'web' | 'master'. Cùng luật main.py loader.che_do() / meta_mode(). */
+function cheDo_() { return metaMode_('che_do'); }
+
+/** Giá trị thô 1 khoá chế độ trong META: 'web' | 'master' | '' (chưa có dòng) | null (không đọc được META). */
+function metaModeRaw_(key) {
   try {
     const meta = sheetValues_('META');
     const c = headerMap_(meta[0] || []);
-    if (c.key === undefined || c.value === undefined) return 'master';
-    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === 'che_do');
-    return r && String(r[c.value]).trim().toLowerCase() === 'web' ? 'web' : 'master';
+    if (c.key === undefined || c.value === undefined) return '';
+    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === key);
+    return !r ? '' : String(r[c.value]).trim().toLowerCase() === 'web' ? 'web' : 'master';
   } catch (err) {
-    return 'master';
+    return null;
   }
 }
 
-/** Đọc 1 khoá chế độ trong META ('web' | 'master'); mặc định / không đọc được → master. */
+/** Chế độ 1 sổ ('web' | 'master' = Dự phòng: bot / Mac được ghi Sheet).
+ *  Công tắc Script Property DU_PHONG_CONG = 1 (14/11, anh Kha: bình thường chỉ web ghi, Sheet là bản web chép; bật Dự phòng mới mở):
+ *   - META khoá = master (Chủ nhắn "che do" → Dự phòng, đường mở tay khi web sập) → master;
+ *   - còn lại hỏi cổng web /api/du-phong (1 công tắc chung): du_phong = true → master; false / web không trả lời → web (KHOÁ ghi Sheet).
+ *  Tắt (mặc định) → chỉ đọc META như cũ (chưa có / không đọc được → master). */
 function metaMode_(key) {
-  try {
-    const meta = sheetValues_('META');
-    const c = headerMap_(meta[0] || []);
-    if (c.key === undefined || c.value === undefined) return 'master';
-    const r = meta.find((row, i) => i > 0 && String(row[c.key]).trim() === key);
-    return r && String(r[c.value]).trim().toLowerCase() === 'web' ? 'web' : 'master';
-  } catch (err) {
-    return 'master';
-  }
+  const raw = metaModeRaw_(key);
+  if (PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') !== '1') return raw === 'web' ? 'web' : 'master';
+  if (raw === 'master') return 'master';
+  return webDuPhong_().du_phong ? 'master' : 'web';
 }
+
+/** Cổng web POST /api/du-phong (ký như /api/bot-lenh) → {du_phong, luc, boi}; lỗi → {du_phong:false, loi}. Nhớ 60 giây (lỗi 20 giây). */
+function webDuPhong_() {
+  if (MEMO.__duPhong) return MEMO.__duPhong;
+  const cache = CacheService.getScriptCache();
+  const c = cache.get('du_phong');
+  if (c) return (MEMO.__duPhong = JSON.parse(c));
+  const w = webForward_({}, '/api/du-phong');
+  const r = w && typeof w.du_phong === 'boolean' ? { du_phong: w.du_phong, luc: w.luc || null, boi: w.boi || null }
+    : { du_phong: false, loi: 'web không trả lời (' + String((w && w.error) || 'không rõ').slice(0, 120) + ')' };
+  cache.put('du_phong', JSON.stringify(r), r.loi ? 20 : 60);
+  return (MEMO.__duPhong = r);
+}
+
+/** Câu báo khi sổ đang khoá (web ghi): làm trên màn web; web không trả lời thì kèm cách bật Dự phòng tay. */
+function khoaGhiText_(man) {
+  const d = PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') === '1' ? webDuPhong_() : {};
+  return '🌐 Làm trên web: ' + WEB_GOC + (man || '/admin/app') + (d.loi ? '\n⚠️ ' + d.loi + ' — web sập thì Chủ nhắn "che do" → bật Dự phòng.' : '');
+}
+const WEB_GOC = 'https://giayhainancy.vn';
+
 function cheDoKho_() { return metaMode_('che_do_kho'); } // P2: phiếu kho ghi D1
 function cheDoTon_() { return metaMode_('che_do_ton'); } // P3: tồn tính ở D1
 function cheDoHh_() { return metaMode_('che_do_hh'); }   // P4: hàng hoá + giá sửa trên admin
@@ -5161,6 +5184,8 @@ function labelDone_(body, nguoi, dryRun) {
   const w = nhapFlagsWeb_('web_label', sel.rows.map(x => ({ row: x.row, value: stamp }))); // P5b: sổ kho Web → web ghi
   if (w && !w.ok) return { ok: false, action: 'da_in_tem', error: w.error };
   if (w) return { ok: true, action: 'da_in_tem', so_dong: sel.rows.length, web: true };
+  // 14/11: sổ kho Web mà web chưa nhận cờ (P5b tắt) → không ghi thẳng NHAP (Sheet là bản web chép)
+  if (cheDoKho_() === 'web') return { ok: false, action: 'da_in_tem', kho_web: true, error: khoaGhiText_('/admin/app#in-tem') };
   sel.rows.forEach(x => sheet.getRange(x.row, c.web_label + 1).setValue(stamp));
   console.log('da_in_tem kho ' + sel.kho + ' bởi ' + nguoi + ': ' + sel.rows.length + ' dòng');
   return { ok: true, action: 'da_in_tem', so_dong: sel.rows.length, _sync: ['NHAP'] };

@@ -45,7 +45,47 @@ def bat(m, key):
 
 def p5b_on(m, so):
     """so = 'che_do_kho' | 'che_do_hh'."""
-    return bat(m, 'p5b_web') and str(m.get(so, '')).strip().lower() == 'web'
+    return bat(m, 'p5b_web') and che_do(m, so) == 'web'
+
+
+_DU_PHONG = {}
+
+
+def du_phong():
+    """Cổng web POST /api/du-phong (14/11, 1 công tắc chung, ký như /api/bot-lenh) → {'du_phong', 'luc', 'boi'};
+    lỗi → {'du_phong': False, 'loi'} (coi như khoá). Nhớ 60 giây (lỗi 20 giây). Cùng luật bot webDuPhong_."""
+    import time
+    if _DU_PHONG and time.time() < _DU_PHONG.get('_het', 0):
+        return _DU_PHONG
+    luc = _luc()
+    r, loi = _post('/api/du-phong', {'luc': luc}, luc)
+    out = {}
+    if r is not None:
+        try:
+            out = r.json() if r.status_code == 200 else {}
+        except ValueError:
+            out = {}
+        if r.status_code != 200:
+            loi = f'web trả lỗi {r.status_code}'
+    if isinstance(out.get('du_phong'), bool):
+        kq = {'du_phong': out['du_phong'], 'luc': out.get('luc'), 'boi': out.get('boi')}
+    else:
+        kq = {'du_phong': False, 'loi': f"web không trả lời ({(loi or 'không rõ')[:120]})"}
+    _DU_PHONG.clear()
+    _DU_PHONG.update(kq, _het=time.time() + (20 if 'loi' in kq else 60))
+    return _DU_PHONG
+
+
+def che_do(m, key):
+    """Chế độ 1 sổ ('web' | 'master' = Dự phòng, Mac được ghi Sheet). m = meta(). Cùng luật bot metaMode_ (luật 15):
+    DU_PHONG_CONG=1 (.env) → META khoá = master (mở tay ở menu [7] / bot "che do") thì master; còn lại hỏi cổng web:
+    du_phong → master, không / web không trả lời → web (khoá). Tắt → chỉ đọc META như cũ (chưa có → master)."""
+    raw = str(m.get(key, '')).strip().lower()
+    if _env('DU_PHONG_CONG') != '1':
+        return 'web' if raw == 'web' else 'master'
+    if key in m and raw != 'web':
+        return 'master'
+    return 'master' if du_phong().get('du_phong') else 'web'
 
 
 def _env(name):

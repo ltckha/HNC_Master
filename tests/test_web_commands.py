@@ -109,5 +109,20 @@ META.v = [r for r in META.v if r[0] != 'p5b_web']
 n, SP.writes[:] = len(SENT), []
 L.update_status('SANPHAM', [2], 1, 'Done')
 eq('chưa có p5b_web → ghi Sheet, không gọi web', [len(SENT) - n, len(SP.writes)], [0, 1])
+# 14/11 cổng Dự phòng: DU_PHONG_CONG=1 → hỏi /api/du-phong; lỗi = khoá; META master = mở tay
+_env1 = web_commands._env
+web_commands._env = lambda n: '1' if n == 'DU_PHONG_CONG' else _env1(n)
+def dp(reply, m):
+    web_commands._DU_PHONG.clear(); REPLY[:] = reply; return web_commands.che_do(m, 'che_do_kho')
+eq('cổng: du_phong false → web (khoá)', dp([200, {'du_phong': False}], {}), 'web')
+eq('cổng: gọi đúng /api/du-phong', SENT[-1]['url'], 'https://beta.example/api/du-phong')
+eq('cổng: du_phong true → master (mở)', dp([200, {'du_phong': True, 'luc': 'x', 'boi': 'y'}], {'che_do_kho': 'web'}), 'master')
+eq('cổng: web lỗi 500 → web (khoá) + câu lỗi', [dp([500, {}], {}), 'loi' in web_commands._DU_PHONG], ['web', True])
+eq('cổng: META master (mở tay) → master, không gọi web', [dp([500, {}], {'che_do_kho': 'master'})], ['master'])
+web_commands._DU_PHONG.clear(); REPLY[:] = [200, {'du_phong': False}]; n = len(SENT)
+web_commands.che_do({}, 'che_do'); web_commands.che_do({}, 'che_do_hh')
+eq('cổng: nhớ 60 giây (2 sổ = 1 lần gọi)', len(SENT) - n, 1)
+web_commands._env = _env1
+eq('công tắc tắt: META như cũ (chưa có → master)', [web_commands.che_do({}, 'che_do_kho'), web_commands.che_do({'che_do_kho': 'web'}, 'che_do_kho')], ['master', 'web'])
 print(('❌ ' if fails else '✅ ') + 'test_p5b_mac ' + ('lỗi ' + str(fails) if fails else 'đạt'))
 sys.exit(1 if fails else 0)

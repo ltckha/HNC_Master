@@ -378,19 +378,9 @@ class EngineDataLoader:
         self._init_connection()
 
     def che_do(self):
-        """META che_do: 'web' | 'master' (mặc định master — như hôm nay). Đọc 1 lần mỗi lần mở menu. Cùng luật bot webModeOn_."""
+        """Chế độ Sổ bán: 'web' | 'master'. Đọc 1 lần mỗi lần mở menu. Cùng luật bot cheDo_ (tools/web_commands.che_do)."""
         if getattr(self, '_che_do', None) is None:
-            self._che_do = 'master'
-            try:
-                rows = self.spreadsheet.worksheet('META').get_all_values()
-                head = [str(h).strip() for h in (rows[0] if rows else [])]
-                if 'key' in head and 'value' in head:
-                    ck, cv = head.index('key'), head.index('value')
-                    for r in rows[1:]:
-                        if len(r) > max(ck, cv) and r[ck].strip() == 'che_do':
-                            self._che_do = 'web' if r[cv].strip().lower() == 'web' else 'master'
-            except Exception:
-                pass  # không đọc được META → giữ master
+            self._che_do = self.meta_mode('che_do')
         return self._che_do
 
     def cho_chep(self):
@@ -408,16 +398,17 @@ class EngineDataLoader:
         return 0
 
     def meta_mode(self, key):
-        """Khoá chế độ trong META ('web' | 'master'), mặc định master. Đọc 1 lần mỗi lần mở menu; đổi ở [7] thì xoá nhớ. Cùng luật bot metaMode_."""
+        """Chế độ 1 sổ ('web' | 'master'). Đọc 1 lần mỗi lần mở menu; đổi ở [7] thì xoá nhớ. Cùng luật bot metaMode_:
+        công tắc DU_PHONG_CONG=1 (.env) → hỏi cổng web /api/du-phong, lỗi = khoá; META = master (mở tay) vẫn mở. Tắt → META như cũ."""
         cache = self.__dict__.setdefault('_modes', {})
         if key not in cache:
-            cache[key] = 'master'
+            from tools import web_commands
+            m = {}
             try:
-                for r in self.spreadsheet.worksheet('META').get_all_values()[1:]:
-                    if len(r) > 1 and r[0].strip() == key:
-                        cache[key] = 'web' if r[1].strip().lower() == 'web' else 'master'
+                m = web_commands.meta(self.spreadsheet)
             except Exception:
                 pass
+            cache[key] = web_commands.che_do(m, key)
         return cache[key]
 
     def che_do_kho(self):
@@ -436,6 +427,10 @@ class EngineDataLoader:
             return False
         if them_dong and sheet_name in ('NHAP', 'XUAT') and self.is_google_api and self.che_do_kho() == 'web':
             print(f"⛔ Sổ kho đang ở Web: menu Mac không thêm dòng {sheet_name}. Nhập / xuất trên web / app, hoặc đổi sổ kho về Dự phòng khi web hỏng.")
+            return False
+        # 14/11 (anh Kha: bình thường chỉ web ghi, Sheet là bản web chép): sổ kho Web → không ghi tab KHO / ký gửi
+        if sheet_name in ('KHO15E', 'KHOY3C', 'KYGUI') and self.is_google_api and self.che_do_kho() == 'web':
+            print(f"⛔ Sổ kho đang ở Web: menu Mac không ghi tab {sheet_name}. Làm trên web https://giayhainancy.vn/admin/app, hoặc bật Dự phòng khi web hỏng.")
             return False
         if sheet_name in WEB_MODE_LOCKED_TABS and self.is_google_api and self.che_do() == 'web':
             print(f"⛔ Đang chế độ Web (sổ gốc ở web): menu Mac không ghi tab {sheet_name}. Làm trên web / app, hoặc đổi META che_do = master khi web hỏng.")
@@ -585,6 +580,14 @@ class EngineDataLoader:
         print(f"🌐 Đã gửi cờ {sheet_name} lên web ({sum(len(c) for c in cells.values())} ô).")
         return True
 
+    def _header_name(self, sheet_name, col_idx):
+        """Tên cột (hàng 1) của 1 chỉ số cột; lỗi → ''."""
+        try:
+            head = self.spreadsheet.worksheet(sheet_name).row_values(1)
+            return str(head[col_idx]).strip() if col_idx < len(head) else ''
+        except Exception:
+            return ''
+
     def update_status(self, sheet_name, row_indices, col_idx, status_text_or_list):
         """Cập nhật chữ 'Done - YYYY-MM-DD HH:mm' hoặc danh sách trạng thái riêng từng dòng lên Google Sheet."""
         if not self._write_ok(sheet_name):
@@ -600,6 +603,9 @@ class EngineDataLoader:
         w = self._p5b_web(sheet_name, {r: {col_idx: t} for r, t in zip(row_indices, status_list)})
         if w is not None:
             return w
+        if sheet_name == 'NHAP' and self.is_google_api and self.che_do_kho() == 'web' and self._header_name(sheet_name, col_idx) == 'web_label':
+            print("⛔ Sổ kho đang ở Web: không ghi thẳng cờ đã in tem vào NHAP. Đánh dấu trên web https://giayhainancy.vn/admin/app#in-tem.")
+            return False
 
         if self.is_google_api:
             try:
