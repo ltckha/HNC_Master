@@ -245,3 +245,20 @@ def goi_y_gia(items, dry_run=False):
             tong['text'].append(str(w['text']))
     tong['text'] = ' · '.join(tong['text'])
     return tong
+
+
+def in_tem(act, timeout=10, **kw):
+    """Hàng đợi in tem của web (14/11, anh Kha chốt in tem chuyển hẳn sang web): POST /api/in-tem ký như /api/du-phong.
+    act 'lay' → {ok, du_phong, lenh:[{id, kho, lenh}]}; act 'kq' (id, ket_qua, ma_da_in, giu) → {ok, dong_da_danh_dau}.
+    Lỗi / web không trả lời → {'ok': False, 'error'} (Mac quay về tab in_tem_lenh)."""
+    luc = _luc()
+    r, loi = _post('/api/in-tem', dict({'luc': luc, 'act': act}, **kw), luc, timeout=timeout)
+    if r is None:
+        return {'ok': False, 'error': loi}
+    try:
+        out = r.json()
+    except ValueError:
+        out = {}
+    if r.status_code != 200:
+        return {'ok': False, 'error': f'web trả lỗi {r.status_code}'}
+    return out

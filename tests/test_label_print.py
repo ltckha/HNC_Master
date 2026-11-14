@@ -69,6 +69,10 @@ def fake_print(ok, loi='', da_gui=None):
 
 
 label_print.mark_done = lambda rows, codes: calls['mark'].append((rows, sorted(codes))) or rows
+
+from tools import web_commands  # noqa: E402
+WEB = {'lay': {'ok': False, 'error': 'test: không gọi web thật'}, 'kq': []}
+web_commands.in_tem = lambda act, timeout=10, **kw: WEB['lay'] if act == 'lay' else (WEB['kq'].append(kw) or {'ok': True, 'dong_da_danh_dau': []})
 ws = FakeWS()
 
 # 1. In được → đánh dấu đúng dòng, xoá lệnh, ket_qua ok
@@ -125,6 +129,28 @@ data = convert(qlr=label_print.batch_raster('QL-700', 4, False), images=imgs, la
 eq('cắt cuối đợt: ESC i A 4, 1 lần kết thúc', [data.count(b'\x1biA\x04'), data.count(b'\x1biA\x01'), data.endswith(b'\x1a')], [4, 0, True])
 data1 = convert(qlr=label_print.batch_raster('QL-700', 4, True), images=imgs, label='62x29', rotate='0', cut=True)
 eq('cắt từng tem: ESC i A 1', data1.count(b'\x1biA\x01'), 4)
+
+# Hàng đợi in tem của web (14/11): web giả, máy in giả — không gọi web / máy in thật
+mark0, print0 = len(calls['mark']), calls['print']
+label_print.print_records = fake_print(True)
+WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 7, 'kho': '15E', 'lenh': job(dong=('PN-1#2',))}]}
+n = label_print.poll_web()
+k = WEB['kq'][-1]
+eq('web: in xong → báo kq (id, ok, ma_da_in, giu false), Mac không đánh dấu Sheet',
+   [n, calls['print'] - print0, k['id'], k['ket_qua']['ok'], k['ma_da_in'], k['giu'], len(calls['mark']) - mark0, 'ma_da_in' in k['ket_qua']],
+   [1, 1, 7, True, ['TH2040D40'], False, 0, False])
+label_print.print_records = fake_print(False, 'Không thấy máy in', da_gui=False)
+label_print.poll_web()
+eq('web: chưa tới máy in → giu true (web giữ lệnh)', [WEB['kq'][-1]['giu'], WEB['kq'][-1]['ket_qua']['ok'], WEB['kq'][-1]['ma_da_in']], [True, False, []])
+WEB['lay'] = {'ok': True, 'du_phong': True, 'lenh': [{'id': 8, 'kho': '15E', 'lenh': job()}]}
+n0 = len(WEB['kq'])
+eq('web Dự phòng → không lấy hàng đợi web (dùng tab)', [label_print.poll_web(), len(WEB['kq']) - n0], [None, 0])
+WEB['lay'] = {'ok': False, 'error': 'web trả lỗi 404'}
+eq('web lỗi / chưa có cổng → None (dùng tab)', label_print.poll_web(), None)
+WEB['lay'] = {'ok': True, 'du_phong': False, 'lenh': [{'id': 9, 'kho': '15E', 'lenh': '{hỏng'}]}
+label_print.poll_web()
+eq('web: lệnh hỏng → báo lỗi, không giữ', [WEB['kq'][-1]['ket_qua']['ok'], WEB['kq'][-1]['giu'], 'lệnh in hỏng' in WEB['kq'][-1]['ket_qua']['loi']], [False, False, True])
+WEB['lay'] = {'ok': False, 'error': 'test'}
 
 if fails:
     sys.exit(1)

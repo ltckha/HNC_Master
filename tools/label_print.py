@@ -233,8 +233,9 @@ def queue_write(ws, row, col, **fields):
     ws.update_cells([gspread.Cell(row, col[k] + 1, v) for k, v in fields.items()])
 
 
-def process_job(lenh_txt, dry=False):
-    """1 lệnh (JSON bot ghi) → in → kết quả dict. Trả (result, giữ_lệnh)."""
+def process_job(lenh_txt, dry=False, web=False):
+    """1 lệnh (JSON bot / web ghi) → in → kết quả dict. Trả (result, giữ_lệnh).
+    web=True (hàng đợi web): dong là ma_dong, Mac KHÔNG đánh dấu NHAP (web tự đánh dấu theo ma_da_in); result có 'ma_da_in'."""
     req = json.loads(lenh_txt)
     kho = req.get('kho', '')
     cot = req.get('cot') or []
@@ -253,7 +254,9 @@ def process_job(lenh_txt, dry=False):
               'so_tem_da_in': res.get('so_tem_da_in', res['so_tem'] if res['ok'] else 0), 'ok': res['ok'], 'loi': res['loi'], 'dong_da_danh_dau': []}
     done_codes = {r.get('Code128', '').strip().upper() for r in records} if res['ok'] else set(res.get('ma_da_in') or [])
     done_codes.discard('')
-    if done_codes and not dry and req.get('dong'):
+    if web:
+        result['ma_da_in'] = sorted(done_codes)
+    elif done_codes and not dry and req.get('dong'):
         try:
             result['dong_da_danh_dau'] = mark_done([int(x) for x in req['dong']], done_codes)
         except Exception as e:
@@ -263,7 +266,33 @@ def process_job(lenh_txt, dry=False):
     return result, keep
 
 
+def poll_web(dry=False):
+    """Hàng đợi in tem của web (14/11): lấy lệnh chờ mỗi kho → in → báo kết quả (web tự đánh dấu web_label).
+    Trả số lệnh đã xử lý; None = web Dự phòng / lỗi / chưa có cổng → chỉ dùng tab in_tem_lenh như cũ."""
+    sys.path.insert(0, ROOT)
+    from tools import web_commands
+    w = web_commands.in_tem('lay')
+    if not w.get('ok') or w.get('du_phong'):
+        return None
+    n = 0
+    for job in w.get('lenh') or []:
+        try:
+            result, keep = process_job(job['lenh'], dry=dry, web=True)
+        except (ValueError, KeyError, TypeError) as e:
+            result, keep = {'luc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'kho': job.get('kho', ''), 'ok': False, 'so_tem': 0,
+                            'so_tem_da_in': 0, 'loi': f'lệnh in hỏng: {e}', 'dong_da_danh_dau': [], 'ma_da_in': []}, False
+        ma = result.pop('ma_da_in', [])
+        kq = web_commands.in_tem('kq', timeout=30, id=job.get('id'), ket_qua=result, ma_da_in=ma, giu=bool(keep))
+        if not kq.get('ok'):
+            health_log.ghi('hnc.label_print', 'loi', f"in tem {job.get('kho', '')}: chưa báo được web ({kq.get('error', '')})")
+        elif not result.get('ok'):
+            health_log.ghi('hnc.label_print', 'loi', f"in tem {job.get('kho', '')}: {result.get('loi', '')}")
+        n += 1
+    return n
+
+
 def poll_once(ws):
+    poll_web()  # web là đường chính; tab in_tem_lenh vẫn đọc (Dự phòng / bot cũ còn ghi)
     rows, col = queue_rows(ws)
     for kho in KHOS:  # mỗi kho 1 đợt riêng, không trộn (anh Kha 18/10)
         if kho not in rows or not rows[kho][1]:
