@@ -1005,6 +1005,35 @@ function navReceiptStep_(n, chatId, d) {
 }
 
 /** 14/11 (luật anh 20/10: giá nhập / giá HĐ / NCC không bao giờ ra Zalo): hoá đơn mua hàng chỉ trả link web, như "bc". */
+/** 14/11 (Bán hàng chốt cách A: màn Hoá đơn NCC chuyển sang web, web làm gốc từ khi nạp xong): gửi 1 lần (gọi lại an toàn, web ghi đè)
+ *  mọi ô Script Property pnx_* / hdon_* / hdkhong_* (nguyên JSON, không lọc) tới POST <gốc>/api/hd-nap, ký như /api/du-phong, lô ≤ 500 khoá.
+ *  body.dich = 'beta' (khoá Script Property BETA_BOT_KEY) | 'chinh' (mặc định, khoá bot sẵn có). Chỉ đọc Script Properties, không ghi Sheet. */
+function hdNap_(body) {
+  const props = PropertiesService.getScriptProperties();
+  const dich = String((body && body.dich) || 'chinh').trim() === 'beta' ? 'beta' : 'chinh';
+  const key = dich === 'beta' ? props.getProperty('BETA_BOT_KEY') || '' : '';
+  if (dich === 'beta' && key.length < 16) return { ok: false, action: 'hd_nap', error: 'chưa có Script Property BETA_BOT_KEY (khoá bot của beta)' };
+  const url = (dich === 'beta' ? 'https://beta.giayhainancy.vn' : (webOrigin_() || WEB_GOC)) + '/api/hd-nap';
+  const all = props.getProperties(), nhom = { pnx: {}, hdon: {}, hdkhong: {} }, items = [];
+  Object.keys(all).sort().forEach(k => {
+    const m = k.match(/^(pnx|hdon|hdkhong)_(.+)$/);
+    if (!m) return;
+    try { nhom[m[1]][m[2]] = JSON.parse(all[k]); items.push([m[1], m[2]]); } catch (e) { /* ô hỏng: bỏ */ }
+  });
+  const so = { pnx: 0, hdon: 0, hdkhong: 0 };
+  let lo = 0;
+  for (let i = 0; i < items.length; i += 500) {
+    const b = { pnx: {}, hdon: {}, hdkhong: {} };
+    items.slice(i, i + 500).forEach(([g, id]) => { b[g][id] = nhom[g][id]; });
+    const w = webForward_(b, url, key || undefined);
+    lo++;
+    if (!w.ok) return { ok: false, action: 'hd_nap', dich, lo, so, error: 'lô ' + lo + ': ' + (w.error || 'web chưa nhận') };
+    ['pnx', 'hdon', 'hdkhong'].forEach(g => { so[g] += Number(w.so && w.so[g]) || 0; });
+  }
+  return { ok: true, action: 'hd_nap', dich, lo, so, gui: { pnx: Object.keys(nhom.pnx).length, hdon: Object.keys(nhom.hdon).length, hdkhong: Object.keys(nhom.hdkhong).length } };
+}
+function hdNapBeta() { console.log(JSON.stringify(hdNap_({ dich: 'beta' }))); } // chạy tay trong trình sửa Apps Script
+
 function hdLinkText_() {
   return '🧾 Hoá đơn mua hàng xem / ghi trên web (Nhập hàng › HĐ): ' + (webOrigin_() || 'https://giayhainancy.vn') + '/admin/nhap-hang\nNhắn số: 9 Menu';
 }
@@ -1621,8 +1650,8 @@ function khoaGhi_() {
   return CHE_DO_SO.every(m => metaMode_(m.key) === 'web');
 }
 // stock_key: lệnh chỉ đọc / không ghi Sheet (Script Property, Drive nháp) vẫn chạy khi khoá
-const STOCK_DOC = ['kq_in_tem', 'doc_phieu', 'ds_nhap', 'xem_nhap', 'bo_nhap'];
-const HD_DOC = ['ds', 'xem', 'tin', 'trang_thai'];
+const STOCK_DOC = ['kq_in_tem', 'doc_phieu', 'ds_nhap', 'xem_nhap', 'bo_nhap', 'hd_nap'];
+const HD_DOC = []; // 14/11: Hoá đơn NCC chuyển sang web (web gốc từ khi nạp hd_nap) → khoá thì chặn cả ds / xem / ghi / trang_thai / tin
 
 function cheDoKho_() { return metaMode_('che_do_kho'); } // P2: phiếu kho ghi D1
 function cheDoTon_() { return metaMode_('che_do_ton'); } // P3: tồn tính ở D1
@@ -2130,6 +2159,7 @@ function handleStock_(body, dryRun) {
   if ((action === 'bo_sung_sp' || action === 'tao_ma') && cheDoHh_() === 'web') return { ok: false, action, hh_web: true, error: HH_WEB_TEXT };
   if (action === 'bo_sung_sp') return productFill_(body, seller, dryRun);
   if (action === 'xuat_misa') return handleMisaExport_(body, seller, dryRun);
+  if (action === 'hd_nap') return hdNap_(body);
   if (action === 'hoa_don') return invoiceAction_(body, seller, dryRun);
   // 14/11 (anh Kha chốt): in tem chuyển hẳn sang web (hàng đợi + dựng tem ở web, Mac đọc cổng web). Công tắc DU_PHONG_CONG bật
   // + sổ kho Web → bot thôi nhận in_tem / in_bu; Dự phòng (hoặc công tắc tắt) → đường bot cũ (in_tem_lenh). Gắn công tắc: sổ kho đã Web từ 21/10.
@@ -5255,7 +5285,7 @@ function invoiceReminderMessages_() {
 /** 04/11 (Nhập hàng tự động, anh "làm thử"): tin nhắc thứ Hai = hoá đơn chưa có + phiếu nhập hàng giao thiếu / quá hẹn (web {che:"nhac_tuan"}), gộp 1 tin.
  *  Web lỗi / không có phiếu → chỉ phần hoá đơn như cũ (lỗi ghi Nhật ký, không gửi Zalo). */
 function weeklyReminderMessages_() {
-  const hd = invoiceReminderMessages_();
+  const hd = khoaGhi_() ? [] : invoiceReminderMessages_(); // 14/11: khoá → HĐ NCC ở web (dữ liệu bot không còn mới), bỏ phần HĐ
   let nh = '';
   try {
     const props = PropertiesService.getScriptProperties();

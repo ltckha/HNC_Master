@@ -1593,9 +1593,25 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
     const ms = ctx.handleStock_({ action: 'xuat_misa', seller: 'ltckha@gmail.com', loai: 'danh_muc' }, false);
     const hds = ctx.handleStock_({ action: 'hoa_don', seller: 'ltckha@gmail.com', che_do: 'ds' }, true);
     const kq = ctx.handleStock_({ action: 'kq_in_tem', kho: '15E' }, false);
-    eq('khoá ghi: đơn sàn (sale_key), nhập, tạo mã, xuất MISA bị chặn kèm link; hoá đơn ds + kq_in_tem (chỉ đọc) vẫn chạy; không ghi Sheet',
-      [sp.ok, /admin\/app#ban/.test(sp.error), nh.ok, nh.khoa_ghi, tm.khoa_ghi, /admin\/xuat/.test(ms.error), hds.ok !== false && !hds.khoa_ghi, kq.ok, WRITES.length - w0],
+    eq('khoá ghi: đơn sàn (sale_key), nhập, tạo mã, xuất MISA, hoá đơn (cả ds — web gốc) bị chặn kèm link; kq_in_tem vẫn chạy; không ghi Sheet',
+      [sp.ok, /admin\/app#ban/.test(sp.error), nh.ok, nh.khoa_ghi, tm.khoa_ghi, /admin\/xuat/.test(ms.error), !!hds.khoa_ghi, kq.ok, WRITES.length - w0],
       [false, true, false, true, true, true, true, true, 0]);
+    { // hd_nap: gửi nguyên ô pnx_ / hdon_ / hdkhong_ tới /api/hd-nap, chia lô 500, chạy cả khi khoá
+      const keep = Object.keys(PROPS).filter(k => /^(pnx|hdon|hdkhong)_/.test(k)).map(k => [k, PROPS[k]]);
+      keep.forEach(([k]) => delete PROPS[k]);
+      for (let i = 0; i < 600; i++) PROPS['hdon_NK' + i] = JSON.stringify({ s: 'da', so_hd: 'X' + i });
+      PROPS.pnx_PN1 = JSON.stringify({ ncc: 'A', nk: 'NK1' }); PROPS.hdkhong_PN2 = JSON.stringify({ t: 1 }); PROPS.hdon_HONG = '{';
+      const lots = []; const f1 = ctx.UrlFetchApp.fetch;
+      ctx.UrlFetchApp.fetch = (url, opt) => { if (url.indexOf('/api/hd-nap') === -1) return f1(url, opt); const b = JSON.parse(opt.payload); lots.push({ url, b, sig: opt.headers['x-bot-sig'] });
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, so: { pnx: Object.keys(b.pnx).length, hdon: Object.keys(b.hdon).length, hdkhong: Object.keys(b.hdkhong).length } }) }; };
+      const hn = ctx.handleStock_({ action: 'hd_nap' }, false);
+      eq('hd_nap: 2 lô ≤500, đủ 600 hdon + pnx + hdkhong, nguyên JSON, ô hỏng bỏ, gốc bản chính, có ký',
+        [hn.ok, hn.lo, hn.so, lots.length, lots[0].url, Object.keys(lots[0].b.hdon).length + Object.keys(lots[0].b.pnx).length + Object.keys(lots[0].b.hdkhong).length, lots.some(l => l.b.pnx.PN1 && l.b.pnx.PN1.nk === 'NK1'), !!lots[0].sig],
+        [true, 2, { pnx: 1, hdon: 600, hdkhong: 1 }, 2, 'https://beta.example/api/hd-nap', 500, true, true]);
+      eq('hd_nap beta chưa có BETA_BOT_KEY → báo, không gửi', [ctx.handleStock_({ action: 'hd_nap', dich: 'beta' }, false).ok, lots.length], [false, 2]);
+      ctx.UrlFetchApp.fetch = f1;
+      Object.keys(PROPS).filter(k => /^(pnx|hdon|hdkhong)_/.test(k)).forEach(k => delete PROPS[k]); keep.forEach(([k, v]) => { PROPS[k] = v; });
+    }
     DATA.META = [DATA.META[0], ['che_do_kho', 'master', '']]; mode([500, {}]);
     eq('khoá ghi: web sập + Chủ mở 1 sổ (che do) → mở khoá chung, sổ đó qua cổng riêng', vm.runInContext('khoaGhi_()', ctx), false);
     DATA.META = [DATA.META[0]]; mode([200, { du_phong: false }]);
