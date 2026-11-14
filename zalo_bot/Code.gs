@@ -208,6 +208,13 @@ function handleTextLocked_(text, dryRun, chatId, sellerName) {
     try {
       const sw = datNccSwitch_(text, chatId);
       if (sw) return { reply: sw, syncTabs: [] };
+      if (/^hd\s*nap$/.test(norm_(text))) { // 14/11: nạp 1 lần HĐ NCC sang web (chỉ Chủ; gọi lại an toàn) — chỉ trả số đếm, không NCC / tiền
+        if (!navIsOwner_(chatId)) return { reply: '🔒 Chỉ Chủ dùng lệnh này.\nNhắn số: 9 Menu', syncTabs: [] };
+        if (dryRun) return { reply: '🧪 CHẠY THỬ — chưa nạp', syncTabs: [] };
+        const r = hdNap_({});
+        return { reply: (r.ok ? '✅ Đã nạp HĐ NCC sang web: ' : '⚠️ Chưa nạp xong (' + r.error + '): ') + 'phiếu ' + r.so.pnx + ' · HĐ ' + r.so.hdon + ' · không lấy HĐ ' + r.so.hdkhong +
+          (r.gui ? ' (bot gửi ' + r.gui.pnx + ' / ' + r.gui.hdon + ' / ' + r.gui.hdkhong + ')' : '') + '\nNhắn số: 9 Menu', syncTabs: [] };
+      }
       const nav = navHandle_(text, chatId, dryRun); // menu / tin số (điều khiển bằng số, anh Kha 17/10)
       if (nav) return { reply: nav.text, syncTabs: nav.touched || [] };
       // Tin nhiều dòng: mỗi dòng bắt đầu bằng ban/nhap/xuat là 1 lệnh (dòng khác bỏ qua). Tin 1 dòng chạy như cũ.
@@ -1007,12 +1014,10 @@ function navReceiptStep_(n, chatId, d) {
 /** 14/11 (luật anh 20/10: giá nhập / giá HĐ / NCC không bao giờ ra Zalo): hoá đơn mua hàng chỉ trả link web, như "bc". */
 /** 14/11 (Bán hàng chốt cách A: màn Hoá đơn NCC chuyển sang web, web làm gốc từ khi nạp xong): gửi 1 lần (gọi lại an toàn, web ghi đè)
  *  mọi ô Script Property pnx_* / hdon_* / hdkhong_* (nguyên JSON, không lọc) tới POST <gốc>/api/hd-nap, ký như /api/du-phong, lô ≤ 500 khoá.
- *  body.dich = 'beta' (khoá Script Property BETA_BOT_KEY nếu có, không thì khoá bot sẵn có) | 'chinh' (mặc định, khoá bot sẵn có). Chỉ đọc Script Properties, không ghi Sheet. */
+ *  Gốc web bản chính + khoá bot sẵn có (web kiểm như /api/bot-lenh). Chạy: Chủ nhắn Zalo "hd nap" (1 lần sau khi bot @66 + web lên), hoặc stock_key hd_nap. Chỉ đọc Script Properties, không ghi Sheet. */
 function hdNap_(body) {
   const props = PropertiesService.getScriptProperties();
-  const dich = String((body && body.dich) || 'chinh').trim() === 'beta' ? 'beta' : 'chinh';
-  const key = dich === 'beta' ? props.getProperty('BETA_BOT_KEY') || '' : ''; // trống → khoá bot sẵn có (beta nhận khoá bot như /api/du-phong)
-  const url = (dich === 'beta' ? 'https://beta.giayhainancy.vn' : (webOrigin_() || WEB_GOC)) + '/api/hd-nap';
+  const url = (webOrigin_() || WEB_GOC) + '/api/hd-nap';
   const all = props.getProperties(), nhom = { pnx: {}, hdon: {}, hdkhong: {} }, items = [];
   Object.keys(all).sort().forEach(k => {
     const m = k.match(/^(pnx|hdon|hdkhong)_(.+)$/);
@@ -1024,14 +1029,13 @@ function hdNap_(body) {
   for (let i = 0; i < items.length; i += 500) {
     const b = { pnx: {}, hdon: {}, hdkhong: {} };
     items.slice(i, i + 500).forEach(([g, id]) => { b[g][id] = nhom[g][id]; });
-    const w = webForward_(b, url, key || undefined);
+    const w = webForward_(b, url);
     lo++;
-    if (!w.ok) return { ok: false, action: 'hd_nap', dich, lo, so, error: 'lô ' + lo + ': ' + (w.error || 'web chưa nhận') };
+    if (!w.ok) return { ok: false, action: 'hd_nap', lo, so, error: 'lô ' + lo + ': ' + (w.error || 'web chưa nhận') };
     ['pnx', 'hdon', 'hdkhong'].forEach(g => { so[g] += Number(w.so && w.so[g]) || 0; });
   }
-  return { ok: true, action: 'hd_nap', dich, lo, so, gui: { pnx: Object.keys(nhom.pnx).length, hdon: Object.keys(nhom.hdon).length, hdkhong: Object.keys(nhom.hdkhong).length } };
+  return { ok: true, action: 'hd_nap', lo, so, gui: { pnx: Object.keys(nhom.pnx).length, hdon: Object.keys(nhom.hdon).length, hdkhong: Object.keys(nhom.hdkhong).length } };
 }
-function hdNapBeta() { console.log(JSON.stringify(hdNap_({ dich: 'beta' }))); } // chạy tay trong trình sửa Apps Script
 
 function hdLinkText_() {
   return '🧾 Hoá đơn mua hàng xem / ghi trên web (Nhập hàng › HĐ): ' + (webOrigin_() || 'https://giayhainancy.vn') + '/admin/nhap-hang\nNhắn số: 9 Menu';

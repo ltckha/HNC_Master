@@ -1608,8 +1608,9 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
       eq('hd_nap: 2 lô ≤500, đủ 600 hdon + pnx + hdkhong, nguyên JSON, ô hỏng bỏ, gốc bản chính, có ký',
         [hn.ok, hn.lo, hn.so, lots.length, lots[0].url, Object.keys(lots[0].b.hdon).length + Object.keys(lots[0].b.pnx).length + Object.keys(lots[0].b.hdkhong).length, lots.some(l => l.b.pnx.PN1 && l.b.pnx.PN1.nk === 'NK1'), !!lots[0].sig],
         [true, 2, { pnx: 1, hdon: 600, hdkhong: 1 }, 2, 'https://beta.example/api/hd-nap', 500, true, true]);
-      const hb = ctx.handleStock_({ action: 'hd_nap', dich: 'beta' }, false);
-      eq('hd_nap beta: gửi gốc beta, khoá bot sẵn có khi không có BETA_BOT_KEY', [hb.ok, lots[lots.length - 1].url], [true, 'https://beta.giayhainancy.vn/api/hd-nap']);
+      const zr = ctx.handleText_('hd nap', false, PROPS.OWNER_CHAT_ID, 'Chủ');
+      eq('Zalo "hd nap" (Chủ): nạp, trả số đếm, không tên NCC', [/Đã nạp HĐ NCC sang web: phiếu 1 · HĐ 600 · không lấy HĐ 1/.test(zr), /\bA\b/.test(zr), lots.length], [true, false, 4]);
+      eq('Zalo "hd nap" nhân viên → chặn', /Chỉ Chủ/.test(ctx.handleText_('hd nap', false, 'NV9', 'nv')), true);
       ctx.UrlFetchApp.fetch = f1;
       Object.keys(PROPS).filter(k => /^(pnx|hdon|hdkhong)_/.test(k)).forEach(k => delete PROPS[k]); keep.forEach(([k, v]) => { PROPS[k] = v; });
     }
