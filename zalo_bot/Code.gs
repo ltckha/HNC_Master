@@ -4418,6 +4418,8 @@ function handleExport_(body, dryRun) {
   MEMO = {};
   const channel = String(body.channel || '').trim().toLowerCase();
   const kind = String(body.kind || '').trim().toLowerCase();
+  // 14/11: web không gọi từ 30/10 (Thực thi · Web); Hàng hoá ở Web → không ghi cờ sàn / mốc *_last_update vào Sheet
+  if (cheDoHh_() === 'web') return { ok: false, hh_web: true, error: khoaGhiText_('/admin/xuat') };
   if (body.action === 'unmark_exported') return unmarkExported_(body, dryRun);
   if (body.action === 'dat_lai_co_san') return datLaiCoSan_(body, dryRun);
   if (body.action !== 'mark_exported') return { ok: false, error: 'action phải là "mark_exported" hoặc "unmark_exported"' };
@@ -4862,6 +4864,8 @@ function invoiceAction_(body, nguoi, dryRun) {
       dong: invoiceRows_(t), tin_xin_hd: thieuMst ? '' : msg, thieu_mst: thieuMst, loi_tin: thieuMst ? msg.replace(/^⛔\s*/, '') : undefined };
   }
   if (mode !== 'ghi') return fail('che_do phải là ds, xem, ghi, trang_thai hoặc tin');
+  // 14/11: web ghi HĐ NCC qua /api/bot-lenh của web, không nhờ bot → sổ kho Web thì bot không ghi thẳng HĐ vào Sheet (P5b: gửi web)
+  if (cheDoKho_() === 'web' && !p5bOn_('che_do_kho')) return Object.assign(fail(khoaGhiText_('/admin/nhap-hang')), { kho_web: true });
   const ids = (Array.isArray(body.phieu) ? body.phieu : [body.phieu]).map(x => String(x || '').trim()).filter(Boolean);
   const list = ids.map(id => tickets.find(x => x.id === id));
   if (!ids.length || list.some(x => !x)) return fail('phiếu không có: ' + ids.filter((id, i) => !list[i]).join(', '));

@@ -430,7 +430,8 @@ class EngineDataLoader:
             return False
         # 14/11 (anh Kha: bình thường chỉ web ghi, Sheet là bản web chép): sổ kho Web → không ghi tab KHO / ký gửi
         if sheet_name in ('KHO15E', 'KHOY3C', 'KYGUI') and self.is_google_api and self.che_do_kho() == 'web':
-            print(f"⛔ Sổ kho đang ở Web: menu Mac không ghi tab {sheet_name}. Làm trên web https://giayhainancy.vn/admin/app, hoặc bật Dự phòng khi web hỏng.")
+            man = 'admin/hang-hoa?tab=ky-gui' if sheet_name == 'KYGUI' else 'admin/app#kho-vi-tri'
+            print(f"⛔ Sổ kho đang ở Web: menu Mac không ghi tab {sheet_name}. Làm trên web https://giayhainancy.vn/{man}, hoặc bật Dự phòng khi web hỏng.")
             return False
         if sheet_name in WEB_MODE_LOCKED_TABS and self.is_google_api and self.che_do() == 'web':
             print(f"⛔ Đang chế độ Web (sổ gốc ở web): menu Mac không ghi tab {sheet_name}. Làm trên web / app, hoặc đổi META che_do = master khi web hỏng.")

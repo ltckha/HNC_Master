@@ -1575,6 +1575,10 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
   DATA.META = [DATA.META[0]]; mode([200, { du_phong: false }]);
   const dn = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
   eq('cổng khoá: da_in_tem không ghi thẳng web_label NHAP, chỉ đường web', [dn.ok, /admin\/app#in-tem/.test(dn.error)], [false, true]);
+  const w0 = WRITES.length;
+  const ex = ctx.handleExport_({ action: 'mark_exported', channel: 'shopee', kind: 'upload', codes: ['TH2040D'] }, false);
+  const hd = ctx.invoiceAction_({ che_do: 'ghi', phieu: 'X', so_hd: '1', dung_nhu_phieu: true }, 'ltckha@gmail.com', false);
+  eq('cổng khoá: mark_exported + hoa_don ghi không ghi Sheet, chỉ link web', [ex.ok, /admin\/xuat/.test(ex.error), hd.ok, /admin\/nhap-hang/.test(hd.error), WRITES.length - w0], [false, true, false, true, 0]);
   delete PROPS.DU_PHONG_CONG;
   eq('công tắc tắt: META như cũ (chưa có → master)', mode([200, { du_phong: false }]), ['master', 'master', 'master']);
   ctx.UrlFetchApp.fetch = f0; DATA.META = meta0; delete PROPS.SYNC_HINT_URL; delete PROPS.BOT_CALLBACK_KEY; delete CACHE.du_phong; vm.runInContext('MEMO={};', ctx); }
