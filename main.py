@@ -5051,6 +5051,9 @@ def change_che_do(loader):
             pairs[k] = str(max(i + 1 for i, r in enumerate(v) if i == 0 or (len(r) > ic and r[ic].strip())))
         pairs[m['tu']] = luc
     set_meta(loader, pairs)
+    if want == 'master':  # 14/11: báo web bật Dự phòng (1 công tắc chung) — web sập thì thôi, META master đã mở ghi
+        from tools import web_commands
+        web_commands.bat_du_phong()
     loader.__dict__.pop('_modes', None)
     loader._mark_sync('META')
     print(f"✅ Đã đổi {m['ten']}: {want.upper()}")

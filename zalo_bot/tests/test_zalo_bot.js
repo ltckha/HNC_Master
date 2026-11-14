@@ -1564,11 +1564,13 @@ eq('Gemini: thứ tự RECEIPT_MODELS khớp shared/gemini_models.json (luật 1
   const mode = (r) => { rep = r; vm.runInContext('MEMO={};', ctx); delete CACHE.du_phong; return vm.runInContext("[metaMode_('che_do'), metaMode_('che_do_kho'), metaMode_('che_do_hh')]", ctx); };
   eq('cổng: du_phong false → 3 sổ khoá (web), gọi web 1 lần', [mode([200, { du_phong: false }]), urls.length, urls[0]], [['web', 'web', 'web'], 1, 'https://beta.example/api/du-phong']);
   eq('cổng: du_phong true → mở (master)', mode([200, { du_phong: true, luc: 'x', boi: 'y' }]), ['master', 'master', 'master']);
-  eq('cổng: web lỗi 500 → khoá', mode([500, {}]), ['web', 'web', 'web']);
+  DATA.META.push(['che_do', 'web', ''], ['che_do_kho', 'web', ''], ['che_do_hh', 'web', '']);
+  eq('cổng: web lỗi 500 → theo META như hôm nay (web = khoá)', mode([500, {}]), ['web', 'web', 'web']);
   eq('cổng: câu khoá kèm cách bật Dự phòng khi web không trả lời', /web không trả lời[\s\S]*che do/.test(vm.runInContext("khoaGhiText_('/admin/app#in-tem')", ctx)), true);
-  DATA.META.push(['che_do_kho', 'master', '']);
-  eq('cổng: META che_do_kho = master (Chủ nhắn che do) → sổ kho mở dù web lỗi', mode([500, {}]), ['web', 'master', 'web']);
-  DATA.META.pop(); mode([200, { du_phong: false }]);
+  DATA.META[2][1] = 'master';
+  eq('cổng: web sập + META che_do_kho = master (Chủ nhắn che do) → sổ kho mở', mode([500, {}]), ['web', 'master', 'web']);
+  eq('cổng: web trả lời → theo web, không theo META', mode([200, { du_phong: false }]), ['web', 'web', 'web']);
+  DATA.META = [DATA.META[0]]; mode([200, { du_phong: false }]);
   const dn = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
   eq('cổng khoá: da_in_tem không ghi thẳng web_label NHAP, chỉ đường web', [dn.ok, /admin\/app#in-tem/.test(dn.error)], [false, true]);
   delete PROPS.DU_PHONG_CONG;

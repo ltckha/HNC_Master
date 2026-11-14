@@ -58,7 +58,7 @@ def du_phong():
     if _DU_PHONG and time.time() < _DU_PHONG.get('_het', 0):
         return _DU_PHONG
     luc = _luc()
-    r, loi = _post('/api/du-phong', {'luc': luc}, luc)
+    r, loi = _post('/api/du-phong', {'luc': luc}, luc, timeout=10)
     out = {}
     if r is not None:
         try:
@@ -78,14 +78,20 @@ def du_phong():
 
 def che_do(m, key):
     """Chế độ 1 sổ ('web' | 'master' = Dự phòng, Mac được ghi Sheet). m = meta(). Cùng luật bot metaMode_ (luật 15):
-    DU_PHONG_CONG=1 (.env) → META khoá = master (mở tay ở menu [7] / bot "che do") thì master; còn lại hỏi cổng web:
-    du_phong → master, không / web không trả lời → web (khoá). Tắt → chỉ đọc META như cũ (chưa có → master)."""
-    raw = str(m.get(key, '')).strip().lower()
-    if _env('DU_PHONG_CONG') != '1':
-        return 'web' if raw == 'web' else 'master'
-    if key in m and raw != 'web':
-        return 'master'
-    return 'master' if du_phong().get('du_phong') else 'web'
+    DU_PHONG_CONG=1 (.env) → web trả lời /api/du-phong thì theo cờ du_phong của web; web không trả lời (sập / 5xx / quá 10 giây)
+    → theo META như hôm nay (menu [7] / bot "che do" = master mở ghi). Tắt → chỉ đọc META (chưa có → master)."""
+    if _env('DU_PHONG_CONG') == '1':
+        d = du_phong()
+        if 'loi' not in d:
+            return 'master' if d.get('du_phong') else 'web'
+    return 'web' if str(m.get(key, '')).strip().lower() == 'web' else 'master'
+
+
+def bat_du_phong():
+    """Menu [7] / bot "che do" → Dự phòng: báo web bật công tắc chung (POST /api/du-phong {bat: true}); lỗi thì thôi."""
+    luc = _luc()
+    _post('/api/du-phong', {'luc': luc, 'bat': True}, luc, timeout=10)
+    _DU_PHONG.clear()
 
 
 def _env(name):
@@ -124,7 +130,7 @@ def _luc():
     return datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
 
-def _post(duong, payload, luc):
+def _post(duong, payload, luc, timeout=60):
     """POST payload ký HMAC hex(khoá, luc + "." + thân) tới <gốc web><duong>. Trả (requests.Response | None, lỗi)."""
     key, goc = _khoa(), _goc()
     if len(key) < 16 or not goc:
@@ -132,8 +138,8 @@ def _post(duong, payload, luc):
     raw = json.dumps(payload, ensure_ascii=False)
     sig = hmac.new(key.encode(), (luc + '.' + raw).encode('utf-8'), hashlib.sha256).hexdigest()
     try:
-        return requests.post(goc + duong, data=raw.encode('utf-8'), timeout=60,
-                             headers={'content-type': 'application/json', 'x-bot-time': luc, 'x-bot-sig': sig}), ''
+        return requests.post(goc + duong, data=raw.encode('utf-8'),
+                             headers={'content-type': 'application/json', 'x-bot-time': luc, 'x-bot-sig': sig}, timeout=timeout), ''
     except requests.RequestException as e:
         return None, f'không gọi được web: {e}'
 

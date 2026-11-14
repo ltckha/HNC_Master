@@ -1578,14 +1578,16 @@ function metaModeRaw_(key) {
 
 /** Chế độ 1 sổ ('web' | 'master' = Dự phòng: bot / Mac được ghi Sheet).
  *  Công tắc Script Property DU_PHONG_CONG = 1 (14/11, anh Kha: bình thường chỉ web ghi, Sheet là bản web chép; bật Dự phòng mới mở):
- *   - META khoá = master (Chủ nhắn "che do" → Dự phòng, đường mở tay khi web sập) → master;
- *   - còn lại hỏi cổng web /api/du-phong (1 công tắc chung): du_phong = true → master; false / web không trả lời → web (KHOÁ ghi Sheet).
- *  Tắt (mặc định) → chỉ đọc META như cũ (chưa có / không đọc được → master). */
+ *   web trả lời cổng /api/du-phong (1 công tắc chung) → theo cờ du_phong của web; web KHÔNG trả lời (web sập) → theo META như hôm nay
+ *   (Chủ nhắn "che do" → master = được ghi; bot báo web luôn {bat:true}). Về Web chỉ làm ở admin web (Nhập bù trước).
+ *  Tắt (mặc định) → chỉ đọc META như cũ. Không đọc được / chưa có khoá → master (như cũ). */
 function metaMode_(key) {
   const raw = metaModeRaw_(key);
-  if (PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') !== '1') return raw === 'web' ? 'web' : 'master';
-  if (raw === 'master') return 'master';
-  return webDuPhong_().du_phong ? 'master' : 'web';
+  if (PropertiesService.getScriptProperties().getProperty('DU_PHONG_CONG') === '1') {
+    const d = webDuPhong_();
+    if (!d.loi) return d.du_phong ? 'master' : 'web';
+  }
+  return raw === 'web' ? 'web' : 'master';
 }
 
 /** Cổng web POST /api/du-phong (ký như /api/bot-lenh) → {du_phong, luc, boi}; lỗi → {du_phong:false, loi}. Nhớ 60 giây (lỗi 20 giây). */
@@ -1755,6 +1757,10 @@ function navCheDoPick_(n, chatId, d, dryRun) {
   pairs[m.key] = want; pairs[m.luc] = luc; pairs[m.boi] = 'zalo ' + (CTX.seller || chatId);
   if (want === 'master') { Object.keys(m.moc).forEach(k => { pairs[k] = lastCodeRow_(m.moc[k]); }); pairs[m.tu] = luc; } // mốc như web
   metaSet_(pairs);
+  if (want === 'master') { // 14/11: báo web bật Dự phòng (1 công tắc chung) — gọi lỗi (web sập) thì thôi, META master đã mở ghi
+    try { webForward_({ bat: true }, '/api/du-phong'); } catch (e) { /* bỏ qua */ }
+    CacheService.getScriptCache().remove('du_phong'); delete MEMO.__duPhong;
+  }
   const sw = PropertiesService.getScriptProperties().getProperty('BOT_CHUYEN_WEB') === '1';
   return { text: '✅ Đã đổi ' + ten + (m.key === 'che_do' && want === 'web' && !sw ? '\n(Lệnh bán Zalo / app sẽ bị chặn: bán trên app.)' : '') + '\nNhắn số: 9 Menu', touched: ['META'] };
 }
