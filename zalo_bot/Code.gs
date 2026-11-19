@@ -2400,7 +2400,7 @@ function ghepTen_(r) {
   if (!pb) pb = cu;
   if (/^(nam|nữ)$/i.test(pb)) pb = pb.toLowerCase();
   if (coTrong(ng, pb)) pb = '';
-  const cl = dau1(r.chat_lieu) || dau1(r['Chất liệu']);
+  const cl = (dau1(r.chat_lieu) || dau1(r['Chất liệu'])).replace(/\s*cao cấp\s*/gi, ' ').trim(); // bỏ hẳn "cao cấp" (Chất liệu cũ, web 3263d324)
   const laDa = /\bda\b/i.test(fd(cl));
   let mat = laDa ? dau1(r.be_mat) : '';
   if (!mat && laDa && MAT.indexOf(fd(dau1(r['Nhấn mạnh']))) !== -1) mat = dau1(r['Nhấn mạnh']); // bề mặt cũ ở Nhấn mạnh

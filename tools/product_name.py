@@ -66,7 +66,7 @@ def ghep_ten(r):
         pb = pb.lower()
     if _co_trong(ng, pb):
         pb = ''
-    cl = _dau1(r.get('chat_lieu')) or _dau1(r.get('Chất liệu'))
+    cl = re.sub(r'\s*cao cấp\s*', ' ', _dau1(r.get('chat_lieu')) or _dau1(r.get('Chất liệu')), flags=re.I).strip()  # bỏ hẳn "cao cấp" (Chất liệu cũ "da bò cao cấp", web 3263d324)
     la_da = bool(re.search(r'\bda\b', _fd(cl), re.I | re.A))
     mat = _dau1(r.get('be_mat')) if la_da else ''
     if not mat and la_da and _fd(_dau1(r.get('Nhấn mạnh'))) in MAT:
