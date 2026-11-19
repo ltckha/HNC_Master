@@ -1,0 +1,214 @@
+{
+ "ghi_chu": "Ca thử tên sản phẩm (quy tắc 19/11). 'ten' sinh bằng hàm web ghepTen (Website-giayhainancy src/worker/products/source.ts) — Mac tools/product_name.py và bot ghepTen_ phải ra đúng chữ này (luật 15).",
+ "ca": [
+  {
+   "mo_ta": "giày tây: kieu_dong, da bò trơn",
+   "dong": {
+    "Tên Ngành Hàng": "Giày tây nam",
+    "Đặc điểm": "nam",
+    "Thương hiệu": "Hải Nancy",
+    "Chất liệu": "da bò",
+    "Nhấn mạnh": "cao cấp",
+    "kieu_dong": "buộc dây",
+    "chat_lieu": "da bò",
+    "be_mat": "trơn",
+    "product_code": "HN123A"
+   },
+   "ten": "Giày tây nam buộc dây Hải Nancy da bò trơn HN123A"
+  },
+  {
+   "mo_ta": "tăng chiều cao + số cm",
+   "dong": {
+    "Tên Ngành Hàng": "Giày tây nam tăng chiều cao",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_dong": "xỏ, lười",
+    "chat_lieu": "da bò",
+    "tang_cao_cm": "6",
+    "product_code": "TC6B"
+   },
+   "ten": "Giày tây nam tăng chiều cao 6cm xỏ Hải Nancy da bò TC6B"
+  },
+  {
+   "mo_ta": "tăng chiều cao số lẻ",
+   "dong": {
+    "Tên Ngành Hàng": "Giày mọi nam tăng chiều cao",
+    "Thương hiệu": "Hải Nancy",
+    "chat_lieu": "da bò",
+    "tang_cao_cm": "5,5",
+    "product_code": "TC55A"
+   },
+   "ten": "Giày mọi nam tăng chiều cao 5,5cm Hải Nancy da bò TC55A"
+  },
+  {
+   "mo_ta": "giày khác trống kieu_dong → Đặc điểm cũ; chất liệu cũ, bề mặt từ Nhấn mạnh",
+   "dong": {
+    "Tên Ngành Hàng": "Giày mọi nam",
+    "Đặc điểm": "đế khâu",
+    "Thương hiệu": "Hải Nancy",
+    "Chất liệu": "da bò",
+    "Nhấn mạnh": "hạt mềm",
+    "product_code": "M12C"
+   },
+   "ten": "Giày mọi nam đế khâu Hải Nancy da bò hạt mềm M12C"
+  },
+  {
+   "mo_ta": "Đặc điểm 'nam' trùng tên ngành → bỏ",
+   "dong": {
+    "Tên Ngành Hàng": "Giày mọi nam",
+    "Đặc điểm": "Nam",
+    "Thương hiệu": "Hải Nancy",
+    "Chất liệu": "da bò cao cấp",
+    "product_code": "M13D"
+   },
+   "ten": "Giày mọi nam Hải Nancy da bò cao cấp M13D"
+  },
+  {
+   "mo_ta": "dép: kieu_quai, kẹp ngón",
+   "dong": {
+    "Tên Ngành Hàng": "Dép nam",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_quai": "kẹp ngón chữ V",
+    "chat_lieu": "da bò",
+    "be_mat": "da lộn",
+    "product_code": "D1A"
+   },
+   "ten": "Dép nam quai kẹp ngón Hải Nancy da bò lộn D1A"
+  },
+  {
+   "mo_ta": "sandal nhiều quai lấy đầu",
+   "dong": {
+    "Tên Ngành Hàng": "Sandal nữ",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_quai": "quai chéo, quai hậu",
+    "chat_lieu": "vải bố",
+    "be_mat": "trơn",
+    "product_code": "S2B"
+   },
+   "ten": "Sandal nữ quai chéo Hải Nancy vải bố S2B"
+  },
+  {
+   "mo_ta": "búp bê: mũi + dang_mui",
+   "dong": {
+    "Tên Ngành Hàng": "Giày búp bê",
+    "Thương hiệu": "Hải Nancy",
+    "dang_mui": "nhọn",
+    "kieu_dong": "xỏ",
+    "chat_lieu": "da bò",
+    "product_code": "BB1A"
+   },
+   "ten": "Giày búp bê mũi nhọn Hải Nancy da bò BB1A"
+  },
+  {
+   "mo_ta": "cao gót trống dang_mui → Đặc điểm",
+   "dong": {
+    "Tên Ngành Hàng": "Giày cao gót",
+    "Đặc điểm": "Nữ",
+    "Thương hiệu": "Hải Nancy",
+    "chat_lieu": "da bò",
+    "product_code": "CG2B"
+   },
+   "ten": "Giày cao gót nữ Hải Nancy da bò CG2B"
+  },
+  {
+   "mo_ta": "nữ đế xuồng",
+   "dong": {
+    "Tên Ngành Hàng": "Giày nữ đế xuồng",
+    "Thương hiệu": "Hải Nancy",
+    "dang_mui": "tròn",
+    "chat_lieu": "da bò",
+    "be_mat": "vân",
+    "product_code": "DX3C"
+   },
+   "ten": "Giày nữ đế xuồng mũi tròn Hải Nancy da bò vân DX3C"
+  },
+  {
+   "mo_ta": "bốt",
+   "dong": {
+    "Tên Ngành Hàng": "Giày bốt nam",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_dong": "khoá kéo",
+    "chat_lieu": "da bò",
+    "product_code": "BO1A"
+   },
+   "ten": "Giày bốt nam khoá kéo Hải Nancy da bò BO1A"
+  },
+  {
+   "mo_ta": "ví: Đặc điểm Nam → nam",
+   "dong": {
+    "Tên Ngành Hàng": "Ví ngang",
+    "Đặc điểm": "Nam",
+    "Thương hiệu": "Yen",
+    "Chất liệu": "da bò",
+    "be_mat": "trơn",
+    "product_code": "V1A"
+   },
+   "ten": "Ví ngang nam Yen da bò trơn V1A"
+  },
+  {
+   "mo_ta": "thắt lưng",
+   "dong": {
+    "Tên Ngành Hàng": "Thắt lưng",
+    "Đặc điểm": "Nữ",
+    "Thương hiệu": "Hải Nancy",
+    "chat_lieu": "da bò",
+    "product_code": "TL1A"
+   },
+   "ten": "Thắt lưng nữ Hải Nancy da bò TL1A"
+  },
+  {
+   "mo_ta": "Big Size",
+   "dong": {
+    "Tên Ngành Hàng": "Giày tây nam",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_dong": "buộc dây",
+    "chat_lieu": "da bò",
+    "Nhấn mạnh": "Big Size",
+    "product_code": "BS1A"
+   },
+   "ten": "Giày tây nam buộc dây Hải Nancy da bò Big Size BS1A"
+  },
+  {
+   "mo_ta": "không phải da → không bề mặt",
+   "dong": {
+    "Tên Ngành Hàng": "Giày thể thao nam",
+    "Thương hiệu": "Hải Nancy",
+    "kieu_dong": "buộc dây",
+    "chat_lieu": "vải lưới",
+    "be_mat": "trơn",
+    "Nhấn mạnh": "trơn",
+    "product_code": "TT1A"
+   },
+   "ten": "Giày thể thao nam buộc dây Hải Nancy vải lưới TT1A"
+  },
+  {
+   "mo_ta": "ô trống nhiều, khoảng trắng thừa",
+   "dong": {
+    "Tên Ngành Hàng": "  Giày   mọi nữ ",
+    "Thương hiệu": "",
+    "product_code": "MN1A"
+   },
+   "ten": "Giày mọi nữ MN1A"
+  },
+  {
+   "mo_ta": "thiếu ngành",
+   "dong": {
+    "Thương hiệu": "Hải Nancy",
+    "Chất liệu": "da bò",
+    "product_code": "X1A"
+   },
+   "ten": "Hải Nancy da bò X1A"
+  },
+  {
+   "mo_ta": "rọ sapo, Đặc điểm có ;",
+   "dong": {
+    "Tên Ngành Hàng": "Giày rọ, sapo nam",
+    "Đặc điểm": "đục lỗ; thoáng",
+    "Thương hiệu": "Hải Nancy",
+    "Chất liệu": "da bò",
+    "Nhấn mạnh": "trơn",
+    "product_code": "R1A"
+   },
+   "ten": "Giày rọ, sapo nam đục lỗ Hải Nancy da bò trơn R1A"
+  }
+ ]
+}

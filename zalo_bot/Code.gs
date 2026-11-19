@@ -2374,6 +2374,47 @@ const PN_INFO_COLS = ['Tên Ngành Hàng', 'Đặc điểm', 'Chất liệu', 'N
   'Dáng giày mũi:', 'Phần dưới giày:', 'Kết hợp trang phục:', 'Sử dụng:', 'Bonus:'];
 // Cột công thức phụ thuộc ngành: ngành trống thì để trống (tránh "female" / #N/A), có ngành thì chép lại công thức
 const PN_NGANH_FORMULA_COLS = ['Giới tính', 'product_category_id'];
+// Cột thuộc tính chuẩn (bộ 29/10, như Mac COT_MOI): mã mới cùng mã cha chép từ mẫu (như Mac / web) — cần cho quy tắc tên 19/11
+const PN_ATTR_COLS = ['gioi_tinh', 'chat_lieu', 'kieu_dong', 'kieu_quai', 'dang_mui', 'kieu_de', 'cao_got_cm', 'tang_cao_cm', 'chat_lieu_de',
+  'lot_trong', 'lot_de', 'be_mat', 'co_giay', 'do_om', 'dip', 'chon_size', 'kieu_giay_tay'];
+
+/**
+ * Tên sản phẩm (CON_NAME) theo quy tắc anh Kha chốt 19/11 — bản bot của web ghepTen (Website src/worker/products/source.ts),
+ * Mac tools/product_name.py; ca thử chung shared/product_name_cases.json (luật 15). Từ 19/11 CON_NAME là GIÁ TRỊ (không còn TEXTJOIN).
+ * Ngành (tăng chiều cao + "<tang_cao_cm>cm") · 1 điểm phân biệt · Thương hiệu · Chất liệu · Bề mặt da · (Big Size) · Mã; KHÔNG "cao cấp".
+ */
+function ghepTen_(r) {
+  const s = v => (v === null || v === undefined ? '' : String(v));
+  const g = k => s(r[k]).trim();
+  const dau1 = v => s(v).split(/[,;]/)[0].trim();
+  const fd = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
+  const coTrong = (ng, t) => Boolean(t) && (' ' + fd(ng) + ' ').indexOf(' ' + fd(t) + ' ') !== -1;
+  const MAT = ['tron', 'hat mem', 'van', 'da lon', 'lon'];
+  let ng = g('Tên Ngành Hàng');
+  const tc = Number(g('tang_cao_cm').replace(',', '.'));
+  if (tc > 0 && /tăng chiều cao/i.test(ng)) ng = ng.replace(/tăng chiều cao/i, 'tăng chiều cao ' + String(tc).replace('.', ',') + 'cm');
+  const fn = fd(ng), cu = dau1(r['Đặc điểm']);
+  let pb = /^(dep|sandal)/.test(fn) ? dau1(r.kieu_quai).replace(/^kẹp ngón.*$/i, 'quai kẹp ngón')
+    : /bup be|cao got|de xuong/.test(fn) ? (dau1(r.dang_mui) ? 'mũi ' + dau1(r.dang_mui) : '')
+    : /^(giay|sapo|bot|boot)/.test(fn) ? dau1(r.kieu_dong) : cu;
+  if (!pb) pb = cu;
+  if (/^(nam|nữ)$/i.test(pb)) pb = pb.toLowerCase();
+  if (coTrong(ng, pb)) pb = '';
+  const cl = dau1(r.chat_lieu) || dau1(r['Chất liệu']);
+  const laDa = /\bda\b/i.test(fd(cl));
+  let mat = laDa ? dau1(r.be_mat) : '';
+  if (!mat && laDa && MAT.indexOf(fd(dau1(r['Nhấn mạnh']))) !== -1) mat = dau1(r['Nhấn mạnh']); // bề mặt cũ ở Nhấn mạnh
+  if (fd(mat) === 'da lon') mat = 'lộn';
+  const big = /big size/i.test(g('Nhấn mạnh')) ? 'Big Size' : '';
+  return [ng, pb, g('Thương hiệu'), cl, mat, big, g('product_code')].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Dòng SANPHAM (mảng) → {tên cột hàng 2: giá trị} cho ghepTen_. */
+function rowObj_(header, row) {
+  const o = {};
+  header.forEach((h, i) => { const k = String(h).trim(); if (k && o[k] === undefined) o[k] = row[i]; });
+  return o;
+}
 
 function handleReceipt_(action, body, dryRun) {
   MEMO = {};
@@ -3120,7 +3161,8 @@ function receiptKhoRowsPlan_(plan, lines) {
 }
 
 /**
- * Thêm 1 dòng SANPHAM tối thiểu (tiêu đề hàng 2): chép công thức của dòng cuối (mã cha, tên, mô tả…; product_name giữ công thức),
+ * Thêm 1 dòng SANPHAM tối thiểu (tiêu đề hàng 2): chép công thức của dòng cuối (mã cha, mô tả…; product_name giữ công thức =T),
+ * CON_NAME ghép giá trị bằng ghepTen_ (19/11, không chép dòng trên),
  * điền mã, màu, giá bán (app nhập), giá nhập = đơn giá phiếu, NCC, size = dãy size; cột thông tin mẫu chép từ mẫu cùng mã cha nếu có.
  * Ngành trống → Giới tính / product_category_id để trống (mã "cần bổ sung", bổ sung qua bo_sung_sp).
  */
@@ -3143,7 +3185,7 @@ function appendSanphamMin_(m) {
   const sib = data.slice(hr + 1).find(r => String(r[col.product_code]).trim() &&
     ((pc !== undefined && String(r[pc]).trim().toUpperCase() === m.base) || String(r[col.product_code]).trim().toUpperCase().slice(0, -1) === m.base));
   const values = { product_code: m.code, product_color: m.color, product_price: m.price };
-  PN_INFO_COLS.concat(['Thương hiệu', 'product_unit', 'product_origin']).forEach(n => {
+  PN_INFO_COLS.concat(['Thương hiệu', 'product_unit', 'product_origin'], PN_ATTR_COLS).forEach(n => {
     if (sib && col[n] !== undefined && String(sib[col[n]]).trim() !== '') values[n] = sib[col[n]];
   });
   if (m.nganh && col['Tên Ngành Hàng'] !== undefined) values['Tên Ngành Hàng'] = m.nganh;
@@ -3154,6 +3196,8 @@ function appendSanphamMin_(m) {
   if (col.supplier !== undefined && m.ncc) values.supplier = m.ncc;
   const hasNganh = col['Tên Ngành Hàng'] !== undefined && String(values['Tên Ngành Hàng'] || '').trim() !== '';
   if (!hasNganh) PN_NGANH_FORMULA_COLS.forEach(n => { if (col[n] !== undefined) values[n] = ''; });
+  // 19/11: CON_NAME là GIÁ TRỊ (web ghi) — KHÔNG chép từ dòng trên (sẽ mang tên mã khác). Có ngành → ghép theo quy tắc tên; không → để trống cho web ghép.
+  if (col.CON_NAME !== undefined) values.CON_NAME = hasNganh ? ghepTen_(Object.assign(sib ? rowObj_(data[hr], sib) : {}, values)) : '';
 
   const formulas = last > hr + 1 ? sheet.getRange(last, 1, 1, ncol).getFormulasR1C1()[0] : [];
   // CON_DES: web ghi mô tả đã duyệt đè công thức (Agent đăng SP 28/10) → dòng cuối có thể là chữ; lấy công thức gần nhất phía trên.
@@ -3332,6 +3376,11 @@ function productFill_(body, nguoi, dryRun) {
     }
     const after = data[ri].slice();
     names.forEach(n => { after[col[n]] = values[n]; });
+    // 19/11: CON_NAME là giá trị → ghép lại theo quy tắc tên khi đã có ngành (trước đây công thức tự đổi)
+    if (nganh && col.CON_NAME !== undefined) {
+      const ten = ghepTen_(rowObj_(data[hr], after));
+      if (ten !== String(data[ri][col.CON_NAME] || '')) { values.CON_NAME = ten; names.push('CON_NAME'); after[col.CON_NAME] = ten; }
+    }
     const result = { ok: true, action: 'bo_sung_sp', product_code: code, dry_run: dryRun, da_ghi: names.concat(restore.map(x => x.name)), canh_bao: canhBao,
       can_bo_sung: needsInfo_(after, col) };
     if (dryRun) return result;

@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools.category_defaults import don_vi_tinh, dvt_da_so  # noqa: E402
+from tools.category_defaults import don_vi_tinh, dvt_da_so, mac_dinh  # noqa: E402
 
 ok = fail = 0
 
@@ -23,5 +23,14 @@ eq('thắt lưng theo đa số ra Cái', don_vi_tinh('Thắt lưng  NAM', '', ds
 eq('ghi rõ thì giữ', don_vi_tinh('Thắt lưng nam', 'Sợi', ds), 'Sợi')
 eq('ngành chưa có mã: giày / dép / sandal / bốt / sapo / guốc → Đôi', [don_vi_tinh(n, '', ds) for n in ('Giày cao gót nữ', 'Dép nam', 'Sandal nữ', 'Bốt nữ', 'Sapo nam', 'Guốc nữ')], ['Đôi'] * 6)
 eq('ngành chưa có mã khác → Cái', [don_vi_tinh(n, None, ds) for n in ('Ví nữ', 'Túi xách', 'Ba lô')], ['Cái'] * 3)
+# Bảng điền sẵn theo ngành (anh Kha 19/11, data_contract mac_dinh_theo_nganh)
+GD = {'co_giay': 'cổ thấp', 'chat_lieu': 'da bò', 'chat_lieu_de': 'cao su nhiệt TPR'}
+eq('giày tây: có gót + lót da heo / da bò', mac_dinh('Giày tây nam'), {**GD, 'kieu_de': 'có gót', 'lot_trong': 'da heo', 'lot_de': 'da bò'})
+eq('giày tây tăng chiều cao: có gót', mac_dinh('Giày tây nam tăng chiều cao')['kieu_de'], 'có gót')
+eq('giày mọi: đế bằng + lót', mac_dinh('Giày mọi  NAM'), {**GD, 'kieu_de': 'đế bằng', 'lot_trong': 'da heo', 'lot_de': 'da bò'})
+eq('dép: đế bằng, không lót', mac_dinh('Dép nam'), {**GD, 'kieu_de': 'đế bằng'})
+eq('bốt: KHÔNG điền cổ giày', mac_dinh('Giày bốt nữ'), {'chat_lieu': 'da bò', 'chat_lieu_de': 'cao su nhiệt TPR'})
+eq('cao gót: chỉ 3 luật giày dép', mac_dinh('Giày cao gót'), GD)
+eq('ví: không điền', mac_dinh('Ví ngang'), {})
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)

@@ -115,6 +115,7 @@ Hoá đơn NCC: bot gom NHAP theo ngày × NCC × kho, so với thư mục `Hoá
 - `~/.zshrc` có `GEMINI_API_KEY` dùng chung các repo; main.py nạp `.env` với `override=True` nên khoá HNC thắng. Bot dùng Script Property riêng, xem 8 ký tự sha256 trong `checkConfig`.
 - SANPHAM tên cột ở hàng 2; NHAP hàng 2 là tiêu đề kỹ thuật, dữ liệu từ hàng 3.
 - Mã "cần bổ sung" = SANPHAM trống `Tên Ngành Hàng` hoặc `product_price`; xuất sàn / MISA và `mark_exported` bỏ qua. `product_name` là công thức, đừng ghi đè.
+- **Tên SP `CON_NAME` là GIÁ TRỊ từ 19/11** (web ghi theo quy tắc tên, không còn TEXTJOIN; `product_name` = `=T` và `CON_DES` vẫn công thức theo cột này). Mã mới lúc Dự phòng: bot `ghepTen_` / Mac `tools/product_name.py` ghép cùng quy tắc (ca chung `shared/product_name_cases.json`), không có ngành thì để trống cho web ghép — không chép tên dòng trên. Điền sẵn thuộc tính theo ngành: chỉ bảng `mac_dinh_theo_nganh` (data_contract), web chép bằng `npm run luat:sync`.
 - NHAP từ phiếu NCC: `Số chứng từ` = `NK` + 6 số chạy theo kho; mã `PN…` chỉ là nội bộ của bot.
 - Cửa web → bot phải để khoá trong URL (Apps Script không đọc được header); chiều bot → web dùng header.
 - Chủ hàng ≠ kho xuất: hàng ký gửi (KYGUI) bán ở kho hộ kia thì tiền / hoá đơn / tin MISA thuộc `BAN.chu_hang`, không theo `KHO`.

@@ -31,7 +31,7 @@ def mac_dinh(nganh):
         if ('nganh' in l and ng in [_n(x) for x in l['nganh']]) or ('nganh_chua' in l and gd and any(x in ng for x in l['nganh_chua'])) \
                 or (l.get('giay_dep') and gd):
             out[l['cot']] = l['gia_tri']
-    return out
+    return {k: v for k, v in out.items() if v}  # gia_tri "" = để trống (chặn luật sau, vd bốt không điền cổ giày — 19/11)
 
 
 GIAY_DEP_DVT = re.compile(r'giày|dép|sandal|bốt|sapo|guốc')

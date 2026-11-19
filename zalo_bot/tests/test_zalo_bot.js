@@ -440,9 +440,9 @@ eq('V2 chạy thử: tạo 2 SANPHAM, 2 kho × 7 size + 1 dòng KHO thiếu, s�
 pr = pn(v2);
 if (!pr.ok) console.log(JSON.stringify(pr));
 const spNew = DATA.SANPHAM.slice(spLen);
-eq('V2 SANPHAM tối thiểu: mã, màu, giữ công thức tên, giá bán + giá nhập theo phiếu, size = dãy size, ngành trống → giới tính / danh mục trống',
+eq('V2 SANPHAM tối thiểu: mã, màu, KHÔNG chép CON_NAME dòng trên (19/11: ngành trống → tên trống cho web ghép), giá bán + giá nhập theo phiếu, size = dãy size, ngành trống → giới tính / danh mục trống',
   [spNew.length, spNew.map(r => r[1]), spNew.map(r => r[7]), spNew[0][8], spNew[0][0], spNew[0][6], spNew[0][10], spNew.map(r => r[11]), spNew[0][12], spNew[0][13], spNew[0][14], spNew[0][15], spNew[0][9], spNew[0][17], spNew[0][4]],
-  [2, ['32837D', '32837N'], ['Đen', 'Nâu'], '=R[0]C[-2]', '32837', '=CONCATENATE(R[0]C[-5])', 'Đôi', [1200000, 1200000], 400000, '38,39,40,41,42,43,44', '', '', '', 'Việt Nam', 'Chú Dũng']);
+  [2, ['32837D', '32837N'], ['Đen', 'Nâu'], '=R[0]C[-2]', '32837', '', 'Đôi', [1200000, 1200000], 400000, '38,39,40,41,42,43,44', '', '', '', 'Việt Nam', 'Chú Dũng']);
 const kNew = DATA.KHO15E.slice(k15);
 eq('V2 KHO15E: 14 dòng tồn đầu 0 + công thức theo tên cột', [kNew.length, kNew[0].slice(1, 5), kNew[0][0], kNew[0][5]],
   [14, ['32837D', 'Đen', 38, 0], '=CONCATENATE($A$1;B' + (k15 + 1) + ';D' + (k15 + 1) + ')',
@@ -472,8 +472,8 @@ eq('bo_sung_sp: cột ngoài danh sách → lỗi, không ghi', [bf.ok, bf.loi],
 bf = bs({ cot: { 'Tên Ngành Hàng': 'Giày bay' } }, true);
 eq('bo_sung_sp: ngành không có trong SUB → lỗi', [bf.ok, /không có trong SUB/.test(bf.loi[0])], [false, true]);
 bf = bs({ cot: { 'Tên Ngành Hàng': 'Giày mọi nam', 'Đặc điểm ': 'xỏ chân' } });
-eq('bo_sung_sp: ghi ngành + đặc điểm, khôi phục công thức, hết cần bổ sung', [bf.ok, bf.da_ghi, bf.can_bo_sung, DATA.SANPHAM[spRow][9], DATA.SANPHAM[spRow][16], DATA.SANPHAM[spRow][14], DATA.SANPHAM[spRow][15], bf._sync],
-  [true, ['Tên Ngành Hàng', 'Đặc điểm', 'Giới tính', 'product_category_id'], false, 'Giày mọi nam', 'xỏ chân', '=IF(REGEXMATCH(R[0]C[-5];"nam");"male";"female")', '=INDEX(SUB!A:B;1;1)', ['SANPHAM']]);
+eq('bo_sung_sp: ghi ngành + đặc điểm, ghép lại tên (19/11), khôi phục công thức, hết cần bổ sung', [bf.ok, bf.da_ghi, bf.can_bo_sung, DATA.SANPHAM[spRow][9], DATA.SANPHAM[spRow][16], DATA.SANPHAM[spRow][6], DATA.SANPHAM[spRow][14], DATA.SANPHAM[spRow][15], bf._sync],
+  [true, ['Tên Ngành Hàng', 'Đặc điểm', 'CON_NAME', 'Giới tính', 'product_category_id'], false, 'Giày mọi nam', 'xỏ chân', 'Giày mọi nam xỏ chân 32837D', '=IF(REGEXMATCH(R[0]C[-5];"nam");"male";"female")', '=INDEX(SUB!A:B;1;1)', ['SANPHAM']]);
 r2 = ex({ channel: 'shopee', kind: 'upload', codes: ['32837D'], at: '2026-10-16T03:06:00Z' }, true);
 eq('đủ thông tin → mark_exported đánh dấu', [r2.written, r2.chua_bo_sung], [1, []]);
 GEMINI_REPLY = { ncc: 'Chú Dũng', so_phieu: 'PX3001', ngay: '2026-10-16', dong: [{ ma_ncc: 'CXE', mo_ta: 'Giày', sl: 1, don_gia: 300000 }], tong_sl: 1, tong_tien: 300000 };
@@ -1424,6 +1424,23 @@ eq('COD / thu hộ → COD; sàn → Chuyển khoản; CK → Chuyển khoản',
   const dt = ctx.handleStock_({ action: 'da_in_tem', seller: 'nv@hn.vn', so_chung_tu: 'NK000123', kho: '15E' }, false);
   eq('P5b tắt + sổ kho Web (14/11) → không gọi web, KHÔNG ghi thẳng NHAP, chỉ màn web', [sent.length - n1, /^Done - /.test(lbRow[9]), dt.ok, dt.kho_web], [0, false, false, true]);
   ctx.UrlFetchApp.fetch = f0; delete PROPS.SYNC_HINT_URL; delete PROPS.WEB_NOTIFY_KEY; if (meta0) DATA.META = meta0; else delete DATA.META; vm.runInContext('MEMO={};', ctx); }
+{ // 19/11 quy tắc tên: ghepTen_ ra đúng tên như web ghepTen / Mac tools/product_name.py (ca chung shared/product_name_cases.json)
+  const ca = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'product_name_cases.json'), 'utf8')).ca;
+  const sai = ca.filter(c => ctx.ghepTen_(c.dong) !== c.ten).map(c => c.mo_ta + ': ' + ctx.ghepTen_(c.dong));
+  eq('ghepTen_ khớp web (' + ca.length + ' ca)', sai, []);
+  eq('ghepTen_ số từ Sheet (6 / 5.5)', [ctx.ghepTen_({ 'Tên Ngành Hàng': 'Giày tây nam tăng chiều cao', tang_cao_cm: 6, product_code: 'A1' }), ctx.ghepTen_({ 'Tên Ngành Hàng': 'Giày tây nam tăng chiều cao', tang_cao_cm: 5.5, product_code: 'A1' })],
+    ['Giày tây nam tăng chiều cao 6cm A1', 'Giày tây nam tăng chiều cao 5,5cm A1']); }
+{ // 19/11: dòng trên CON_NAME là GIÁ TRỊ → mã mới không mang tên mã khác; cùng mã cha → chép thuộc tính chuẩn + ghép tên
+  const sp0 = DATA.SANPHAM;
+  DATA.SANPHAM = [['nhóm', '', '', '', '', '', '', '', ''], ['parent_product_code', 'product_code', 'product_color', 'product_price', 'Tên Ngành Hàng', 'Thương hiệu', 'kieu_dong', 'chat_lieu', 'CON_NAME'],
+    ['HN5', 'HN5D', 'Đen', 1, 'Giày tây nam', 'Hải Nancy', 'buộc dây', 'da bò', 'Giày tây nam buộc dây Hải Nancy da bò HN5D']];
+  vm.runInContext('MEMO={};', ctx);
+  ctx.appendSanphamMin_({ code: 'HN5N', base: 'HN5', color: 'Nâu', price: 2, sizes: [] });
+  ctx.appendSanphamMin_({ code: 'ZZ1D', base: 'ZZ1', color: 'Đen', price: 2, sizes: [] });
+  ctx.appendSanphamMin_({ code: 'ZZ2D', base: 'ZZ2', color: 'Đen', price: 2, sizes: [], nganh: 'Giày mọi nam' });
+  eq('mã mới: cùng mã cha → chép kieu_dong / chat_lieu + tên của chính mã; mã khác không ngành → tên trống; có ngành → ghép', DATA.SANPHAM.slice(3).map(r => [r[1], r[6], r[7], r[8]]),
+    [['HN5N', 'buộc dây', 'da bò', 'Giày tây nam buộc dây Hải Nancy da bò HN5N'], ['ZZ1D', '', '', ''], ['ZZ2D', '', '', 'Giày mọi nam ZZ2D']]);
+  DATA.SANPHAM = sp0; vm.runInContext('MEMO={};', ctx); }
 { // Agent đăng SP 28/10: web ghi CON_DES (chữ) đè công thức dòng cuối → mã mới lấy công thức CON_DES gần nhất phía trên, không chép chữ
   const sp0 = DATA.SANPHAM;
   DATA.SANPHAM = [['nhóm', '', ''], ['product_code', 'product_color', 'product_price', 'CON_DES', 'product_description'],

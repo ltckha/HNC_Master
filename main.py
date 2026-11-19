@@ -3991,6 +3991,7 @@ def batch_commit_ingestion(loader, confirmed_products):
     head_sp = [str(x).strip() for x in df_sp.iloc[var_idx_sp].values]
     from tools.product_dictionary import COT_MOI
     from tools.category_defaults import mac_dinh as category_defaults, don_vi_tinh, dvt_da_so
+    from tools.product_name import ghep_ten
     COT_MOI_MAU = [c for c, _, _ in COT_MOI]  # chép cả do_om / chon_size (cùng khuôn); mau_phoi không chép (theo màu). Mẫu mới hẳn: để người nhập chọn (29/10)
     mau_cha = {}
     if 'product_code' in head_sp:
@@ -4087,7 +4088,7 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_gender is not None: row_values[idx_gender] = f'=IF(REGEXMATCH({c_cat}{cur_sp_row}; "nam"); "male"; "female")'
             if idx_size is not None: row_values[idx_size] = f'=IF({c_unit}{cur_sp_row}="Đôi"; if({c_gender}{cur_sp_row}="male";"38,39,40,41,42,43";if({c_gender}{cur_sp_row}="female";"35,36,37,38,39,40";""));"")'  # 05/11 bỏ Size Plus (anh Kha): big size web tính từ Nhấn mạnh / tồn size ≥44
             if idx_mat is not None: row_values[idx_mat] = data.get('material', 'da bò')
-            if idx_hl is not None: row_values[idx_hl] = data.get('highlight', 'cao cấp')
+            if idx_hl is not None: row_values[idx_hl] = data.get('highlight', '')  # 19/11 bỏ hẳn "cao cấp"
             if idx_strap is not None: row_values[idx_strap] = data.get('strap_material', 'da bò cao cấp')
             if idx_sole is not None: row_values[idx_sole] = data.get('sole_material', 'cao su')
             if idx_lining is not None: row_values[idx_lining] = data.get('inner_lining', 'da heo')
@@ -4098,7 +4099,6 @@ def batch_commit_ingestion(loader, confirmed_products):
             if idx_usage is not None: row_values[idx_usage] = data.get('usage', 'hằng ngày, dự tiệc...')
             if idx_bonus is not None: row_values[idx_bonus] = ""
             if idx_countif is not None and idx_countif < num_sp_cols: row_values[idx_countif] = f'=countif(${c_code}:${c_code};{c_code}{cur_sp_row})'
-            if idx_con_name is not None: row_values[idx_con_name] = f'=TEXTJOIN(" ";TRUE;{c_cat}{cur_sp_row};{c_feat}{cur_sp_row};{c_brand}{cur_sp_row};{c_mat}{cur_sp_row};{c_hl}{cur_sp_row};{c_code}{cur_sp_row})'  # bỏ ô trống (bộ chuẩn 29/10, khớp web ghepTen)
             if idx_con_des is not None: row_values[idx_con_des] = f'=CONCATENATE({c_con_name}{cur_sp_row};". ";${c_strap}$2;{c_strap}{cur_sp_row};". ";${c_sole}$2;{c_sole}{cur_sp_row};". ";${c_lining}$2;{c_lining}{cur_sp_row};". ";${c_insole}$2;{c_insole}{cur_sp_row};". ";${c_toe}$2;{c_toe}{cur_sp_row};". ";${c_bottom}$2;{c_bottom}{cur_sp_row};". ";${c_outfit}$2;{c_outfit}{cur_sp_row};". ";${c_usage}$2;{c_usage}{cur_sp_row};". ";{c_bonus}{cur_sp_row})'
             if idx_code is not None: row_values[idx_code] = data.get('product_code', '')
             if idx_name is not None: row_values[idx_name] = f'={c_con_name}{cur_sp_row}'
@@ -4127,6 +4127,10 @@ def batch_commit_ingestion(loader, confirmed_products):
                 for ten, v in category_defaults(data.get('category_name', '')).items():
                     if ten in head_sp and not str(row_values[head_sp.index(ten)]).strip():
                         row_values[head_sp.index(ten)] = v
+            # 19/11 quy tắc tên (anh Kha): CON_NAME là GIÁ TRỊ (web ghi, không còn TEXTJOIN) — ghép như web ghepTen (luật 15); thiếu ngành → để trống cho web ghép
+            if idx_con_name is not None:
+                dong = {h: row_values[i] for i, h in enumerate(head_sp) if h and i < len(row_values)}
+                row_values[idx_con_name] = ghep_ten(dong) if str(data.get('category_name', '')).strip() else ''
 
             sp_new_rows.append(row_values)
             sp_added_count += 1
