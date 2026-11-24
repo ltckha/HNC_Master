@@ -5523,12 +5523,24 @@ function kyguiTransfer_(code, size, qty, from, to, dry) {
 }
 
 /** Bán ở kho `kho`: tách theo chủ hàng (ký gửi của hộ kia trước) → [{chu_hang, qty}]; chạy thật thì ghi BAN + trừ KYGUI. */
+/** Bán: 24/11 anh Kha "bán hàng của tiệm trước rồi mới bán hàng ký gửi sau" (thay 17/10 ký gửi trước) — cùng LuatKho.banTachChuHang
+ *  (shared/stock_rules.js) và web ownersFor: phần tiệm = tồn KHO − ký gửi hộ kia đang ở kho, trừ trước; hết mới trừ ký gửi; thiếu tồn → tính cho kho.
+ *  Tồn = current_quantity đầu lượt − số đã bán ở dòng trước cùng lượt (CTX.banDa); ký gửi = còn lại (kyguiQty_ đã trừ dòng trước). */
 function kyguiSale_(code, color, price, size, qty, kho, channel, seller, dry, payment, phone) {
   const other = kho === 'Y3C' ? '15E' : 'Y3C';
-  const cons = Math.min(qty, kyguiQty_(other, kho, code, size));
+  const ky = kyguiQty_(other, kho, code, size);
+  if (!CTX.banDa) CTX.banDa = {};
+  const kk = kho + '|' + code + '|' + size;
+  const rows = ky > 0 ? findKhoRows_(kho, code, [size]) : [];
+  const ton = ky > 0 ? (rows.length ? Number(rows[0].current_quantity) || 0 : 0) - (CTX.banDa[kk] || 0) : qty;
+  CTX.banDa[kk] = (CTX.banDa[kk] || 0) + qty;
+  const tiem = Math.min(qty, Math.max(0, ton - ky));
+  const cons = Math.min(qty - tiem, ky);
+  const thieu = qty - tiem - cons;
   const phan = [];
+  if (tiem > 0) phan.push({ chu_hang: kho, qty: tiem + thieu });
   if (cons > 0) phan.push({ chu_hang: other, qty: cons });
-  if (qty - cons > 0) phan.push({ chu_hang: kho, qty: qty - cons });
+  if (tiem === 0 && thieu > 0) phan.push({ chu_hang: kho, qty: thieu });
   const ops = [];
   phan.forEach(ph => {
     if (ph.chu_hang !== kho) { const op = kyguiAdjust_(ph.chu_hang, kho, code, size, -ph.qty, dry); if (op) ops.push(op); }

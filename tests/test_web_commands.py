@@ -125,7 +125,7 @@ eq('bat_du_phong: POST /api/du-phong {bat: true}', [len(SENT) - n, json.loads(SE
 web_commands._DU_PHONG.clear(); REPLY[:] = [200, {'du_phong': False}]; n = len(SENT)
 web_commands.che_do({}, 'che_do'); web_commands.che_do({}, 'che_do_hh')
 eq('cổng: nhớ 60 giây (2 sổ = 1 lần gọi)', len(SENT) - n, 1)
-web_commands._env = _env1
+web_commands._env = lambda n: '' if n == 'DU_PHONG_CONG' else _env1(n)  # .env máy thật đã bật (14/11) → ép tắt
 eq('công tắc tắt: META như cũ (chưa có → master)', [web_commands.che_do({}, 'che_do_kho'), web_commands.che_do({'che_do_kho': 'web'}, 'che_do_kho')], ['master', 'web'])
 print(('❌ ' if fails else '✅ ') + 'test_p5b_mac ' + ('lỗi ' + str(fails) if fails else 'đạt'))
 sys.exit(1 if fails else 0)

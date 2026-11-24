@@ -64,16 +64,23 @@ var LuatKho = (function () {
   }
 
   /**
-   * Bán ở kho `kho` n đôi: hàng ký gửi của hộ kia bán trước.
-   * kyGuiHoKia = số đôi của hộ kia đang ở kho này (ô cua_… của dòng KHO).
+   * Bán ở kho `kho` n đôi — 24/11 anh Kha "bán hàng của tiệm trước rồi mới bán hàng ký gửi sau" (thay luật 17/10 ký gửi trước),
+   * như web ownersFor: phần của chính kho = tonKho − kyGuiHoKia, trừ trước; hết mới trừ ký gửi của hộ kia; thiếu tồn (sổ lệch) → tính cho chính kho.
+   * kyGuiHoKia = số đôi của hộ kia đang ở kho này (ô cua_… của dòng KHO, còn lại sau các dòng trước cùng lượt).
+   * tonKho = tồn dòng KHO đó (gồm cả ký gửi, còn lại sau các dòng trước cùng lượt); không truyền → coi như đủ hàng tiệm.
    * → { phan: [{ chu_hang, qty }], doi_cot: [{ kho, cot, delta }] } (doi_cot = thay đổi ô ký gửi cần ghi).
    */
-  function banTachChuHang(kho, qty, kyGuiHoKia) {
+  function banTachChuHang(kho, qty, kyGuiHoKia, tonKho) {
     var other = hoKia(kho);
-    var cons = Math.min(qty, Math.max(0, Number(kyGuiHoKia) || 0));
+    var ky = Math.max(0, Number(kyGuiHoKia) || 0);
+    var ton = tonKho === undefined || tonKho === null || tonKho === '' ? qty + ky : Math.max(0, Number(tonKho) || 0);
+    var tiem = Math.min(qty, Math.max(0, ton - ky));
+    var cons = Math.min(qty - tiem, ky);
+    var thieu = qty - tiem - cons;
     var phan = [], doi = [];
+    if (tiem > 0) phan.push({ chu_hang: kho, qty: tiem + thieu });
     if (cons > 0) { phan.push({ chu_hang: other, qty: cons }); doi.push({ kho: kho, cot: COT_KY_GUI[kho], delta: -cons }); }
-    if (qty - cons > 0) phan.push({ chu_hang: kho, qty: qty - cons });
+    if (tiem === 0 && thieu > 0) phan.push({ chu_hang: kho, qty: thieu });
     return { phan: phan, doi_cot: doi };
   }
 

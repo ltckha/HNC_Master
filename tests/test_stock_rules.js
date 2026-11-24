@@ -40,9 +40,10 @@ const OLD = {
     if (!p.code || p.code === whole || p.sizes.length !== 1 || ma.indexOf(p.code) === -1) return null;
     return { ma: p.code, size: p.sizes[0].size };
   },
-  banTachChuHang(kho, qty, ky) {
+  banTachChuHang(kho, qty, ky, ton) {
     ctx.__memo();
     stub('kyguiQty_', () => Math.max(0, Number(ky) || 0));
+    stub('findKhoRows_', () => [{ current_quantity: ton === undefined ? qty + Math.max(0, Number(ky) || 0) : ton }]); // 24/11: tồn dòng KHO
     const doi = adjCapture();
     const r = O.kyguiSale_('X1', '', 0, '40', qty, kho, '', '', true);
     return { phan: r.phan, doi_cot: doi };

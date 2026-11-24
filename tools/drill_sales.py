@@ -40,7 +40,7 @@ def pick_rows(loader):
             if code and ton > 0 and price.get(code, 0) > 0:
                 cot = 'cua_Y3C' if kho == '15E' else 'cua_15E'
                 out.append({'kho': kho, 'code': code, 'color': r[hk.index('product_color')].strip(), 'size': r[hk.index('item_size')].strip(), 'gia': price[code],
-                            'tab': tab, 'dong_kho': v.index(r) + 1, 'cot': cot, 'ky': money(r[hk.index(cot)]) if cot in hk else 0})
+                            'tab': tab, 'dong_kho': v.index(r) + 1, 'cot': cot, 'ky': money(r[hk.index(cot)]) if cot in hk else 0, 'ton': ton})
                 if len([x for x in out if x['kho'] == kho]) >= 2:
                     break
     return out[:SO_DONG]
@@ -71,7 +71,7 @@ def main_():
     new, doi = [], []
     stamp = 'mac ' + main.datetime.now().strftime('%Y-%m-%d %H:%M')
     for x in rows:
-        tach = goi('banTachChuHang', x['kho'], 1, x['ky'])  # ký gửi của hộ kia bán trước (như bot kyguiSale_)
+        tach = goi('banTachChuHang', x['kho'], 1, x['ky'], x['ton'])  # 24/11: hàng tiệm trước, hết mới ký gửi (như bot kyguiSale_ / web ownersFor)
         for ph in tach['phan']:
             n = len(new) + 1
             r = [''] * len(head)

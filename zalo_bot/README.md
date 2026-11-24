@@ -116,7 +116,7 @@ Content-Type: application/json   (hoặc text/plain)
 Chuyển hàng giữa 2 hộ (15E = Hải Nancy, Y3C = Yen Leather) không xuất hoá đơn, chỉ ghi ký gửi: hàng của hộ này đang nằm ở kho hộ kia.
 - **Tab `KYGUI`** (hàng 1): `product_code` · `item_size` · `chu_hang` (15E / Y3C) · `kho_dang_o` · `so_luong` · `cap_nhat`. Dòng về 0 vẫn giữ. Chưa có tab → tính năng tắt (chủ hàng = kho).
 - **Chuyển A → B** (`chuyen_kho` app / lệnh `chuyen kho` Zalo): trừ trước KYGUI(chủ B, ở A) (trả về chủ), phần còn lại cộng KYGUI(chủ A, ở B). App nhận `results[].ky_gui = [{size, chu_hang, qty, loai: tra_ve_chu | thanh_ky_gui}]`.
-- **Bán ở kho K** (cửa ghi bán, lệnh `ban` Zalo): bán trước hàng ký gửi của hộ kia đang ở K → `BAN.chu_hang` = hộ kia; còn lại `chu_hang` = K. Lẫn 2 chủ → 2 dòng BAN. Dòng BAN cũ trống `chu_hang` = chủ theo KHO.
+- **Bán ở kho K** (cửa ghi bán, lệnh `ban` Zalo; 24/11 anh Kha "bán hàng của tiệm trước rồi mới bán hàng ký gửi", thay 17/10): phần của K = tồn KHO − ký gửi hộ kia đang ở K, bán trước (`chu_hang` = K); hết mới trừ ký gửi (`chu_hang` = hộ kia); thiếu tồn → tính cho K. Cùng `shared/stock_rules.js` banTachChuHang + web ownersFor. Món khách lấy khi đổi trả giữ luật cũ (ký gửi trước). Lẫn 2 chủ → 2 dòng BAN. Dòng BAN cũ trống `chu_hang` = chủ theo KHO.
 - **Trả hàng** (`tra_hang`): về đúng chủ: `chu_hang` gửi kèm dòng, không có thì theo dòng BAN gần nhất cùng mã / size / kho. Chủ khác kho → cộng lại KYGUI.
 - **Cảnh báo** (không chặn): ký gửi đang ở kho > tồn kho đó.
 - Huỷ 10 phút trả KYGUI về như trước. Đổi KYGUI gửi sync-hint `KYGUI`.

@@ -138,7 +138,7 @@ class TraDoi:
         if r is None:
             raise RuntimeError(f'{KHO_TAB[kho]} không có {code} size {size} — không xuất được')
         ky = _money(v[r - 1][h.index(KY_COL[kho])]) if KY_COL[kho] in h else 0
-        tach = goi('banTachChuHang', kho, qty, ky)
+        tach = goi('banTachChuHang', kho, qty, ky, ky)  # đổi trả GIỮ luật cũ (ký gửi trước, như bot xuat doi_tra): tồn = ký gửi → phần tiệm 0
         self._append('XUAT', {'Ngày': datetime.now().strftime('%d/%m/%Y'), 'product_code': code, 'product_color': info['color'], 'KHO': kho,
                               'item_size': int(size) if size.isdigit() else size, 'item_quantity': qty, 'ma_dong': self.ma_dong(), 'nguon': f'doi_tra {self.phieu}'},
                      label=f"XUẤT {code} size {size} × {qty} ở {kho} (món đổi, {self.phieu})")
