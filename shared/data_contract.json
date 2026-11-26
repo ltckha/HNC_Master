@@ -692,7 +692,7 @@
       "bot",
       "tay"
      ],
-     "dinh_dang": "Tiền mặt | Chuyển khoản | Thẻ | Ví | Ghi nợ | COD (giao thu hộ — anh Kha 20/10), đúng chữ có dấu như bot paymentMethod_. Sàn (Shopee / TikTok / Lazada) = Chuyển khoản. Trống = chưa ghi."
+     "dinh_dang": "Tiền mặt | Chuyển khoản | Thẻ | Ví | Ghi nợ | COD (giao thu hộ — anh Kha 20/10), đúng chữ có dấu như bot paymentMethod_. Sàn (Shopee / TikTok / Lazada) = Chuyển khoản. Trống = chưa ghi. Nhiều cách thu (web, anh Kha 26/11): 2–4 phần \"<cách thu> <số tiền>\" nối \" + \", vd \"Tiền mặt 500000 + Chuyển khoản 1200000\", \"Chuyển khoản 300000 + COD 700000\"; số là tiền của cả phiếu — đọc chia theo tỉ lệ (tools/cash_book.tach_cach_thu)."
     },
     "customer_phone": {
      "ghi": [

@@ -93,5 +93,18 @@ _, _, t5 = c.so_quy({'quy': [q for q in Q5 if q['id'] != 3], 'phieu': []}, ban, 
 eq('Bắt đầu sổ (web 2a7b1795): bán 01/11 hộ 15E trước ngày bắt đầu → không cảnh báo; tiền mặt ở két 3C (đã bắt đầu 01/11) vẫn tính', t5, {'ck': 0, 'the': 0, 'mat': 200000, 'truoc': '2026-11-02'})
 _, n5, _ = c.so_quy({'quy': Q5, 'phieu': []}, ban, '15E', '2026-11', today='2026-11-03')
 eq('Bắt đầu sổ: COD 02/11 (từ ngày bắt đầu) vẫn "chưa vào quỹ"', n5, {'COD': 300000})
+# 26/11 web "trả nhiều cách thu": payment_method = "Tiền mặt 500000 + Chuyển khoản 1200000" (2–4 phần nối " + ")
+eq('tách 2 cách thu đúng số', c.tach_cach_thu('Tiền mặt 500000 + Chuyển khoản 1200000', 1700000), [('Tiền mặt', 500000), ('Chuyển khoản', 1200000)])
+eq('đơn giao: CK trước + COD (số có dấu chấm, đ)', c.tach_cach_thu('Chuyển khoản 300.000đ + COD 700.000', 1000000), [('Chuyển khoản', 300000), ('COD', 700000)])
+eq('1 phiếu nhiều dòng (tổng nhóm ≠ số ghi) → chia theo tỉ lệ, phần cuối nhận số lẻ', c.tach_cach_thu('Tiền mặt 1 + Thẻ 2', 1000), [('Tiền mặt', 333), ('Thẻ', 667)])
+eq('4 phần', [p for p, _ in c.tach_cach_thu('Tiền mặt 1 + Chuyển khoản 1 + Thẻ 1 + Ví 1', 4)], ['Tiền mặt', 'Chuyển khoản', 'Thẻ', 'Ví'])
+eq('trả hàng (tiền âm) chia theo tỉ lệ', c.tach_cach_thu('Tiền mặt 500000 + Chuyển khoản 1500000', -2000000), [('Tiền mặt', -500000), ('Chuyển khoản', -1500000)])
+eq('1 cách thu cũ → như cũ', [c.tach_cach_thu('CK', 5), c.tach_cach_thu('', 5)], [[('Chuyển khoản', 5)], [('Tiền mặt', 5)]])
+eq('thiếu số ở 1 phần / 5 phần → như cũ (cả chuỗi 1 cách thu)', [c.tach_cach_thu('Tiền mặt + Chuyển khoản 5', 5), len(c.tach_cach_thu('a 1 + b 1 + c 1 + d 1 + e 1', 5))], [[('Chuyển khoản', 5)], 1])
+BAN6 = BAN[:1] + [['03/11/2026', 'C1', '1700000', '1', '15E', '', '', 'Tiền mặt 500000 + Chuyển khoản 1200000'],
+                  ['03/11/2026', 'C2', '1000000', '1', '15E', '', '', 'Chuyển khoản 300000 + COD 700000']]
+d6, ng6, _ = c.tien_ban(QUY, c.ban_rows(BAN6), '2026-11-03', '2026-11-03')
+eq('sổ quỹ: tiền mặt 500k vào két 15E, CK 1.2tr + 300k vào TK 15E, COD 700k chưa vào quỹ',
+   [sorted((d['quy'], d['vao']) for d in d6), ng6['15E']], [[(1, 500000), (3, 1500000)], {'COD': 700000}])
 print(f"{'✅' if not fail else '❌'} {ok}/{ok + fail} ca đạt")
 sys.exit(1 if fail else 0)

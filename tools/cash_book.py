@@ -32,6 +32,30 @@ TEN_LOAI = {'PT': 'Thu', 'PC': 'Chi', 'CQNB': 'Chuyển quỹ'}
 COT = ['Ngày', 'Số chứng từ', 'Diễn giải', 'Nhóm chi', 'Thu', 'Chi', 'Tồn']
 
 
+def tach_cach_thu(text, t):
+    """26/11 (web "trả nhiều cách thu"): "Tiền mặt 500000 + Chuyển khoản 1200000" (2–4 phần nối " + ") → [(cách thu, tiền)].
+    Tiền t của nhóm dòng chia theo tỉ lệ số ghi từng phần (1 phiếu nhiều dòng BAN cùng chuỗi → cộng lại đúng số từng phần);
+    phần cuối nhận số lẻ. Chuỗi 1 cách thu / thiếu số ở 1 phần → như cũ: [(payment_method(text), t)]."""
+    parts = [x.strip() for x in str(text or '').split(' + ')]
+    if 2 <= len(parts) <= 4:
+        ds = []
+        for x in parts:
+            m = re.match(r'^(.*?)\s*(-?[\d.,]+)\s*(?:đ|d|vnđ|vnd)?$', x, re.I)
+            so = int(re.sub(r'[^\d]', '', m.group(2)) or 0) if m else 0
+            if not m or not m.group(1).strip() or so <= 0:
+                ds = []
+                break
+            ds.append((payment_method(m.group(1)) or 'Tiền mặt', so))
+        if ds:
+            tong, out, da = sum(n for _, n in ds), [], 0
+            for i, (p, n) in enumerate(ds):
+                v = t - da if i == len(ds) - 1 else round(t * n / tong)
+                da += v
+                out.append((p, v))
+            return out
+    return [(payment_method(text) or 'Tiền mặt', t)]
+
+
 def payment_method(text):
     """Như web sheet_copy.paymentMethod: chữ tự do → 6 giá trị; không đoán được → Tiền mặt."""
     n = str(text or '').replace('đ', 'd').replace('Đ', 'd')
@@ -145,27 +169,29 @@ def tien_ban(qs, ban, tu, den, tat_ca=None):
     bd = {h: bat_dau(h) for h in ('15E', 'Y3C')}
     by, ngoai = {}, {'15E': {}, 'Y3C': {}}
     thieu = {h: {'ck': 0, 'the': 0, 'mat': 0, 'truoc': bd[h] if tu < bd[h] else None} for h in ('15E', 'Y3C')}
-    for (day, kho, chu, ch, pay), t in grp.items():
-        if SAN.search(ch or '') or not t:
+    for (day, kho, chu, ch, pay), t0 in grp.items():
+        if SAN.search(ch or '') or not t0:
             continue
-        p = payment_method(pay) or 'Tiền mặt'
-        ho = ho_of(chu, kho)
-        if day < bd[ho] and not (p == 'Tiền mặt' and day >= bd[kho_ho(kho)]):
-            continue  # trước ngày bắt đầu sổ quỹ của hộ chủ hàng (tiền mặt: còn tính cho két tiệm bán nếu két đó đã bắt đầu)
-        cho = cho_q(p, day)
-        if cho and not any(q['id'] == cho['id'] for q in qs):
-            continue  # sổ hộ 3C: tiền này nằm ở quỹ chờ về hộ 15E (khoản bù trừ), không vào quỹ nào của hộ này
-        if not cho and p in CACH_THU_NGOAI:
-            ngoai[ho][p] = ngoai[ho].get(p, 0) + t
-            continue
-        q = cho or (tm(kho_ho(kho)) if p == 'Tiền mặt' else ck(ho))
-        if not q:
-            thieu[ho]['mat' if p == 'Tiền mặt' else 'the' if p == 'Thẻ' else 'ck'] += t
-            continue
-        d = by.setdefault((q['id'], day), {'quy': q['id'], 'ngay': day, 'so': 'BH', 'vao': 0, 'ra': 0, 'nhom': '',
-                                           'dien': f"Tiền bán hàng ({'thẻ' if p == 'Thẻ' else 'COD'}, chờ về)" if cho else
-                                           'Tiền bán hàng (tiền mặt)' if p == 'Tiền mặt' else 'Tiền bán hàng (chuyển khoản / thẻ)'})
-        d['vao'] += t
+        for p, t in tach_cach_thu(pay, t0):  # 26/11: 1 phiếu nhiều cách thu → mỗi phần vào đúng quỹ
+            if not t:
+                continue
+            ho = ho_of(chu, kho)
+            if day < bd[ho] and not (p == 'Tiền mặt' and day >= bd[kho_ho(kho)]):
+                continue  # trước ngày bắt đầu sổ quỹ của hộ chủ hàng (tiền mặt: còn tính cho két tiệm bán nếu két đó đã bắt đầu)
+            cho = cho_q(p, day)
+            if cho and not any(q['id'] == cho['id'] for q in qs):
+                continue  # sổ hộ 3C: tiền này nằm ở quỹ chờ về hộ 15E (khoản bù trừ), không vào quỹ nào của hộ này
+            if not cho and p in CACH_THU_NGOAI:
+                ngoai[ho][p] = ngoai[ho].get(p, 0) + t
+                continue
+            q = cho or (tm(kho_ho(kho)) if p == 'Tiền mặt' else ck(ho))
+            if not q:
+                thieu[ho]['mat' if p == 'Tiền mặt' else 'the' if p == 'Thẻ' else 'ck'] += t
+                continue
+            d = by.setdefault((q['id'], day), {'quy': q['id'], 'ngay': day, 'so': 'BH', 'vao': 0, 'ra': 0, 'nhom': '',
+                                               'dien': f"Tiền bán hàng ({'thẻ' if p == 'Thẻ' else 'COD'}, chờ về)" if cho else
+                                               'Tiền bán hàng (tiền mặt)' if p == 'Tiền mặt' else 'Tiền bán hàng (chuyển khoản / thẻ)'})
+            d['vao'] += t
     dong = []
     for d in by.values():
         if d['vao'] < 0:
